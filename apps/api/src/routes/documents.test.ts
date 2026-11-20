@@ -165,6 +165,23 @@ describe.skipIf(!url)('documents (against TEST_DATABASE_URL)', () => {
     expect(del.statusCode).toBe(403);
   });
 
+  it('reindex puts a document back in the queue with a fresh attempt count', async () => {
+    const list = await app.inject({
+      url: '/v1/workspaces/ouc/documents?type=pdf',
+      headers: { authorization: auth.admin },
+    });
+    const doc = list.json().data[0];
+    const before = queued.length;
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/workspaces/ouc/documents/${doc.id}/reindex`,
+      headers: { authorization: auth.admin },
+    });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toMatchObject({ status: 'queued', attempts: 0, error: null });
+    expect(queued.slice(before)).toEqual([doc.id]);
+  });
+
   it('deleting removes vectors, row and file', async () => {
     const list = await app.inject({
       url: '/v1/workspaces/ouc/documents?type=txt',

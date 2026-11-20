@@ -141,6 +141,11 @@ services:
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080
       KEYCLOAK_REALM: rag-workspaces
       KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
+      LMSTUDIO_BASE_URL: ${LMSTUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
+      DEFAULT_EMBEDDING_MODEL: ${DEFAULT_EMBEDDING_MODEL:-text-embedding-nomic-embed-text-v1.5}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - uploads:/data/uploads
     healthcheck:
