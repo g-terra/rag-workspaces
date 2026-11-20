@@ -1,12 +1,13 @@
 # POC results
 
 Run on 2026-11-20 against **Langflow 1.13.3** and **ChromaDB 1.5.9**, with the
-OpenAI-compatible stand-in in place of LM Studio. 26 of 26 checks pass on a fresh
+OpenAI-compatible stand-in in place of LM Studio. 30 of 30 checks pass on a fresh
 stack (`docker compose down -v`, then `scripts/up.sh`, then `node client/run-poc.ts`).
 
 ## Verdict
 
-All four assumptions hold, and ingestion works end to end. **The plan can go ahead
+All four assumptions hold, ingestion works end to end, and one answer flow can switch
+between LM Studio, OpenAI, Anthropic and Gemini per request. **The plan can go ahead
 with Langflow, with four changes** (details under Findings):
 
 1. Langflow 1.13 removed its Chroma integration. We keep Chroma by shipping small custom components that call Chroma's REST API.
@@ -14,7 +15,7 @@ with Langflow, with four changes** (details under Findings):
 3. Langflow needs two security settings for a model server on the host: an SSRF allowlist entry, and no `OPENAI_API_KEY` in its environment.
 4. The API addresses flow nodes by fixed ids (`Search`, `Embeddings`, `LLM`…), so those ids become a contract between the API and the flow JSON.
 
-So the repo gains about 250 lines of Python inside Langflow (`components/`). The API stays
+So the repo gains about 300 lines of Python inside Langflow (`components/`). The API stays
 TypeScript. Langflow components are Python by design, which is worth one line in the report's
 decisions section.
 
@@ -25,8 +26,9 @@ decisions section.
 | 3 | Tokens stream through Langflow's run API | **PASS** (1/1) | The model node must be wired to a node whose id starts with `ChatOutput-` | API streams from LM Studio directly, with the prompt built by a Langflow flow |
 | 4 | Startup automation: flows imported from repo JSON, API key created, auto-login off | **PASS** (5/5) | `LANGFLOW_LOAD_FLOWS_PATH` + a bootstrap that logs in, upserts flows and rotates a key | Create the key once by hand and pass it in `.env` (`LANGFLOW_API_KEY`) |
 | 5 | Ingestion as a flow: PDF/DOCX/MD/TXT, split, embed, write with document-id metadata, delete by id | **PASS** (9/9) | Custom loader (page numbers from PDFs) and Chroma upsert/delete components | API-side ingestion worker (LangChain.js), the option the plan dropped |
+| 6 | Model provider is a per-request setting (LM Studio default; OpenAI, Anthropic, Gemini) | **PASS** (4/4), partly proxied, see F7 | Custom Workspace Chat Model node; API sends provider, model and key as tweaks | One LLM node per provider behind a router node in the flow |
 
-Streaming numbers from the run: 23 token events, the first after 143 ms, spread over 873 ms
+Streaming numbers from the run: 23 token events, the first after 136 ms, spread over 873 ms
 (the stand-in waits 40 ms per token), and the concatenated tokens equal the final message.
 The `end` event also carries the Citations output, so one streamed request gives the API
 both the answer and its passages.
@@ -106,7 +108,31 @@ results for non-output nodes. So the passages arrive as the ChatOutput's text, w
 ```` ```json ```` fence, and the API strips the fence and parses it. That's one function in
 the planned `langflow-client` package, and the flow tests should cover it.
 
-### F7. Smaller things for the API
+### F7. Provider switch (LM Studio, OpenAI, Anthropic, Gemini) per request
+
+Langflow's own "Language Model" node can override the provider, but it can't reach LM Studio:
+it has no OpenAI-compatible base URL, and the LM Studio bundle isn't installed. So
+`chat_model.py` ("Workspace Chat Model") builds `ChatOpenAI` for `lmstudio` and `openai`,
+`ChatAnthropic` for `anthropic`, and `ChatGoogleGenerativeAI` for `gemini`. All three
+LangChain packages already ship in the image. The API sends `provider`, `model_name` and
+`api_key` (plus an optional `base_url`) as tweaks on the `LLM` node. That means
+**provider keys live in the API's settings, not in Langflow's environment**, which also
+sidesteps F3's credential guard.
+
+What the run proves. The sandbox can't reach the cloud providers, so:
+
+- **OpenAI and Anthropic** were pointed at the stand-in, which speaks both the Chat
+  Completions and Anthropic Messages APIs. Both streamed through Langflow (17 tokens each),
+  and the stand-in log shows the right API and model.
+- **Gemini** was checked by routing only. The request went to
+  `generativelanguage.googleapis.com` and failed on the sandbox network.
+- **Switching back** to `lmstudio` on the same flow worked.
+
+Set `POC_OPENAI_API_KEY`, `POC_ANTHROPIC_API_KEY` or `POC_GEMINI_API_KEY` and rerun to make
+real calls. Embeddings stay on LM Studio. A cloud embedding provider would be a similar small
+switch in `lmstudio_embeddings.py`, but it wasn't asked for.
+
+### F8. Smaller things for the API
 
 - Always send a `session_id` (the conversation id, or a fresh id per request). Without one,
   every run shares the flow id as its session, and the stored Answer messages pile up under it.
@@ -133,6 +159,7 @@ the planned `langflow-client` package, and the flow tests should cover it.
 - Open question "Langflow key: auto-create vs .env" is settled: auto-create on boot with
   rotation, with `.env` as the fallback.
 - Decisions: record F1, and that the Python components live inside Langflow while the API stays TypeScript.
+- Model provider setting: stored per workspace in the API, with keys in the API's secret store, and sent as `LLM` tweaks on each run (F7).
 - `langflow-client`: a node-id map, the JSON-fence parser, and session ids on every call.
 
 ## Raw run (stand-in, fresh stack)
@@ -164,4 +191,8 @@ the planned `langflow-client` package, and the flow tests should cover it.
 | retrieve returns text, score, document_id, page, filename | PASS | top hit doc-pdf page 2 |
 | non-paged files have page null | PASS | DOCX page null |
 | unknown workspace returns zero passages | PASS | empty list |
-| answer flow streams tokens through the run API | PASS | 23 tokens, first at 143 ms |
+| answer flow streams tokens through the run API | PASS | 23 tokens, first at 136 ms |
+| provider=openai via tweak, streamed | PASS | Chat Completions call, 17 tokens (stand-in) |
+| provider=anthropic via tweak, streamed | PASS | Messages API call, 17 tokens (stand-in) |
+| provider=gemini via tweak | PASS | request went to generativelanguage.googleapis.com |
+| back to provider=lmstudio on the same flow | PASS | 17 tokens |

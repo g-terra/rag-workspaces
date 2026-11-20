@@ -12,13 +12,13 @@ ChromaDB `1.5.9` (`chromadb/chroma:1.5.9`), Node 22.23.
 | Path | What it is |
 |---|---|
 | `docker-compose.yml` | Langflow + ChromaDB. The model server runs on the host, like LM Studio will. |
-| `components/rag_workspaces/` | Five small custom Langflow components (Python), loaded via `LANGFLOW_COMPONENTS_PATH`: document loader, LM Studio embeddings, Chroma upsert, search and delete. Why they exist is in RESULTS.md. |
+| `components/rag_workspaces/` | Six small custom Langflow components (Python), loaded via `LANGFLOW_COMPONENTS_PATH`: document loader, LM Studio embeddings, a chat model whose provider is set per request, and Chroma upsert, search and delete. Why they exist is in RESULTS.md. |
 | `flows/*.json` | `rag-ingest`, `rag-retrieve`, `rag-answer`, `rag-delete`. Imported automatically on startup via `LANGFLOW_LOAD_FLOWS_PATH`. |
 | `client/lib.ts` | Tiny typed client for Langflow's login, API key, flows and run (incl. streaming) endpoints, plus Chroma REST helpers. |
 | `client/bootstrap.ts` | The startup automation the API will run: log in with auto-login off, upsert flows, mint and rotate an API key. |
 | `client/run-poc.ts` | The end-to-end checks. Writes `results/results.json` and `results/summary.md`. |
 | `client/build-flows.ts` | Dev tool that regenerated `flows/*.json` from the running Langflow's component templates. Not needed to run the POC. |
-| `standin/server.ts` | A stand-in for LM Studio's OpenAI-compatible server (hashed bag-of-words embeddings, a canned streamed answer, and a request log). It is not a model: it proves plumbing only. |
+| `standin/server.ts` | A stand-in for LM Studio's OpenAI-compatible server, plus Anthropic's Messages API (hashed bag-of-words embeddings, a canned streamed answer, and a request log). It is not a model: it proves plumbing only. |
 | `samples/` | One PDF (3 pages), DOCX and MD in `ouc/`, one TXT in `personal/`. Mounted read-only at `/data/uploads`, standing in for the API's uploads volume. |
 
 No npm install is needed: everything uses Node's built-ins and runs `.ts` files directly (Node 22.18+).
@@ -62,6 +62,15 @@ since only the stand-in can show the prompt it received.
 
 Expect higher similarity scores than with the stand-in, and real answers. If a check fails,
 `results/results.json` has the full detail.
+
+## Real cloud provider calls (optional)
+
+The provider checks use the stand-in unless you pass keys. With keys they make real calls
+(`gpt-4o-mini`, `claude-haiku-4-5`, `gemini-2.5-flash`):
+
+```bash
+POC_OPENAI_API_KEY=sk-... POC_ANTHROPIC_API_KEY=sk-ant-... POC_GEMINI_API_KEY=... node client/run-poc.ts
+```
 
 ## Regenerating the flows
 

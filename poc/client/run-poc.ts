@@ -7,6 +7,7 @@
 //   POC_EMBED_MODELS=standin-embed-a,standin-embed-b   two embedding models LM Studio has loaded
 //   POC_CHAT_MODELS=standin-chat-a,standin-chat-b       two chat models
 //   POC_MODEL_SERVER_LOG=http://localhost:1234/_log     stand-in request log; set empty for LM Studio
+//   POC_OPENAI_API_KEY / POC_ANTHROPIC_API_KEY / POC_GEMINI_API_KEY   optional, for real provider calls
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { bootstrap } from './bootstrap.ts';
@@ -275,6 +276,59 @@ await attempt(A3, 'answer flow streams tokens through /api/v1/run?stream=true', 
     eventTypes: [...new Set(events.map((e) => e.event))], streamedEqualsFinal: streamed.trim() === finalText.trim(),
     citationsInEndEvent: citations.passages.length, answer: finalText.slice(0, 100),
   }];
+});
+
+// ---- 6. model provider as a per-request setting ----------------------------------------------------
+// The API sends provider, model and key as tweaks on the LLM node. Real cloud calls run only when
+// a key is given (POC_OPENAI_API_KEY, POC_ANTHROPIC_API_KEY, POC_GEMINI_API_KEY); otherwise OpenAI
+// and Anthropic are pointed at the stand-in (which speaks both APIs) and Gemini is checked by
+// confirming the request went to Google's endpoint.
+const PROV = '6 provider';
+const STANDIN_BASE = 'http://host.docker.internal:1234';
+async function answerStream(llm: Record<string, unknown>) {
+  const events: StreamEvent[] = [];
+  for await (const ev of streamFlow(KEY, 'rag-answer', {
+    input_value: 'What is chunking?', session_id: `prov-${Date.now()}`,
+    tweaks: { Search: { collection_name: ws('ouc'), top_k: 2 }, LLM: llm },
+  })) events.push(ev);
+  const tokens = events.filter((e) => e.event === 'token' && e.data?.chunk).length;
+  const text = outputsByComponent(events.find((e) => e.event === 'end')?.data?.result ?? {})['ChatOutput-answer']?.results?.message?.text ?? '';
+  return { tokens, text };
+}
+const realKeys = { openai: process.env.POC_OPENAI_API_KEY, anthropic: process.env.POC_ANTHROPIC_API_KEY, gemini: process.env.POC_GEMINI_API_KEY };
+const realModels = { openai: 'gpt-4o-mini', anthropic: 'claude-haiku-4-5', gemini: 'gemini-2.5-flash' };
+for (const provider of ['openai', 'anthropic'] as const) {
+  await attempt(PROV, `provider=${provider} via tweak, streamed`, async () => {
+    if (realKeys[provider]) {
+      const r = await answerStream({ provider, model_name: realModels[provider], api_key: realKeys[provider] });
+      return [r.text.length > 0 && r.tokens > 1, { real: true, tokens: r.tokens, answer: r.text.slice(0, 100) }];
+    }
+    if (!(await modelLog())) return [true, `skipped: no stand-in and no POC_${provider.toUpperCase()}_API_KEY`];
+    const model = `${provider}-via-tweak`;
+    const r = await answerStream({ provider, model_name: model, api_key: 'fake', base_url: provider === 'openai' ? `${STANDIN_BASE}/v1` : STANDIN_BASE });
+    const last = (await modelLog())!.at(-1);
+    const path = provider === 'openai' ? '/v1/chat/completions' : '/v1/messages';
+    return [last?.path === path && last?.model === model && r.tokens > 1, { apiCalled: last?.path, model: last?.model, tokens: r.tokens }];
+  });
+}
+await attempt(PROV, 'provider=gemini via tweak', async () => {
+  if (realKeys.gemini) {
+    const r = await answerStream({ provider: 'gemini', model_name: realModels.gemini, api_key: realKeys.gemini });
+    return [r.text.length > 0, { real: true, tokens: r.tokens, answer: r.text.slice(0, 100) }];
+  }
+  try {
+    await run('rag-answer', { input_value: 'x', session_id: `gem-${Date.now()}`,
+      tweaks: { Search: { collection_name: ws('ouc') }, LLM: { provider: 'gemini', model_name: 'gemini-2.5-flash', api_key: 'fake', stream: false } } });
+    return [false, 'a fake key should not succeed'];
+  } catch (err) {
+    const msg = String(err);
+    // Without network: connection error naming Google's host. With network: Google rejects the key.
+    return [/generativelanguage\.googleapis\.com|API key|API_KEY_INVALID/i.test(msg), msg.slice(0, 200)];
+  }
+});
+await attempt(PROV, 'back to provider=lmstudio on the same flow', async () => {
+  const r = await answerStream({ provider: 'lmstudio', model_name: CHAT_A });
+  return [r.text.length > 0 && r.tokens > 1, { tokens: r.tokens }];
 });
 
 // ---- report ---------------------------------------------------------------------------------------

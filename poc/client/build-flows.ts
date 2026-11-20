@@ -107,8 +107,9 @@ for (const v of ['context', 'question']) {
   };
 }
 prompt.data.node.custom_fields = { template: ['context', 'question'] };
-const llm = node('LLM', 'ext:openai:OpenAIModelComponent@official', 1050, 0, {
-  model_name: 'standin-chat-a', openai_api_base: MODEL_BASE, api_key: DUMMY_KEY, stream: true, temperature: 0.2,
+// Custom component: provider (lmstudio | openai | anthropic | gemini) is a per-request tweak.
+const llm = node('LLM', ext('WorkspaceChatModel'), 1050, 0, {
+  provider: 'lmstudio', model_name: 'standin-chat-a', api_key: DUMMY_KEY, stream: true, temperature: 0.2,
 });
 const aOut = chatOutput('ChatOutput-answer', 1400, 0, true);
 const aCites = chatOutput('ChatOutput-citations', 1050, 300);

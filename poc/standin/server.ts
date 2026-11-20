@@ -6,6 +6,7 @@
 //   lexical overlap gives real similarity and retrieval results are meaningful.
 // - POST /v1/chat/completions: builds an "answer" from the prompt, and streams it
 //   word by word (SSE) when stream=true, with a delay so streaming is observable.
+// - POST /v1/messages: the same, in Anthropic's Messages API shape (incl. streaming).
 // - GET /_log: every request seen (path, model, stream flag), so the POC can
 //   prove which model name a Langflow tweak actually sent.
 //
@@ -130,6 +131,35 @@ const server = createServer(async (req, res) => {
       }
       chunk({}, 'stop');
       res.write('data: [DONE]\n\n');
+      return res.end();
+    }
+
+    // Minimal Anthropic Messages API, so the provider switch can be tested end to end.
+    if (req.method === 'POST' && url.pathname === '/v1/messages') {
+      const body = await readJson(req);
+      const model: string = body.model;
+      const stream = Boolean(body.stream);
+      const msgs = [...(body.system ? [{ role: 'system', content: body.system }] : []), ...(body.messages ?? [])];
+      const prompt = msgs.map((m: any) => messageText(m.content)).join('\n').slice(0, 200);
+      log.push({ at: new Date().toISOString(), path: url.pathname, model, stream, prompt });
+      const answer = composeAnswer(model, msgs);
+      const id = `msg_${Date.now()}`;
+      const usage = { input_tokens: 1, output_tokens: 1 };
+      if (!stream) {
+        return send(res, 200, { id, type: 'message', role: 'assistant', model, stop_reason: 'end_turn', stop_sequence: null,
+          content: [{ type: 'text', text: answer }], usage });
+      }
+      res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
+      const ev = (type: string, data: object) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`);
+      ev('message_start', { message: { id, type: 'message', role: 'assistant', model, content: [], stop_reason: null, stop_sequence: null, usage } });
+      ev('content_block_start', { index: 0, content_block: { type: 'text', text: '' } });
+      for (const piece of answer.split(/(?<=\s)/)) {
+        ev('content_block_delta', { index: 0, delta: { type: 'text_delta', text: piece } });
+        await new Promise((r) => setTimeout(r, TOKEN_DELAY_MS));
+      }
+      ev('content_block_stop', { index: 0 });
+      ev('message_delta', { delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 1 } });
+      ev('message_stop', {});
       return res.end();
     }
 
