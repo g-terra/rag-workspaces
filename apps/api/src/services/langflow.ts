@@ -30,6 +30,9 @@ export class LangflowService {
   keySource: KeySource = 'none';
   private readonly opts: LangflowServiceOptions;
   private stopped = false;
+  private markReady!: () => void;
+  /** Resolves once the API has a working key. */
+  readonly ready = new Promise<void>((resolve) => (this.markReady = resolve));
   private timer: NodeJS.Timeout | undefined;
 
   constructor(opts: LangflowServiceOptions) {
@@ -58,6 +61,7 @@ export class LangflowService {
         });
         this.client.setApiKey(apiKey);
         this.keySource = 'auto';
+        this.markReady();
         log.info({ revoked }, 'created a Langflow API key');
         return;
       } catch (err) {
@@ -67,6 +71,7 @@ export class LangflowService {
     if (config.LANGFLOW_API_KEY) {
       this.client.setApiKey(config.LANGFLOW_API_KEY);
       this.keySource = 'env';
+      this.markReady();
       log.info('using LANGFLOW_API_KEY from the environment');
       return;
     }

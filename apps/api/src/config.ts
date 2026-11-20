@@ -39,6 +39,22 @@ const ConfigSchema = z.object({
   DEFAULT_EMBEDDING_PROVIDER: z.enum(['lmstudio', 'openai', 'gemini']).default('lmstudio'),
   DEFAULT_EMBEDDING_MODEL: z.string().default('text-embedding-nomic-embed-text-v1.5'),
 
+  DEFAULT_CHUNK_SIZE: z.coerce.number().int().positive().default(800),
+  DEFAULT_CHUNK_OVERLAP: z.coerce.number().int().nonnegative().default(100),
+
+  // --- Model providers (keys stay here, never in Langflow's environment) ---
+  /** LM Studio's OpenAI-compatible server, as Langflow's container reaches it. */
+  LMSTUDIO_BASE_URL: z.url().default('http://host.docker.internal:1234/v1'),
+  OPENAI_API_KEY: optionalString,
+  GEMINI_API_KEY: optionalString,
+
+  // --- Ingestion ---
+  /** A flow run gets this long, plus INGEST_TIMEOUT_MS_PER_MB for each megabyte of the file. */
+  INGEST_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
+  INGEST_TIMEOUT_MS_PER_MB: z.coerce.number().int().nonnegative().default(60_000),
+  /** Attempts per document before it is `failed` (1 + retries). */
+  INGEST_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(4),
+
   // --- Langflow ---
   LANGFLOW_URL: z.url().default('http://langflow:7860'),
   /** The API signs in as this user on start to mint its own Langflow API key (decision 17). */
