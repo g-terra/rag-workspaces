@@ -12,3 +12,19 @@ The first workspace, `ouc`, is the project for the COS512 Langflow assignment (O
 - [API schema](docs/api-schema.md): resources, routes and shapes
 - [Work breakdown](docs/work-breakdown.md): milestones and the four workstreams
 - [Decisions](docs/decisions.md): what is settled, what is open, and why
+
+## Commits and releases
+
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org): `type(scope): summary`,
+for example `feat(api): stream answers` or `fix(admin): keep the upload list sorted`. `pnpm install` sets up a
+Git hook that checks each message, and CI checks pull request commits and titles. Types: `feat`, `fix`,
+`perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `style`, `revert`; add `!` (`feat(api)!: …`) for a
+breaking change.
+
+Versions follow [semantic versioning](https://semver.org) and are picked from those messages by
+[release-please](https://github.com/googleapis/release-please) (`.github/workflows/release.yml`):
+
+1. Every push to `main` updates a release pull request (`chore(main): release x.y.z`) with the next version
+   and `CHANGELOG.md`. `fix` bumps the patch version; `feat` and breaking changes bump the minor version
+   while we are below 1.0.
+2. Merging it tags `vX.Y.Z` and creates the GitHub release.

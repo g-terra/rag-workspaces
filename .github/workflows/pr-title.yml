@@ -1,0 +1,23 @@
+name: PR title
+
+# When a pull request is squash-merged, its title becomes the commit on main that
+# release-please reads, so it must be a Conventional Commit: `feat(api): add answers`.
+# (With merge commits, the commit messages count instead; CI checks those too.)
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  conventional-title:
+    name: Conventional Commit title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          subjectPattern: ^.+$
