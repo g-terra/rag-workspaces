@@ -1,0 +1,2 @@
+Sourdough bread needs a lively starter, flour, water and salt. Bake at 230 degrees with steam for the first twenty minutes.
+Retrieval of recipes should never leak into the ouc workspace.

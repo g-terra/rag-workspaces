@@ -1,0 +1,15 @@
+{
+  "name": "rag-workspaces-langflow-poc",
+  "private": true,
+  "type": "module",
+  "description": "Proof of concept for the Langflow assumptions in the rag-workspaces plan. No dependencies.",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "standin": "node standin/server.ts",
+    "up": "scripts/up.sh",
+    "bootstrap": "node client/bootstrap.ts",
+    "build-flows": "node client/build-flows.ts",
+    "poc": "node client/run-poc.ts",
+    "down": "docker compose down -v"
+  }
+}
