@@ -20,6 +20,7 @@ import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 import { ChromaService } from './services/chroma.js';
+import { DocumentEvents } from './services/document-events.js';
 import { noopQueue, type IngestQueue } from './services/ingest-queue.js';
 import { UploadStorage } from './services/storage.js';
 
@@ -33,6 +34,8 @@ export type AppDeps = {
   storage?: UploadStorage;
   /** Where new uploads are queued for ingestion. */
   queue?: IngestQueue;
+  /** Document status changes, for the live status stream. */
+  events?: DocumentEvents;
   /** Dependency checks for `/ready`. */
   checks?: ReadinessCheck[];
   /** Turn bearer credentials into a principal: Keycloak tokens now, API keys next. */
@@ -50,6 +53,7 @@ export async function buildApp({
   chroma = new ChromaService(config),
   storage = new UploadStorage(config.UPLOADS_DIR, config.MAX_UPLOAD_BYTES),
   queue = noopQueue,
+  events = new DocumentEvents(),
   checks = [],
   authenticators = [],
   logger,
@@ -109,7 +113,7 @@ export async function buildApp({
   await app.register(meRoutes);
   if (db) {
     await app.register(workspaceRoutes, { db, chroma, storage, config });
-    await app.register(documentRoutes, { db, storage, chroma, queue, config });
+    await app.register(documentRoutes, { db, storage, chroma, queue, events, config });
     await app.register(apiKeyRoutes, { db });
   }
 

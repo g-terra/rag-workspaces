@@ -45,6 +45,7 @@ const app = await buildApp({
   db: database.db,
   chroma,
   queue,
+  events,
   authenticators: [
     apiKeyAuthenticator(database.db),
     keycloakAuthenticator(keycloakOptionsFromConfig(config)),
