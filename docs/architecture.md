@@ -30,8 +30,7 @@ flowchart LR
     API["API<br/>Fastify, Swagger at /docs"]
     LF["Langflow<br/>ingest, retrieve, answer, chat flows"]
     CH[("ChromaDB<br/>one collection per workspace")]
-    PG[("Postgres<br/>workspaces, documents, keys,<br/>conversations, usage log")]
-    RD[("Redis<br/>ingestion queue, progress")]
+    PG[("Postgres<br/>workspaces, documents, keys,<br/>conversations, usage log,<br/>ingestion queue")]
     WH["Whisper<br/>optional, video"]
     VOL[["uploads volume"]]
   end
@@ -41,7 +40,6 @@ flowchart LR
   API -- verify token --> KC
   API --> PG
   API --> VOL
-  API -- queue --> RD
   API -- run flow --> LF
   API -- manage collections,<br/>delete vectors --> CH
   API -. readiness check .-> LMS
@@ -60,13 +58,12 @@ flowchart LR
 | `langflow` | `langflowai/langflow` (pinned to an exact version) | Runs the ingest, retrieve, answer and chat flows; flow JSON in `flows/` is imported on startup. Flow JSON is tied to the Langflow version, so upgrades are deliberate and re-export the flows |
 | `chroma` | `chromadb/chroma` (pinned, server mode) | Vector store; one collection per workspace |
 | `keycloak` | `quay.io/keycloak/keycloak` (pinned) | Login; realm `rag-workspaces` imported from `docker/keycloak/realm.json` on first start |
-| `postgres` | `postgres:16` | App data, plus separate databases for Langflow and Keycloak (created by an init script on first start) |
-| `redis` | `redis:7` | Ingestion queue (BullMQ) and progress pub/sub |
+| `postgres` | `postgres:16` | App data and the ingestion queue (pg-boss), plus separate databases for Langflow and Keycloak (created by an init script on first start) |
 | `whisper` | faster-whisper ASR web service | Video and audio transcription; compose profile `video`, off by default |
 
 LM Studio is a desktop app on the host. Containers reach it at `http://host.docker.internal:1234/v1` (compose adds `extra_hosts: host.docker.internal:host-gateway` so this works on Linux too). The provider is a setting; any OpenAI-compatible endpoint works.
 
-Published ports: only `web` (8080), `api` (3000), `keycloak` and `langflow` (7860) are published, all bound to `127.0.0.1` by default. `postgres`, `redis`, `chroma` and `whisper` are reachable only on the compose network. Every service has a healthcheck, and `api` waits for postgres, chroma, langflow and keycloak to be healthy before it starts.
+Published ports: only `web` (8080), `api` (3000), `keycloak` and `langflow` (7860) are published, all bound to `127.0.0.1` by default. `postgres`, `chroma` and `whisper` are reachable only on the compose network. Every service has a healthcheck, and `api` waits for postgres, chroma, langflow and keycloak to be healthy before it starts.
 
 Footprint: Keycloak and Langflow each want roughly 1 to 2 GB of RAM on top of the models LM Studio loads. `docs/setup.md` states a minimum (16 GB recommended) and which services can be left out.
 
@@ -126,7 +123,7 @@ All of this is unproven until the [M0 spike](work-breakdown.md#m0-spike-prove-th
 ```mermaid
 flowchart LR
   U["Upload<br/>drag and drop or API"] --> S["API saves file<br/>sha256 dedupe, status queued"]
-  S --> Q["Queue (Redis)"]
+  S --> Q["Queue (Postgres)"]
   Q --> T{"Video or audio?"}
   T -- yes --> W["Whisper transcript<br/>with timestamps"]
   T -- no --> F
@@ -164,7 +161,7 @@ Rules that keep ingestion honest when things fail:
 Workspace isolation is enforced by the API, and only there. That is fine for a self-hosted tool as long as it is stated:
 
 - **Langflow's editor sees everything.** Anyone who can sign in to Langflow can read every collection and the uploads volume. It is an admin tool: auto-login is off, the superuser comes from `.env`, and the port is bound to localhost.
-- **Chroma, Postgres and Redis have no per-workspace access control** and are not published outside the compose network.
+- **Chroma and Postgres have no per-workspace access control** and are not published outside the compose network.
 - **The API chooses the collection.** Flows receive the collection name from the API and never from the caller, so a request cannot name another workspace's collection. The isolation tests cover every route.
 - **Documents are untrusted text.** A file can contain instructions aimed at the model. The system prompt separates passages from instructions, and the flows have no tools that could act on them; this limits the damage to a wrong answer in that workspace.
 - **Questions are stored.** The usage log keeps question text for analytics. A retention setting (default 90 days) trims it, and `docs/operations.md` says so.
@@ -209,7 +206,7 @@ docker-compose.yml, turbo.json, pnpm-workspace.yaml, .env.example
 | Vector DB | ChromaDB, one collection per workspace |
 | Models | LM Studio on the host by default (OpenAI-compatible); configurable per workspace |
 | Auth | Keycloak (OIDC) for people, hashed API keys for agents, `@fastify/rate-limit` |
-| Queue | BullMQ on Redis |
+| Queue | pg-boss on Postgres (no Redis); live status from an in-process event emitter, since there is one API process |
 | App DB | Postgres + Drizzle ORM |
 | Transcription | faster-whisper ASR service + ffmpeg (optional profile) |
 | Admin UI | Vite + React, Tailwind CSS, shadcn/ui, TanStack Query, react-dropzone, oidc-client-ts, fetch-based SSE |

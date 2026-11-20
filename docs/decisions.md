@@ -20,6 +20,7 @@ Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). 
 | 12 | **Accounts are created in Keycloak's own admin console**; our admin UI lists people read-only and grants workspace access | No second user-management screen to build; it can be added later through Keycloak's admin API |
 | 13 | **MCP server is left for later**, outside the core plan | Agents can use the REST API through its OpenAPI spec today |
 | 14 | **No due date drives the plan**; the whole thing is built over the weekend of 21 November 2026 | M2 stays marked as the point where everything graded exists, as a safety net |
+| 15 | **The ingestion queue runs on Postgres (pg-boss); no Redis** | One database for everything. The queue handles one file at a time for one install, so a second data service, client library and test container bought nothing. Live status needs no pub/sub with a single API process |
 
 ### Why TypeScript instead of Flask or FastAPI
 
@@ -34,7 +35,6 @@ Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). 
 |---|---|---|
 | API framework | Fastify + zod | NestJS |
 | Admin UI | Vite + React SPA served by nginx | Next.js |
-| Ingestion queue | BullMQ on Redis, one file at a time across the install (one local model server), configurable | Postgres-backed queue (one fewer service) |
 | Video | faster-whisper ASR container, compose profile `video` | Hosted Whisper API |
 | Folders inside a workspace | Optional, used as a filter | Tags only |
 | Per-workspace settings | Chat model, embedding model, system prompt, chunk size and overlap, top-k, minimum score | Global settings only |
@@ -55,9 +55,8 @@ Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). 
 
 ### Raised by the plan review
 
-These came out of the review on 2026-11-20 and are still waiting for an answer; the rest were answered and moved to the decided table (11 to 14). Nothing in the other docs assumes these yet.
+These came out of the review on 2026-11-20 and are still waiting for an answer; the rest were answered and moved to the decided table (11 to 15). Nothing in the other docs assumes these yet.
 
 | Question | Recommendation | Why |
 |---|---|---|
-| Keep Redis and BullMQ for the queue? | Use a Postgres-backed queue (pg-boss) and drop Redis | The queue runs one file at a time for one person. Postgres is already there; this removes a service, a client library and a test container. Live status needs no pub/sub with a single API process |
 | Four shared packages for two apps? | Keep `packages/shared` and `packages/config`; make the database schema and the Langflow client folders inside `apps/api` | Only the API uses them. Turborepo stays; there is just less wiring |
