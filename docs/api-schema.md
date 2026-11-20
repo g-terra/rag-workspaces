@@ -70,7 +70,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 | GET | `/v1/workspaces/{slug}/answers/{answerId}` | A stored answer |
 | POST | `/v1/workspaces/{slug}/answers/{answerId}/feedback` | `{ "rating": "up" | "down", "comment": "…" }` |
 | POST, GET | `/v1/workspaces/{slug}/conversations` | Start or list conversations |
-| GET, DELETE | `/v1/workspaces/{slug}/conversations/{conversationId}` | A conversation with its messages; delete it and its memory |
+| GET, DELETE | `/v1/workspaces/{slug}/conversations/{conversationId}` | A conversation with its messages; delete it with its messages |
 | POST | `/v1/workspaces/{slug}/conversations/{conversationId}/messages` | Send a message, get the reply with citations |
 | GET | `/v1/workspaces/{slug}/passages?query=…&folderId=…&limit=5` | Best matching passages with scores, no AI answer |
 | GET | `/v1/workspaces/{slug}/passages/{passageId}` | One passage with its neighbours |

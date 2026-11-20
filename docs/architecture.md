@@ -104,7 +104,7 @@ The embedding model is fixed per workspace once it holds documents, because vect
   - `flows/ingest.json`: load a file from the uploads volume, split it, embed with LM Studio, write to the workspace's Chroma collection with metadata (document id, folder, page or timestamp).
   - `flows/retrieve.json`: embed the query and return the best matching passages with scores and metadata, no generation. This backs the passages endpoint; without it the API would have to embed queries itself, which would put AI logic outside Langflow.
   - `flows/answer.json`: retrieve from the workspace's collection, build the prompt, generate an answer with citations.
-  - `flows/chat.json`: the same, with conversation history. Where the history lives (Langflow's memory or our `messages` table) is an [open question](decisions.md#open); the recommendation is that the API owns it.
+  - `flows/chat.json`: the same, with conversation history. The flow is stateless: the API keeps the history in its `messages` table and sends the last turns with each run, so history lives in one place and deleting a conversation is one delete.
 - **The API does the bookkeeping.** It saves uploads, deduplicates by checksum, keeps document records and statuses, queues ingestion and calls the ingest flow one file at a time, retries failures, creates and deletes Chroma collections, deletes a document's vectors by document id, updates passage metadata when a document moves folder, runs Whisper for video before ingestion, enforces auth and workspace isolation, logs usage, and shapes citations. Clients never call Langflow or Chroma directly.
 
 ### The flow contract
@@ -151,7 +151,7 @@ Rules that keep ingestion honest when things fail:
 
 ## Auth
 
-- **People** sign in to the admin UI through Keycloak (OIDC authorization code with PKCE). Accounts are created by admins only; self-registration is off. There is one realm role, `admin` (manage everything). Everyone else gets access per workspace.
+- **People** sign in to the admin UI through Keycloak (OIDC authorization code with PKCE). Accounts are created by admins only, in Keycloak's own admin console; self-registration is off. Our admin UI lists people read-only and grants them workspace access. There is one realm role, `admin` (manage everything). Everyone else gets access per workspace.
 - **Workspace roles** are the same two words for people and keys: `reader` (ask, chat, search) and `editor` (also upload and delete documents, see the workspace's usage). Admins grant a person a role in a workspace; the grant is stored against their Keycloak user id.
 - **API keys** are created by admins only, in the admin UI. Each key is bound to one or more workspaces and has one role, `reader` or `editor`. The secret is 32 random bytes with an `rw_` prefix, shown once and stored as a SHA-256 hash (enough for a high-entropy secret, and fast to look up). Keys can expire, can be revoked, and record when they were last used.
 - **The API** accepts `Authorization: Bearer <token or key>`. Anything starting with `rw_` is looked up as an API key; anything else must be a JWT verified against Keycloak's JWKS (issuer, audience, expiry).

@@ -9,7 +9,7 @@ Milestones define the order; a workstream only starts a milestone item when its 
 |---|---|---|
 | M0 | **Foundation and Langflow spike** | Turborepo + pnpm scaffold, shared configs, `docker compose up` brings up postgres, redis, chroma, langflow, keycloak (realm imported) and an `api` that answers `/health` and serves `/docs`. CI runs lint, typecheck and tests on every PR. The [Langflow spike](#m0-spike-prove-the-langflow-contract) has passed and its findings are written into the docs |
 | M1 | **Workspaces and ingestion** | Workspaces CRUD with isolated Chroma collections; PDF, DOCX, TXT and MD go from upload through the Langflow ingest flow to searchable passages, with live per-file status. The compose smoke test runs this path in CI |
-| M2 | **Asking, auth, analytics** | Passages, answers and conversations through the Langflow flows; Keycloak login and workspace-scoped API keys enforced; every request logged for analytics; smoke test extended to ask, chat and usage; `docs/setup.md` and `docs/api.md` written. **The assignment is submittable from here** |
+| M2 | **Asking, auth, analytics** | Passages, answers and conversations through the Langflow flows; Keycloak login and workspace-scoped API keys enforced; every request logged for analytics; smoke test extended to ask, chat and usage; `docs/setup.md` and `docs/api.md` written. **The assignment's graded parts are all present from here** |
 | M3 | **Design approved** | Mocks for every admin screen reviewed and approved by Guilherme. **Frontend build does not start before this** |
 | M4 | **Admin UI** | Keycloak login, workspace switcher and management, drag-and-drop upload, live status, document library, ask and chat playground, usage analytics, API keys, all against the real API |
 | M5 | **Video** | `video` compose profile: upload mp4/mp3/wav, transcript via Whisper, timestamped citations |
@@ -30,7 +30,7 @@ flowchart LR
 
 ### The assignment cut line
 
-Everything the brief grades exists at the end of M2: the API with ask, chat and retrieve equivalents, usage analytics, Langflow flows as JSON, tests in CI, setup docs, and Swagger UI as the interactive front. M3 to M6 make it a better product but are not needed to hand in. If the deadline gets close, the report and video are made from whatever is merged at that point, and the report is drafted alongside M1 and M2 instead of at the very end.
+Everything the brief grades exists at the end of M2: the API with ask, chat and retrieve equivalents, usage analytics, Langflow flows as JSON, tests in CI, setup docs, and Swagger UI as the interactive front. M3 to M6 make it a better product but are not needed to hand in. The whole plan is being built in one go (the weekend of 21 November 2026), so this is a safety net and not a schedule: the report is drafted alongside M1 and M2, and if anything later slips, the hand-in does not depend on it.
 
 ### M0 spike: prove the Langflow contract
 

@@ -16,6 +16,10 @@ Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). 
 | 8 | **Keycloak** for login, accounts created by admins only | Standard OIDC, runs in compose with a pre-imported realm; no self sign-up for a personal tool |
 | 9 | **API keys created by admins only**, bound to workspaces, role `reader` or `editor` | Keys reach outside the system, so only admins issue them; workspace binding enforces isolation |
 | 10 | Turborepo + pnpm monorepo, Tailwind + shadcn/ui, Swagger docs, Docker Compose, tests in CI, design mocks approved before frontend build | From the original brief |
+| 11 | **Conversation history lives in our database only**; the chat flow is stateless and receives the last turns from the API | One place for history, one delete, and tests do not depend on Langflow's stored state. The flow still does retrieval, prompting and generation |
+| 12 | **Accounts are created in Keycloak's own admin console**; our admin UI lists people read-only and grants workspace access | No second user-management screen to build; it can be added later through Keycloak's admin API |
+| 13 | **MCP server is left for later**, outside the core plan | Agents can use the REST API through its OpenAPI spec today |
+| 14 | **No due date drives the plan**; the whole thing is built over the weekend of 21 November 2026 | M2 stays marked as the point where everything graded exists, as a safety net |
 
 ### Why TypeScript instead of Flask or FastAPI
 
@@ -51,13 +55,9 @@ Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). 
 
 ### Raised by the plan review
 
-These came out of the review on 2026-11-20. Each changes scope or the stack, so they are recommendations. Apart from the MCP move, nothing in the other docs assumes them yet.
+These came out of the review on 2026-11-20 and are still waiting for an answer; the rest were answered and moved to the decided table (11 to 14). Nothing in the other docs assumes these yet.
 
 | Question | Recommendation | Why |
 |---|---|---|
-| When is the assignment due? | Tell us the date; the plan treats M2 as the hand-in point either way | The deliverables were the last milestone, behind the admin UI, video and hardening. Everything graded exists at M2 |
 | Keep Redis and BullMQ for the queue? | Use a Postgres-backed queue (pg-boss) and drop Redis | The queue runs one file at a time for one person. Postgres is already there; this removes a service, a client library and a test container. Live status needs no pub/sub with a single API process |
-| Where does conversation history live? | In our `messages` table; the API sends the last turns to a stateless chat flow | Otherwise history lives twice (Langflow's memory and our table), deleting a conversation has to clean both, and tests need Langflow's state. The flow still does retrieval, prompting and generation |
 | Four shared packages for two apps? | Keep `packages/shared` and `packages/config`; make the database schema and the Langflow client folders inside `apps/api` | Only the API uses them. Turborepo stays; there is just less wiring |
-| Where are people's accounts created? | In Keycloak's own admin console for now; our admin UI lists them read-only and grants workspace access | A user-management screen duplicates what Keycloak already has. It can be added later through Keycloak's admin API |
-| MCP server in the core plan? | Moved from M6 to "later" in the work breakdown; say if you want it back | Agents can use the REST API through OpenAPI today |
