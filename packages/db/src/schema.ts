@@ -1,5 +1,16 @@
 import { sql } from 'drizzle-orm';
-import { index, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  bigint,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 // The schema grows one table at a time with the features that use it (M1: folders,
 // documents; M2: answers, conversations, api keys, usage). Columns are camelCase in
@@ -113,3 +124,49 @@ export const workspaceMembers = pgTable(
 );
 
 export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
+
+export const documentType = pgEnum('document_type', ['pdf', 'docx', 'txt', 'md']);
+
+/** Ingestion status. `transcribing` is used by video and audio (M5). */
+export const documentStatus = pgEnum('document_status', [
+  'queued',
+  'transcribing',
+  'processing',
+  'ready',
+  'failed',
+]);
+
+/**
+ * One uploaded file. Postgres is the source of truth: a document is searchable only when
+ * its row is `ready`. The file lives on the uploads volume at `storagePath`.
+ */
+export const documents = pgTable(
+  'documents',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    title: text().notNull(),
+    /** The name the file was uploaded with. */
+    fileName: text().notNull(),
+    type: documentType().notNull(),
+    sizeBytes: bigint({ mode: 'number' }).notNull(),
+    /** Hex SHA-256 of the content; the same file twice in one workspace is a duplicate. */
+    sha256: text().notNull(),
+    /** Relative to the uploads volume: `<slug>/<document id>.<ext>`. */
+    storagePath: text().notNull(),
+    status: documentStatus().notNull().default('queued'),
+    attempts: integer().notNull().default(0),
+    error: text(),
+    passageCount: integer(),
+    tags: text().array().notNull().default([]),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex('documents_workspace_sha256_key').on(t.workspaceId, t.sha256),
+    index('documents_workspace_status_idx').on(t.workspaceId, t.status),
+  ],
+);
+
+export type Document = typeof documents.$inferSelect;

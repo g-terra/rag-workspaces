@@ -15,10 +15,13 @@ import type { Config } from './config.js';
 import { errorHandler, notFoundHandler } from './errors.js';
 import type { ReadinessCheck } from './readiness.js';
 import { apiKeyRoutes } from './routes/api-keys.js';
+import { documentRoutes } from './routes/documents.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 import { ChromaService } from './services/chroma.js';
+import { noopQueue, type IngestQueue } from './services/ingest-queue.js';
+import { UploadStorage } from './services/storage.js';
 
 export type AppDeps = {
   config: Config;
@@ -26,6 +29,10 @@ export type AppDeps = {
   db?: Database;
   /** Defaults to a client for CHROMA_URL. */
   chroma?: ChromaService;
+  /** Defaults to UPLOADS_DIR. */
+  storage?: UploadStorage;
+  /** Where new uploads are queued for ingestion. */
+  queue?: IngestQueue;
   /** Dependency checks for `/ready`. */
   checks?: ReadinessCheck[];
   /** Turn bearer credentials into a principal: Keycloak tokens now, API keys next. */
@@ -41,6 +48,8 @@ export async function buildApp({
   config,
   db,
   chroma = new ChromaService(config),
+  storage = new UploadStorage(config.UPLOADS_DIR, config.MAX_UPLOAD_BYTES),
+  queue = noopQueue,
   checks = [],
   authenticators = [],
   logger,
@@ -77,6 +86,7 @@ export async function buildApp({
         { name: 'system', description: 'Health and readiness' },
         { name: 'me', description: 'The caller' },
         { name: 'workspaces', description: 'Isolated groups of material, and who can use them' },
+        { name: 'documents', description: 'Files in a workspace and their ingestion status' },
         { name: 'api-keys', description: 'API keys for agents and scripts (admins only)' },
       ],
       components: {
@@ -98,7 +108,8 @@ export async function buildApp({
   await app.register(healthRoutes, { checks, timeoutMs: config.READY_TIMEOUT_MS });
   await app.register(meRoutes);
   if (db) {
-    await app.register(workspaceRoutes, { db, chroma, config });
+    await app.register(workspaceRoutes, { db, chroma, storage, config });
+    await app.register(documentRoutes, { db, storage, chroma, queue, config });
     await app.register(apiKeyRoutes, { db });
   }
 

@@ -22,6 +22,18 @@ const ConfigSchema = z.object({
   /** The app database. Migrations run against it on every start. */
   DATABASE_URL: z.string().default('postgres://rag@postgres:5432/rag'),
 
+  // --- Uploads ---
+  /** The uploads volume, shared read-only with Langflow at the same path. */
+  UPLOADS_DIR: z.string().default('/data/uploads'),
+  /** Largest accepted file. nginx in front of the admin UI has the same limit. */
+  MAX_UPLOAD_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(200 * 1024 * 1024),
+  /** Most files in one upload request. */
+  MAX_UPLOAD_FILES: z.coerce.number().int().positive().default(20),
+
   // --- Defaults for new workspaces (each can override them) ---
   /** Pinned into a workspace when it is created; changing it later needs a reindex. */
   DEFAULT_EMBEDDING_PROVIDER: z.enum(['lmstudio', 'openai', 'gemini']).default('lmstudio'),

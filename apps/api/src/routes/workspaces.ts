@@ -25,10 +25,12 @@ import { currentUser, requireAdmin, requireUser } from '../auth/plugin.js';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
 import { ChromaService } from '../services/chroma.js';
+import type { UploadStorage } from '../services/storage.js';
 
 export type WorkspaceRoutesOptions = {
   db: Database;
   chroma: ChromaService;
+  storage: UploadStorage;
   config: Pick<Config, 'DEFAULT_EMBEDDING_PROVIDER' | 'DEFAULT_EMBEDDING_MODEL'>;
 };
 
@@ -48,7 +50,7 @@ const UNSET: Omit<WorkspaceSettings, 'embeddingProvider' | 'embeddingModel'> = {
 
 export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = async (
   app,
-  { db, chroma, config },
+  { db, chroma, storage, config },
 ) => {
   const toApi = (w: WorkspaceRow, access: Access): Workspace => ({
     id: w.id,
@@ -160,7 +162,7 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
         ...common,
         summary: 'Delete a workspace and all its data',
         description:
-          'Removes its Chroma collection, members and key bindings. An API key left with no workspace is revoked.',
+          'Removes its documents, files, Chroma collection, members and key bindings. An API key left with no workspace is revoked.',
         params: SlugParams,
         response: { 204: z.null() },
       },
@@ -196,6 +198,7 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
         // The workspace is gone either way; a leftover collection is harmless and `pnpm doctor` reports it.
         req.log.warn({ err, workspace: workspace.slug }, 'could not delete the Chroma collection');
       }
+      await storage.removeWorkspace(workspace.slug);
       req.log.info({ workspace: workspace.slug, by: req.principal?.id }, 'workspace deleted');
       return reply.status(204).send(null);
     },
