@@ -10,8 +10,25 @@
 - API documented with Swagger/OpenAPI.
 - Tests integrated into CI.
 - Design mocks are reviewed before frontend build starts.
+- Endpoints follow the assignment: `/v1/ask`, `/v1/chat`, `/v1/retrieve`, plus API usage analytics.
+- Exported Langflow flow JSON is committed in `flows/`.
 
 ## Open choices, with recommendations
+
+### 0. Language: TypeScript instead of Flask or FastAPI (decided by Guilherme, 2026-11-20)
+
+The assignment brief suggests Flask or FastAPI for the API layer. This project uses TypeScript (Node 22, Fastify) throughout. Rationale for the report:
+
+- **One language end to end.** API, ingestion worker, CLI helpers and admin UI share one codebase and one set of zod schemas. The request and response types the UI uses are generated from the same schemas that validate the API, so they cannot drift.
+- **Same capabilities as FastAPI.** Fastify with zod gives typed request validation and an auto-generated OpenAPI spec with Swagger UI, which is what FastAPI is usually chosen for. Fastify is also one of the fastest Node web frameworks.
+- **The AI logic still lives in Langflow.** The brief's core requirement, flow-based AI logic in Langflow, is unchanged: our API calls Langflow's run API, and the flow JSON is in the repo. Langflow and Whisper run as their published container images, so the project writes no Python.
+- **LangChain.js covers the Python ecosystem we would otherwise want.** Document loaders, text splitters, OpenAI-compatible embeddings and the ChromaDB client all exist in LangChain.js.
+- **Turborepo monorepo** gives cached builds and tests across all packages, which a mixed Python and TypeScript repo would make harder.
+
+### 3b. Ingestion libraries: LangChain.js (decided by Guilherme, 2026-11-20)
+
+The worker uses LangChain.js loaders (PDF, DOCX, text), text splitters, `OpenAIEmbeddings` pointed at LM Studio, and the LangChain Chroma vector store. This replaces hand-written parsers. Our code adds progress events, checksum dedupe, course metadata and retries around them.
+
 
 Each choice below has a recommendation the plan already assumes. Changing one is cheap now and expensive after M1.
 

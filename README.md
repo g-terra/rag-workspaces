@@ -1,6 +1,6 @@
 # ouc-materials-api
 
-A self-hosted, Langflow-based RAG API that lets people and AI agents ask questions about OUC class materials.
+A self-hosted, Langflow-based RAG API that lets people and AI agents ask questions about OUC class materials (COS512 Langflow assignment, Option 4: expose AI interactions via an API).
 Material is loaded locally (PDF, DOCX, TXT, MD, and optionally video via Whisper), indexed in a vector database,
 and served through a documented REST API with an admin UI for drag-and-drop uploads and ingestion progress.
 

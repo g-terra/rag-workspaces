@@ -1,13 +1,18 @@
 # Architecture
 
+## Context
+
+This is the project for the COS512 Langflow assignment, Option 4: expose AI interactions via an API. The brief asks for `/ask`, `/chat` and `/retrieve` style endpoints, analytics on API usage, Langflow for the flow-based AI logic, a functional, interactive and tested system, and setup docs. Deliverables are the source code (including the Langflow flow JSON), a 3 to 5 page report and a 3 to 5 minute demo video. The brief suggests Flask or FastAPI; this project uses TypeScript instead, for the reasons recorded in [decisions](decisions.md#0-language-typescript-instead-of-flask-or-fastapi).
+
 ## Goals
 
 1. One command to start everything locally: `docker compose up` (or `pnpm dev` for development).
-2. A REST API, documented with OpenAPI/Swagger, that answers questions over the indexed material with citations, for both humans and agents.
+2. A REST API (`/v1/ask`, `/v1/chat`, `/v1/retrieve`), documented with OpenAPI/Swagger, that answers questions over the indexed material with citations, for both humans and agents.
 3. A documented ingestion pipeline for PDF, DOCX, TXT and MD, with an optional video path (Whisper transcription).
 4. An admin UI with drag-and-drop upload and live ingestion progress.
 5. Provider-agnostic: the LLM and embedding provider are configuration, and the default setup runs fully locally.
-6. Tests at every layer, running in CI on every pull request.
+6. Usage analytics: every API call is recorded and summarised in the API and the admin UI.
+7. Tests at every layer, running in CI on every pull request.
 
 ## System overview
 
@@ -16,7 +21,7 @@ flowchart LR
   UI[Admin UI<br/>browser] --> WEB[web<br/>React SPA + nginx]
   WEB --> API
   AG[Agents / scripts] --> API[api<br/>Fastify, /v1, /docs]
-  API -- query --> LF[langflow<br/>RAG flow]
+  API -- ask / chat --> LF[langflow<br/>RAG flows]
   LF --> QD[(chroma<br/>vectors)]
   LF --> LLM[LLM provider<br/>LM Studio on host, or hosted]
   API -- enqueue --> RD[(redis<br/>BullMQ)]
@@ -40,7 +45,7 @@ LM Studio is a desktop app, so it runs on the host machine, not in compose. Its 
 | `api` | `apps/api` | Public REST API, OpenAPI docs, uploads, SSE progress, auth |
 | `worker` | `apps/worker` | Runs ingestion jobs: parse, chunk, embed, upsert, report progress |
 | `web` | `apps/admin` | Admin UI (static build served by nginx, proxies `/api` to `api`) |
-| `langflow` | `langflowai/langflow` (pinned) | Hosts the retrieval + answer flow; flows are versioned in `flows/` and auto-loaded |
+| `langflow` | `langflowai/langflow` (pinned) | Hosts the ask and chat flows; exported flow JSON is versioned in `flows/` and auto-loaded |
 | `chroma` | `chromadb/chroma` (pinned, server mode) | Vector store (stores and searches embeddings; it does not parse files) |
 | `postgres` | `postgres:16` | Document and job metadata, API keys; also Langflow's own database (separate schema/db) |
 | `redis` | `redis:7` | BullMQ job queue and progress pub/sub |
@@ -62,7 +67,7 @@ open http://localhost:8080      # admin UI;  http://localhost:3000/docs for Swag
 The key design choice is the split between our TypeScript code and Langflow:
 
 - **Our code owns ingestion.** The worker parses, chunks, embeds and writes to Chroma. This gives us per-file, per-stage progress, deterministic behaviour we can unit-test, and helper scripts that work without the UI.
-- **Langflow owns the query flow.** A versioned flow (`flows/rag-query.json`) does retrieval from the same Chroma collection with the same embedding model, builds the prompt, and calls the LLM. Changing prompts, rerankers or models is done in Langflow's editor, then the exported flow is committed.
+- **Langflow owns the answering flows.** Two versioned flows (`flows/ask.json` for single questions, `flows/chat.json` for multi-turn conversations with Langflow's message memory keyed by session id) do retrieval from the same Chroma collection with the same embedding model, builds the prompt, and calls the LLM. Changing prompts, rerankers or models is done in Langflow's editor, then the exported flow is committed.
 - **The API is the only public surface.** Clients never call Langflow or Chroma directly. The API adds auth, validation, OpenAPI docs, citations shaping, and a stable contract even when the flow changes.
 
 The embedding model must match between the worker and the Langflow flow. It is set once in `.env` (`EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`) and the API refuses to start if the collection's recorded model differs.
@@ -76,13 +81,14 @@ upload / CLI ──► store file (volume ./data/uploads, sha256 dedupe)
              ──► create Document + Job (postgres) ──► enqueue (BullMQ)
 worker:  detect type ──► extract text ──► normalise ──► chunk ──► embed (batched) ──► upsert Chroma ──► done
            │               │
-           │               ├─ pdf:  unpdf (pdf.js), page numbers kept for citations
-           │               ├─ docx: mammoth → markdown, headings kept
+           │               ├─ pdf:  LangChain.js PDFLoader, one document per page (page numbers kept for citations)
+           │               ├─ docx: LangChain.js DocxLoader, headings kept
            │               ├─ md / txt: as is (front-matter parsed into metadata)
            │               └─ video/audio: ffmpeg → whisper → timestamped transcript (profile "video")
            └─ each stage emits progress events → redis pub/sub → API SSE → admin UI
 ```
 
+- **LangChain.js does the heavy lifting:** document loaders (`@langchain/community`), `RecursiveCharacterTextSplitter` / `MarkdownTextSplitter` (`@langchain/textsplitters`), `OpenAIEmbeddings` pointed at LM Studio's base URL, and the `Chroma` vector store (`@langchain/community`). Our code wraps them with progress events, dedupe, metadata and retries.
 - **Chunking:** heading-aware recursive splitter, default ~800 tokens with ~100 overlap, configurable. Each chunk carries `documentId`, `course`, `title`, `source path`, `page` or `timestamp`, `heading path`, `chunkIndex`.
 - **Idempotency:** files are keyed by sha256. Re-uploading the same file is a no-op; re-ingesting (e.g. after a chunking change) deletes the document's old points first.
 - **Collections:** material is tagged by `course` (e.g. a module code) so queries can filter by course. One Chroma collection, course as a metadata filter (`where: { course }`).
@@ -95,8 +101,10 @@ All routes are under `/v1`, validated with zod, and documented at `/docs` (Swagg
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/v1/query` | Ask a question. Body: `question`, optional `course`, `topK`. Returns `answer` + `citations[]` (document, page/timestamp, snippet). Supports `stream=true` (SSE) |
-| `POST` | `/v1/search` | Retrieval only: top-k chunks with scores, no LLM. Useful for agents that do their own reasoning |
+| `POST` | `/v1/ask` | One question, one answer. Body: `question`, optional `course`, `topK`. Returns `answer` + `citations[]` (document, page/timestamp, snippet). Supports `stream=true` (SSE) |
+| `POST` | `/v1/chat` | Multi-turn conversation. Body: `message`, optional `sessionId` (created if missing), `course`. Returns `answer`, `citations[]`, `sessionId`. History kept by Langflow memory and mirrored in Postgres |
+| `GET` | `/v1/chat/{sessionId}` | Conversation history |
+| `POST` | `/v1/retrieve` | Retrieval only: top-k chunks with scores, no LLM. Useful for agents that do their own reasoning |
 | `POST` | `/v1/documents` | Multipart upload of one or more files (+ `course`, tags). Returns created documents and job ids |
 | `GET` | `/v1/documents` | List with filters (course, status, type), pagination |
 | `GET` | `/v1/documents/{id}` | Detail, including chunk count and job history |
@@ -106,11 +114,16 @@ All routes are under `/v1`, validated with zod, and documented at `/docs` (Swagg
 | `GET` | `/v1/jobs` / `/v1/jobs/{id}` | Job status and per-stage progress |
 | `GET` | `/v1/jobs/events` | SSE stream of progress events for the admin UI |
 | `GET` | `/v1/courses` | Courses with document counts |
+| `GET` | `/v1/analytics/summary` | API usage totals for a time range: requests by endpoint, error rate, p50/p95 latency, tokens, active API keys |
+| `GET` | `/v1/analytics/timeseries` | Requests and latency per hour/day, filterable by endpoint and key |
+| `GET` | `/v1/analytics/top` | Most asked questions, most cited documents, busiest courses |
 | `GET` | `/health`, `/ready` | Liveness and dependency readiness (postgres, redis, chroma, langflow) |
 
-**Auth:** API keys (`Authorization: Bearer <key>`) with two scopes, `read` (query/search) and `admin` (upload, delete). A bootstrap admin key comes from `.env`. Keys are hashed in Postgres.
+**Auth:** API keys (`Authorization: Bearer <key>`) with two scopes, `read` (ask/chat/retrieve) and `admin` (upload, delete). A bootstrap admin key comes from `.env`. Keys are hashed in Postgres.
 
-**Agents:** besides REST, a later milestone adds an MCP server (`apps/mcp`) exposing `search_materials` and `ask_materials` tools that call the same API, so Claude and other agents can use the material directly.
+**Usage analytics:** a Fastify `onResponse` hook writes one row per request to `api_requests` in Postgres: timestamp, endpoint, status, latency, API key id, course, and for ask/chat the question, token counts (from the LLM response) and cited document ids. Retention is configurable. The analytics endpoints aggregate this table, and the admin UI has a Usage page with charts. Request logging never stores API keys or uploaded file content.
+
+**Agents:** besides REST, a later milestone adds an MCP server (`apps/mcp`) exposing `retrieve_materials` and `ask_materials` tools that call the same API, so Claude and other agents can use the material directly.
 
 ## Repository layout (Turborepo + pnpm workspaces)
 
@@ -122,12 +135,12 @@ apps/
   mcp/            (later) MCP server for agents
 packages/
   shared/         zod schemas and types shared by api, worker, admin (single source of the API contract)
-  ingestion-core/ parsers, chunker, embedder adapters, Chroma writer
+  ingestion-core/ LangChain.js loaders, splitters, embeddings and Chroma store, wrapped with progress and metadata
   langflow-client/ typed client for the Langflow run API
-  db/             Drizzle schema + migrations (documents, jobs, api_keys)
+  db/             Drizzle schema + migrations (documents, jobs, api_keys, chat_sessions, api_requests)
   cli/            helper scripts: ingest, parse, reindex
   config/         shared tsconfig, eslint, prettier, vitest presets
-flows/            exported Langflow flows (auto-loaded at startup)
+flows/            exported Langflow flow JSON: ask.json, chat.json (auto-loaded at startup; part of the deliverable)
 docker/           Dockerfiles, nginx config
 docs/             these documents, plus ingestion guide and API guide
 tests/
@@ -146,7 +159,8 @@ docker-compose.yml, turbo.json, pnpm-workspace.yaml, .env.example
 | Queue | BullMQ on Redis |
 | Metadata DB | Postgres + Drizzle ORM |
 | Vector DB | ChromaDB, server mode (see [decisions](decisions.md)) |
-| RAG orchestration | Langflow, flows versioned in `flows/` |
+| RAG orchestration | Langflow, flow JSON versioned in `flows/` |
+| Ingestion libraries | LangChain.js (`@langchain/community`, `@langchain/textsplitters`, `@langchain/openai`) |
 | LLM / embeddings | Configurable; default LM Studio on the host (OpenAI-compatible API), hosted OpenAI-compatible and Anthropic supported |
 | Transcription | faster-whisper ASR service + ffmpeg (optional profile) |
 | Admin UI | Vite + React, Tailwind CSS, shadcn/ui, TanStack Query, react-dropzone |
