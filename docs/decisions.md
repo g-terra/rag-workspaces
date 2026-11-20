@@ -41,4 +41,4 @@ Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). 
 |---|---|
 | How does our API get its Langflow API key? | API creates it on first start using the Langflow superuser from `.env`, stores it, and reports it in `/ready`; fallback is pasting `LANGFLOW_API_KEY` into `.env` |
 | Which direction(s) of Langflow integration? Our API calling Langflow flows, Langflow flows calling our passages API with a workspace key, or both | Both: the API runs the flows, and agent flows in Langflow can use our API as a tool |
-| Document a hosted model provider as the best-quality setup? | Optional; LM Studio stays the default |
+| Document a hosted model provider? | Yes, as an optional setting in `docs/setup.md` (any OpenAI-compatible endpoint); LM Studio stays the default |
