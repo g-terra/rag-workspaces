@@ -18,6 +18,10 @@ const ConfigSchema = z.object({
   /** How long `/ready` waits for each dependency before calling it down. */
   READY_TIMEOUT_MS: z.coerce.number().int().positive().default(3000),
 
+  // --- Postgres ---
+  /** The app database. Migrations run against it on every start. */
+  DATABASE_URL: z.string().default('postgres://rag@postgres:5432/rag'),
+
   // --- Langflow ---
   LANGFLOW_URL: z.url().default('http://langflow:7860'),
   /** The API signs in as this user on start to mint its own Langflow API key (decision 17). */
