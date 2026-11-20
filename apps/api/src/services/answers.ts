@@ -14,6 +14,8 @@ import {
   outputsByComponent,
   parseJsonMessage,
   type LangflowClient,
+  type RunRequest,
+  type RunResponse,
 } from '@rag/langflow-client';
 import type { Answer } from '@rag/shared';
 import type { Principal } from '../auth/principal.js';
@@ -54,6 +56,10 @@ export type AskInput = {
   question: string;
   maxPassages?: number;
   requestId?: string;
+  /** Stream the reply: called with each piece of text as the model writes it. */
+  onToken?: (text: string) => void;
+  /** Stops the run, e.g. when a streaming client goes away. */
+  signal?: AbortSignal;
 };
 
 /** The stored answer, plus the error that made it fail (for the route to turn into a problem response). */
@@ -73,7 +79,7 @@ export class AnswerService {
 
   async ask(input: AskInput): Promise<AskResult> {
     const { db, langflow, config } = this.deps;
-    const { workspace, caller, question, maxPassages, requestId } = input;
+    const { workspace, caller, question, maxPassages, requestId, onToken, signal } = input;
     const started = performance.now();
     const base: NewAnswer = {
       id: newId('answer'),
@@ -88,6 +94,7 @@ export class AnswerService {
     };
     const elapsed = () => Math.round(performance.now() - started);
     let chat: ChatEndpoint | undefined;
+    let timeToFirstTokenMs: number | null = null;
 
     try {
       chat = chatEndpoint(workspace.settings, config);
@@ -99,30 +106,38 @@ export class AnswerService {
         await retrieve(langflow, workspace, question, config, opts),
       );
       if (!hits.length) {
+        onToken?.(NOT_FOUND_TEXT);
         return {
           answer: await this.store({ ...base, text: NOT_FOUND_TEXT, grounded: false, latencyMs: elapsed() }),
         };
       }
 
-      const run = await langflow.run(
-        FLOWS.answer,
-        {
-          input_value: question,
-          session_id: base.id!,
-          tweaks: {
-            ...searchTweaks(workspace, config, opts),
-            LLM: {
-              provider: chat.provider,
-              model_name: chat.model,
-              api_key: chat.apiKey,
-              base_url: chat.baseUrl,
-              system_message: workspace.settings.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
-              stream: false,
-            },
+      const request: RunRequest = {
+        input_value: question,
+        session_id: base.id!,
+        tweaks: {
+          ...searchTweaks(workspace, config, opts),
+          LLM: {
+            provider: chat.provider,
+            model_name: chat.model,
+            api_key: chat.apiKey,
+            base_url: chat.baseUrl,
+            system_message: workspace.settings.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
+            stream: Boolean(onToken),
           },
         },
-        AbortSignal.timeout(config.ANSWER_TIMEOUT_MS),
-      );
+      };
+      const timeout = AbortSignal.timeout(config.ANSWER_TIMEOUT_MS);
+      const runSignal = signal ? AbortSignal.any([timeout, signal]) : timeout;
+      let run: RunResponse;
+      if (onToken) {
+        run = await this.stream(request, runSignal, (text) => {
+          timeToFirstTokenMs ??= elapsed();
+          onToken(text);
+        });
+      } else {
+        run = await langflow.run(FLOWS.answer, request, runSignal);
+      }
       const outputs = outputsByComponent(run);
       const citationsText = messageText(outputs['ChatOutput-citations']);
       const cited = await resolveHits(
@@ -150,6 +165,7 @@ export class AnswerService {
           model: chat.model,
           ...usage,
           latencyMs: elapsed(),
+          timeToFirstTokenMs,
         }),
       };
     } catch (error) {
@@ -158,11 +174,33 @@ export class AnswerService {
         status: 'failed',
         provider: chat?.provider ?? null,
         model: chat?.model ?? null,
-        error: describe(error),
+        error: signal?.aborted ? 'The caller left before the answer finished.' : describe(error),
         latencyMs: elapsed(),
+        timeToFirstTokenMs,
       });
       return { answer, error };
     }
+  }
+
+  /**
+   * Run `rw-answer` with streaming. Langflow sends `token` events while the model writes and
+   * an `end` event with the same result a plain run returns (so citations arrive at the end).
+   */
+  private async stream(
+    request: RunRequest,
+    signal: AbortSignal,
+    onText: (text: string) => void,
+  ): Promise<RunResponse> {
+    for await (const ev of this.deps.langflow.stream(FLOWS.answer, request, signal)) {
+      const data = (ev.data ?? {}) as { chunk?: string; text?: string; error?: string; result?: RunResponse };
+      if (ev.event === 'token' && data.chunk) onText(data.chunk);
+      // Langflow sends the component's message first ("Connection error."), then a long trace.
+      if (ev.event === 'error') {
+        throw new LangflowError(`stream ${FLOWS.answer}`, 500, (data.text ?? data.error ?? 'failed').trim());
+      }
+      if (ev.event === 'end') return data.result ?? {};
+    }
+    throw new LangflowError(`stream ${FLOWS.answer}`, 502, 'the stream ended without a result');
   }
 
   private async store(row: NewAnswer): Promise<AnswerRow> {

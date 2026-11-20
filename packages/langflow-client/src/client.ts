@@ -11,6 +11,8 @@ export type RunRequest = {
   tweaks?: Tweaks;
 };
 
+export type StreamEvent = { event: string; data: unknown };
+
 export type FlowSummary = { id: string; name: string; endpoint_name: string | null };
 
 export type ApiKeySummary = { id: string; name: string };
@@ -146,4 +148,50 @@ export class LangflowClient {
     });
     return (await res.json()) as RunResponse;
   }
+
+  /**
+   * Run a flow and yield its events as they arrive (`token`, `add_message`, `end`, `error`...).
+   * Tokens only stream when the model node is wired to a `ChatOutput-*` node (POC F5).
+   */
+  async *stream(flow: string, req: RunRequest, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
+    const res = await this.request(`stream ${flow}`, `/api/v1/run/${encodeURIComponent(flow)}?stream=true`, {
+      method: 'POST',
+      signal: signal ?? null,
+      headers: { 'content-type': 'application/json', accept: 'text/event-stream' },
+      body: JSON.stringify({ input_type: 'chat', output_type: 'chat', ...req }),
+    });
+    if (!res.body) return;
+    yield* parseEventStream(res.body);
+  }
+}
+
+/**
+ * Langflow streams one JSON object per event, separated by blank lines, sometimes
+ * with an SSE `data:` prefix. Lines that are not complete JSON are skipped.
+ */
+export async function* parseEventStream(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamEvent> {
+  const decoder = new TextDecoder();
+  let buf = '';
+  const parse = (line: string): StreamEvent | undefined => {
+    const trimmed = line.trim();
+    if (!trimmed) return undefined;
+    const json = trimmed.startsWith('data:') ? trimmed.slice(5).trim() : trimmed;
+    try {
+      const ev = JSON.parse(json) as { event?: string; data?: unknown };
+      return ev.event ? { event: ev.event, data: ev.data } : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+  for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
+    buf += decoder.decode(chunk, { stream: true });
+    let nl: number;
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const ev = parse(buf.slice(0, nl));
+      buf = buf.slice(nl + 1);
+      if (ev) yield ev;
+    }
+  }
+  const last = parse(buf + decoder.decode());
+  if (last) yield last;
 }
