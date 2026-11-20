@@ -6,6 +6,7 @@ import { keycloakAuthenticator, keycloakOptionsFromConfig } from './auth/keycloa
 import { loadConfig } from './config.js';
 import { chromaCheck, keycloakCheck } from './services/checks.js';
 import { ChromaService } from './services/chroma.js';
+import { DocumentEvents } from './services/document-events.js';
 import { IngestProcessor, PgBossIngestQueue } from './services/ingest.js';
 import { LangflowService } from './services/langflow.js';
 
@@ -23,12 +24,14 @@ const database = createDb(config.DATABASE_URL);
 const langflow = new LangflowService({ config, log: logger.child({ component: 'langflow' }) });
 
 const chroma = new ChromaService(config);
+const events = new DocumentEvents();
 const queue = new PgBossIngestQueue(
   config.DATABASE_URL,
   new IngestProcessor({
     db: database.db,
     langflow: langflow.client,
     chroma,
+    events,
     config,
     log: logger.child({ component: 'ingest' }),
   }),
@@ -42,6 +45,7 @@ const app = await buildApp({
   db: database.db,
   chroma,
   queue,
+  events,
   authenticators: [
     apiKeyAuthenticator(database.db),
     keycloakAuthenticator(keycloakOptionsFromConfig(config)),

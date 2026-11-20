@@ -6,6 +6,7 @@ import pino from 'pino';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../config.js';
 import { ChromaService } from './chroma.js';
+import { DocumentEvents } from './document-events.js';
 import { IngestProcessor, PgBossIngestQueue } from './ingest.js';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -59,13 +60,17 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
   let db: Database;
   let workspaceId: string;
   const f = fakes();
+  const events = new DocumentEvents();
+  const seen: string[] = [];
+  events.subscribe((e) => seen.push(e.document.status));
   const config = loadConfig({
     NODE_ENV: 'test',
     INGEST_TIMEOUT_MS: '300',
     INGEST_TIMEOUT_MS_PER_MB: '0',
     INGEST_MAX_ATTEMPTS: '2',
   });
-  const processor = () => new IngestProcessor({ db, langflow: f.langflow, chroma: f.chroma, config, log });
+  const processor = () =>
+    new IngestProcessor({ db, langflow: f.langflow, chroma: f.chroma, events, config, log });
 
   beforeAll(async () => {
     t = await createTestDatabase(url!);
@@ -84,6 +89,7 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
     f.runs.length = 0;
     f.set('ok');
     f.during(undefined);
+    seen.length = 0;
   });
 
   async function newDocument() {
@@ -106,6 +112,7 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
     const id = await newDocument();
     expect(await processor().process(id)).toBe('ready');
     expect(await get(id)).toMatchObject({ status: 'ready', passageCount: 7, attempts: 1, error: null });
+    expect(seen).toEqual(['processing', 'ready']);
     expect(f.runs[0]!.tweaks).toEqual({
       Loader: { file_path: `ouc/${id}.pdf`, document_id: id, filename: 'notes.pdf' },
       Split: { chunk_size: 500, chunk_overlap: 100 },
@@ -186,6 +193,7 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
     const queued = await processor().recover();
     expect(queued).toContain(id);
     expect((await get(id)).status).toBe('queued');
+    expect(seen).toContain('queued');
   });
 
   it('the pg-boss queue processes an enqueued document, retrying until it fails for good', async () => {
