@@ -21,6 +21,7 @@ Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). 
 | 13 | **MCP server is left for later**, outside the core plan | Agents can use the REST API through its OpenAPI spec today |
 | 14 | **No due date drives the plan**; the whole thing is built over the weekend of 21 November 2026 | M2 stays marked as the point where everything graded exists, as a safety net |
 | 15 | **The ingestion queue runs on Postgres (pg-boss); no Redis** | One database for everything. The queue handles one file at a time for one install, so a second data service, client library and test container bought nothing. Live status needs no pub/sub with a single API process |
+| 16 | **The database schema and the Langflow client stay separate packages** (`packages/db`, `packages/langflow-client`) | Separation of concerns. The review suggested folding them into `apps/api` because only the API uses them; declined |
 
 ### Why TypeScript instead of Flask or FastAPI
 
@@ -52,11 +53,3 @@ Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). 
 | How does our API get its Langflow API key? | API creates it on first start using the Langflow superuser from `.env`, stores it, and reports it in `/ready`; fallback is pasting `LANGFLOW_API_KEY` into `.env` |
 | Which direction(s) of Langflow integration? Our API calling Langflow flows, Langflow flows calling our passages API with a workspace key, or both | Both: the API runs the flows, and agent flows in Langflow can use our API as a tool |
 | Document a hosted model provider? | Yes, as an optional setting in `docs/setup.md` (any OpenAI-compatible endpoint); LM Studio stays the default |
-
-### Raised by the plan review
-
-These came out of the review on 2026-11-20 and are still waiting for an answer; the rest were answered and moved to the decided table (11 to 15). Nothing in the other docs assumes these yet.
-
-| Question | Recommendation | Why |
-|---|---|---|
-| Four shared packages for two apps? | Keep `packages/shared` and `packages/config`; make the database schema and the Langflow client folders inside `apps/api` | Only the API uses them. Turborepo stays; there is just less wiring |
