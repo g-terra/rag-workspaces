@@ -22,6 +22,7 @@ import { documentRoutes } from './routes/documents.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
 import { passageRoutes } from './routes/passages.js';
+import { usageRoutes } from './routes/usage.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 import { AnswerService } from './services/answers.js';
 import { ChromaService } from './services/chroma.js';
@@ -107,6 +108,7 @@ export async function buildApp({
         { name: 'answers', description: 'Ask a question, get a cited answer, rate it' },
         { name: 'conversations', description: 'Chat with history; each reply is cited like an answer' },
         { name: 'passages', description: 'Search the material without an AI answer' },
+        { name: 'usage', description: 'Analytics on API usage: per workspace (editors) or overall (admins)' },
         { name: 'api-keys', description: 'API keys for agents and scripts (admins only)' },
       ],
       components: {
@@ -133,6 +135,7 @@ export async function buildApp({
     await app.register(workspaceRoutes, { db, chroma, storage, config });
     await app.register(documentRoutes, { db, storage, chroma, queue, events, config });
     await app.register(apiKeyRoutes, { db });
+    await app.register(usageRoutes, { db });
     if (langflow) {
       await app.register(passageRoutes, { db, chroma, langflow, config });
       await app.register(answerRoutes, { db, answers: new AnswerService({ db, langflow, config }) });
