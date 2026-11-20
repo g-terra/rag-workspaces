@@ -55,7 +55,7 @@ Design (M3) runs in parallel with M0 to M2, so mocks are ready to approve by the
 
 Owns `apps/api`, `packages/*` (except test presets), `flows/`, `docker/`, `docker-compose.yml`.
 
-1. **M0 scaffold** (first PR, unblocks everyone): Turborepo + pnpm, `packages/config`, `packages/shared`, `apps/api` with Fastify, zod type provider, Swagger UI at `/docs`, `/health`, `/ready`; compose with postgres, redis, chroma, langflow, keycloak (pinned, healthchecks, named volumes, `host.docker.internal` for LM Studio); `.env.example`; CI workflow (install, lint, typecheck, test, build).
+1. **M0 scaffold** (first PR, unblocks everyone): Turborepo + pnpm, `packages/config`, `packages/shared`, `apps/api` with Fastify, zod type provider, Swagger UI at `/docs`, `/health`, `/ready`; compose with postgres, chroma, langflow, keycloak (pinned, healthchecks, named volumes, `host.docker.internal` for LM Studio); `.env.example`; CI workflow (install, lint, typecheck, test, build).
 2. **Langflow spike** (see above), in parallel with the scaffold.
 3. `packages/db`: Drizzle schema and migrations for `workspaces`, `workspace_members` (keyed by Keycloak user id), `folders`, `documents`, `answers`, `answer_feedback`, `conversations`, `messages`, `api_keys`, `api_key_workspaces`, `api_requests`. Unique `(workspace_id, sha256)` on documents; indexes on `api_requests` by time, workspace and key.
 4. Auth: Keycloak realm export (`docker/keycloak/realm.json`: clients `admin-ui` and `api`, role `admin`, seeded admin from `.env`, fixed public hostname); JWT verification via JWKS with the internal and public URLs kept apart; API key lookup by `rw_` prefix and SHA-256 hash; workspace access checks as one Fastify hook; rate limiting; read-only user list from Keycloak.
