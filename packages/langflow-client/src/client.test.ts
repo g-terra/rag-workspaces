@@ -30,12 +30,12 @@ describe('LangflowClient', () => {
   it('sends the API key and the run body, defaulting to chat input and output', async () => {
     const { fn, calls } = fakeFetch(() => json({ session_id: 's1', outputs: [] }));
     const client = new LangflowClient({ baseUrl: 'http://lf:7860/', apiKey: 'sk-1', fetch: fn });
-    await client.run('rag-answer', {
+    await client.run('rw-answer', {
       input_value: 'hi',
       session_id: 's1',
       tweaks: { LLM: { model_name: 'x' } },
     });
-    expect(calls[0]!.path).toBe('/api/v1/run/rag-answer?stream=false');
+    expect(calls[0]!.path).toBe('/api/v1/run/rw-answer?stream=false');
     expect(calls[0]!.headers.get('x-api-key')).toBe('sk-1');
     expect(JSON.parse(calls[0]!.body)).toEqual({
       input_type: 'chat',
@@ -54,7 +54,7 @@ describe('LangflowClient', () => {
   it("turns errors into LangflowError with Langflow's own message", async () => {
     const { fn } = fakeFetch(() => json({ detail: { message: 'File not found: /data/uploads/x.pdf' } }, 500));
     const client = new LangflowClient({ baseUrl: 'http://lf', apiKey: 'k', fetch: fn });
-    const err = await client.run('rag-ingest', { session_id: 's' }).catch((e: unknown) => e);
+    const err = await client.run('rw-ingest', { session_id: 's' }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(LangflowError);
     expect(err).toMatchObject({ status: 500, detail: 'File not found: /data/uploads/x.pdf' });
   });
@@ -77,13 +77,13 @@ describe('LangflowClient', () => {
   it('lists flows with their endpoint names', async () => {
     const { fn } = fakeFetch(() =>
       json([
-        { id: '1', name: 'rag-answer', endpoint_name: 'rag-answer', data: null },
+        { id: '1', name: 'rw-answer', endpoint_name: 'rw-answer', data: null },
         { id: '2', name: 'Scratch' },
       ]),
     );
     const client = new LangflowClient({ baseUrl: 'http://lf', apiKey: 'k', fetch: fn });
     expect(await client.listFlows()).toEqual([
-      { id: '1', name: 'rag-answer', endpoint_name: 'rag-answer' },
+      { id: '1', name: 'rw-answer', endpoint_name: 'rw-answer' },
       { id: '2', name: 'Scratch', endpoint_name: null },
     ]);
   });

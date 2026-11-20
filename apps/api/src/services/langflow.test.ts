@@ -23,7 +23,7 @@ function fakeLangflow(opts: { loginFails?: boolean; flows?: string[]; healthy?: 
   return new LangflowClient({ baseUrl: 'http://lf', fetch: fetchFn, sleep: async () => {} });
 }
 
-const ALL_FLOWS = ['rag-ingest', 'rag-retrieve', 'rag-answer', 'rag-delete'];
+const ALL_FLOWS = ['rw-ingest', 'rw-retrieve', 'rw-answer', 'rw-delete'];
 const base = { LANGFLOW_URL: 'http://lf', LANGFLOW_SUPERUSER: 'admin' };
 const signal = new AbortController().signal;
 
@@ -80,11 +80,11 @@ describe('LangflowService', () => {
     const svc = new LangflowService({
       config: { ...base, LANGFLOW_API_KEY: 'sk-env' },
       log,
-      client: fakeLangflow({ flows: ['rag-ingest', 'rag-retrieve'] }),
+      client: fakeLangflow({ flows: ['rw-ingest', 'rw-retrieve'] }),
     });
     await svc.start();
     await expect(svc.readinessCheck().check(signal)).rejects.toThrow(
-      'flows missing in Langflow: rag-answer, rag-delete',
+      'flows missing in Langflow: rw-answer, rw-delete',
     );
   });
 

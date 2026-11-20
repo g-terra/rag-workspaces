@@ -1,7 +1,7 @@
 {
   "id": "5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e01",
-  "name": "rag-ingest",
-  "endpoint_name": "rag-ingest",
+  "name": "rw-ingest",
+  "endpoint_name": "rw-ingest",
   "description": "Load one document, split, embed and upsert into the workspace collection. Tweak Loader, Upsert, Embeddings, Split.",
   "data": {
     "nodes": [

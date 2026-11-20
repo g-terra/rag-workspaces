@@ -31,9 +31,9 @@ regenerating the flows (`poc/client/build-flows.ts` for now) and rerunning the c
 ## Flows
 
 The API's list of names is `apps/api/src/flows.ts`; `/ready` fails if one is missing.
-M1 renames them to `rw-*` and adds a stateless `chat` flow.
+A stateless `rw-chat` flow joins them with conversations (M2).
 
-### `rag-ingest`: load, split, embed and store one file
+### `rw-ingest`: load, split, embed and store one file
 
 | Node | Tweak fields the API sets |
 |---|---|
@@ -47,7 +47,7 @@ vectors first, so retries never duplicate. Vector ids are `<document_id>:<chunk 
 `document_id`, `filename`, `folder`, `chunk_index` and `page` (PDF only, otherwise `null`).
 A failure (for example, file not found) comes back as HTTP 500 with the reason in `detail.message`.
 
-### `rag-retrieve`: best matching passages, no generation
+### `rw-retrieve`: best matching passages, no generation
 
 | Node | Tweak fields |
 |---|---|
@@ -58,9 +58,9 @@ A failure (for example, file not found) comes back as HTTP 500 with the reason i
 Output `ChatOutput-passages`: a list of `{ rank, id, text, score, document_id, filename, folder, page, chunk_index }`, best first; `score` is cosine similarity.
 An unknown collection returns an empty list.
 
-### `rag-answer`: retrieve, prompt, generate (streams)
+### `rw-answer`: retrieve, prompt, generate (streams)
 
-Same `Embeddings` and `Search` tweaks as `rag-retrieve`, plus:
+Same `Embeddings` and `Search` tweaks as `rw-retrieve`, plus:
 
 | Node | Tweak fields |
 |---|---|
@@ -68,9 +68,9 @@ Same `Embeddings` and `Search` tweaks as `rag-retrieve`, plus:
 | `LLM` | `provider` (`lmstudio`, `openai`, `anthropic`, `gemini`), `model_name`, `api_key`, `base_url`, `temperature`, `system_message` |
 
 Outputs `ChatOutput-answer` (the answer text; tokens stream with `?stream=true`) and
-`ChatOutput-citations` (the passages given to the model, same shape as `rag-retrieve`).
+`ChatOutput-citations` (the passages given to the model, same shape as `rw-retrieve`).
 
-### `rag-delete`: delete a document's vectors
+### `rw-delete`: delete a document's vectors
 
 | Node | Tweak fields |
 |---|---|
