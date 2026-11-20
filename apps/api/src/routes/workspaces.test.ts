@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { createTestDatabase } from '@rag/db/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp, type App } from '../app.js';
@@ -5,6 +8,7 @@ import { apiKeyAuthenticator } from '../auth/api-keys.js';
 import { keycloakAuthenticator } from '../auth/keycloak.js';
 import { loadConfig } from '../config.js';
 import { ChromaService } from '../services/chroma.js';
+import { UploadStorage } from '../services/storage.js';
 import { testKeycloak } from '../test/tokens.js';
 
 /** A Chroma stand-in that records collection calls. */
@@ -28,10 +32,12 @@ describe.skipIf(!url)('workspaces (against TEST_DATABASE_URL)', () => {
   const auth: Record<'admin' | 'alice' | 'bob', string> = { admin: '', alice: '', bob: '' };
 
   let kc: Awaited<ReturnType<typeof testKeycloak>>;
+  let uploads: string;
 
   beforeAll(async () => {
     t = await createTestDatabase(url!);
     kc = await testKeycloak();
+    uploads = await mkdtemp(path.join(tmpdir(), 'uploads-'));
     auth.admin = `Bearer ${await kc.token({ sub: 'admin-1', realm_access: { roles: ['admin'] } })}`;
     auth.alice = `Bearer ${await kc.token({ sub: 'alice-1' })}`;
     auth.bob = `Bearer ${await kc.token({ sub: 'bob-1', preferred_username: 'bob' })}`;
@@ -39,6 +45,7 @@ describe.skipIf(!url)('workspaces (against TEST_DATABASE_URL)', () => {
       config: loadConfig({ NODE_ENV: 'test' }),
       db: t.db,
       chroma: chromaFake.chroma,
+      storage: new UploadStorage(uploads, 1_000_000),
       logger: false,
       authenticators: [apiKeyAuthenticator(t.db), keycloakAuthenticator(kc.options)],
     });
@@ -51,6 +58,7 @@ describe.skipIf(!url)('workspaces (against TEST_DATABASE_URL)', () => {
   afterAll(async () => {
     await app?.close();
     await t?.drop();
+    await rm(uploads, { recursive: true, force: true });
   });
 
   function call(
