@@ -1,0 +1,41 @@
+# POC stack: Langflow + ChromaDB. The model server (LM Studio, or the stand-in in
+# standin/server.ts) runs on the host and is reached at host.docker.internal.
+name: rag-poc
+
+services:
+  chroma:
+    image: chromadb/chroma:1.5.9
+    ports: ["8000:8000"]
+    volumes: [chroma-data:/data]
+    environment:
+      ANONYMIZED_TELEMETRY: "FALSE"
+
+  langflow:
+    image: langflowai/langflow:1.13.3
+    ports: ["7860:7860"]
+    depends_on: [chroma]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    env_file: .env
+    environment:
+      LANGFLOW_AUTO_LOGIN: "false"
+      LANGFLOW_SKIP_AUTH_AUTO_LOGIN: "false"
+      LANGFLOW_NEW_USER_IS_ACTIVE: "false"
+      LANGFLOW_CONFIG_DIR: /app/langflow
+      LANGFLOW_DATABASE_URL: sqlite:////app/langflow/langflow.db
+      # Custom components (Chroma over REST, document loader) appear in the UI catalog.
+      LANGFLOW_COMPONENTS_PATH: /app/custom_components
+      # Flows in this folder are imported on startup (tested by the POC, see RESULTS.md).
+      LANGFLOW_LOAD_FLOWS_PATH: /app/flows
+      # Langflow 1.13 blocks model base URLs on private networks (SSRF policy).
+      # LM Studio on the host is one, so it has to be allowlisted explicitly.
+      LANGFLOW_SSRF_ALLOWED_HOSTS: host.docker.internal
+      DO_NOT_TRACK: "true"
+    volumes:
+      - langflow-data:/app/langflow
+      - ./components:/app/custom_components:ro
+      - ./flows:/app/flows:ro
+      - ./samples:/data/uploads:ro
+
+volumes:
+  chroma-data:
+  langflow-data:
