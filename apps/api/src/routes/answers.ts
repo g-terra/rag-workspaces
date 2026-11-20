@@ -5,7 +5,8 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
 import type { Principal } from '../auth/principal.js';
-import { HttpProblem } from '../errors.js';
+import { HttpProblem, problem } from '../errors.js';
+import { openEventStream, wantsEventStream, type SendEvent } from '../sse.js';
 import type { AnswerService } from '../services/answers.js';
 import { canSee, toApiAnswer } from '../services/answers.js';
 import { assertSearchable, flowProblem } from '../services/flow-errors.js';
@@ -28,7 +29,10 @@ export const answerRoutes: FastifyPluginAsyncZod<AnswerRoutesOptions> = async (a
         description:
           "Answers one question from the workspace's material, with citations to the passages the model was given. " +
           'If nothing in the workspace is relevant enough, the answer is `grounded: false` with a fixed text, and no model is called. ' +
-          'Every answer is stored, failed ones too, and can be fetched and rated later.',
+          'Every answer is stored, failed ones too, and can be fetched and rated later.\n\n' +
+          'Send `Accept: text/event-stream` to stream it: `token` events (`{ text }`) as the model writes, ' +
+          'then `citations` and `done` (the stored answer, with `timeToFirstTokenMs`). A failure after the stream ' +
+          'has started ends it with an `error` event (problem JSON plus `answerId`).',
         params: SlugParams,
         body: AskQuestion,
         response: { 201: Answer },
@@ -37,15 +41,48 @@ export const answerRoutes: FastifyPluginAsyncZod<AnswerRoutesOptions> = async (a
     async (req, reply) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'reader');
       assertSearchable(workspace);
-      const { answer, error } = await service.ask({
+      const input = {
         workspace,
         caller: req.principal!,
         question: req.body.question,
         maxPassages: req.body.maxPassages,
         requestId: req.id,
+      };
+
+      if (!wantsEventStream(req)) {
+        const { answer, error } = await service.ask(input);
+        if (error) throw flowProblem(error, 'Answering');
+        return reply.status(201).send(toApiAnswer(answer, workspace.slug));
+      }
+
+      // Streaming. The stream opens with the first token, so a failure before any text
+      // (provider key missing, Langflow down) is still a normal HTTP error response.
+      let send: SendEvent | undefined;
+      const open = () => (send ??= openEventStream(req, reply));
+      const gone = new AbortController();
+      reply.raw.on('close', () => {
+        if (!reply.raw.writableFinished) gone.abort(new Error('The client closed the stream.'));
       });
-      if (error) throw flowProblem(error, 'Answering');
-      return reply.status(201).send(toApiAnswer(answer, workspace.slug));
+      const { answer, error } = await service.ask({
+        ...input,
+        signal: gone.signal,
+        onToken: (text) => open()('token', { text }),
+      });
+      if (error && !send) throw flowProblem(error, 'Answering');
+      const emit = open();
+      if (error) {
+        const p = flowProblem(error, 'Answering');
+        const status = p instanceof HttpProblem ? p.status : 500;
+        emit('error', {
+          ...problem(req, status, p instanceof HttpProblem ? p.message : undefined),
+          answerId: answer.id,
+        });
+      } else {
+        const body = toApiAnswer(answer, workspace.slug);
+        emit('citations', { citations: body.citations });
+        emit('done', body);
+      }
+      reply.raw.end();
     },
   );
 

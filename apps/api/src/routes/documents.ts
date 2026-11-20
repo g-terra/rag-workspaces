@@ -8,6 +8,7 @@ import { and, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
+import { openEventStream } from '../sse.js';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
 import { ChromaService } from '../services/chroma.js';
@@ -220,18 +221,8 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
     },
     async (req, reply) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'reader');
-      reply.hijack();
+      const send = openEventStream(req, reply);
       const res = reply.raw;
-      res.writeHead(200, {
-        'content-type': 'text/event-stream; charset=utf-8',
-        'cache-control': 'no-cache, no-transform',
-        connection: 'keep-alive',
-        'x-request-id': req.id,
-        // Tell nginx not to buffer the stream.
-        'x-accel-buffering': 'no',
-      });
-      const send = (event: string, data: unknown) =>
-        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 
       // Subscribe before reading the snapshot, so a change in between is not lost (it may arrive twice).
       const unsubscribe = events.subscribe((e) => {
