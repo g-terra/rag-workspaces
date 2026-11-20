@@ -1,7 +1,7 @@
 {
   "id": "5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e04",
-  "name": "rag-delete",
-  "endpoint_name": "rag-delete",
+  "name": "rw-delete",
+  "endpoint_name": "rw-delete",
   "description": "Delete a document's vectors by document id. Tweak Delete.",
   "data": {
     "nodes": [

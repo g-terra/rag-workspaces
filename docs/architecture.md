@@ -126,7 +126,7 @@ The embedding model is fixed per workspace once it holds documents, because vect
 
 The API and the flows meet at a small, tested contract, because this is the part of the design most likely to break quietly:
 
-- **Run by name, not id.** Each flow has a fixed endpoint name (`rw-ingest`, `rw-retrieve`, `rw-answer`, `rw-chat`; the M0 flows still use the spike's `rag-*` names until M1). The full contract, node by node, is in [`flows/README.md`](../flows/README.md).
+- **Run by name, not id.** Each flow has a fixed endpoint name (`rw-ingest`, `rw-retrieve`, `rw-answer`, `rw-chat`; `rw-delete` removes a document's vectors). The full contract, node by node, is in [`flows/README.md`](../flows/README.md).
 - **Node ids are part of the contract.** Tweaks are keyed by node id (`Loader`, `Split`, `Embeddings`, `Search`, `Prompt`, `LLM`, `Upsert`, `Delete`), so those ids are fixed. Chat input and output nodes must keep the `ChatInput-` and `ChatOutput-` prefixes, or tokens silently stop streaming.
 - **Inputs are tweaks on named components.** The API passes collection name, embedding model, chat model, system prompt, chunk size and overlap, top-k, folder filter and document id as tweaks. The component names the API relies on are listed in `flows/README.md`, and a CI test fails if a committed flow no longer has them.
 - **Outputs are structured.** Langflow's run API has no "return this data" mode, so flows send passages as fenced JSON inside a chat message and the API parses it. `rw-retrieve`, `rw-answer` and `rw-chat` return the retrieved passages (passage id, document id, chunk index, page or start seconds, text, score) next to the answer text. Citations are the passages that were given to the model; the API does not guess which ones the model used.
