@@ -13,7 +13,7 @@ rag-workspaces is a general tool; its first use is the COS512 Langflow assignmen
 5. Keycloak login for people, workspace-scoped API keys for agents and scripts.
 6. Usage analytics per workspace, per key and per user.
 7. Admin UI with drag-and-drop upload and live ingestion progress.
-8. Provider-agnostic: LM Studio on the host by default, any OpenAI-compatible provider by config.
+8. Provider as a setting: LM Studio on the host by default; OpenAI, Google Gemini, Anthropic or any OpenAI-compatible endpoint by config, globally or per workspace.
 9. Tests at every layer, running in CI.
 10. A submittable assignment early: the brief is fully covered once the API, flows, analytics, tests and docs exist (milestone M2 in the [work breakdown](work-breakdown.md)). The admin UI, video and the rest build on top and must not put the hand-in at risk.
 
@@ -61,7 +61,25 @@ flowchart LR
 | `postgres` | `postgres:16` | App data and the ingestion queue (pg-boss), plus separate databases for Langflow and Keycloak (created by an init script on first start) |
 | `whisper` | faster-whisper ASR web service | Video and audio transcription; compose profile `video`, off by default |
 
-LM Studio is a desktop app on the host. Containers reach it at `http://host.docker.internal:1234/v1` (compose adds `extra_hosts: host.docker.internal:host-gateway` so this works on Linux too). The provider is a setting; any OpenAI-compatible endpoint works.
+LM Studio is a desktop app on the host. Containers reach it at `http://host.docker.internal:1234/v1` (compose adds `extra_hosts: host.docker.internal:host-gateway` so this works on Linux too).
+
+### Model providers
+
+The provider is a setting, not code. LM Studio is the default and needs no key.
+
+| Provider | Chat | Embeddings | Notes |
+|---|---|---|---|
+| LM Studio (default) | yes | yes | On the host, offline, no key |
+| OpenAI | yes | yes | `OPENAI_API_KEY` |
+| Google Gemini | yes | yes | `GEMINI_API_KEY` |
+| Anthropic | yes | no | `ANTHROPIC_API_KEY`; has no embedding models, so embeddings come from another provider |
+| Any OpenAI-compatible endpoint | yes | if it offers them | Base URL and key |
+
+- Providers are configured in `.env` (base URL and key per provider). Keys never go through the API or into flow JSON; Langflow reads them as global variables.
+- Chat and embeddings are chosen separately: a global default for each in `.env`, and a workspace can override either (`chatProvider` and `chatModel`, `embeddingProvider` and `embeddingModel`). A common mix is local embeddings with a hosted chat model.
+- The embedding provider and model are pinned per workspace like the embedding model was; changing either means a reindex.
+- **A hosted provider sends that workspace's passages and questions to the provider.** The workspace settings screen says so in plain words, and a workspace on LM Studio stays fully local.
+- How the flows switch provider (one OpenAI-compatible component with a base URL, or Langflow's own OpenAI, Gemini and Anthropic components behind a switch) is settled in the M0 spike.
 
 Published ports: only `web` (8080), `api` (3000), `keycloak` and `langflow` (7860) are published, all bound to `127.0.0.1` by default. `postgres`, `chroma` and `whisper` are reachable only on the compose network. Every service has a healthcheck, and `api` waits for postgres, chroma, langflow and keycloak to be healthy before it starts.
 
@@ -114,6 +132,8 @@ The API and the flows meet at a small, tested contract, because this is the part
 - **Passage metadata is written at ingestion:** `document_id`, `folder_id`, `chunk_index`, and `page` or `start_seconds`. The passage id is `psg_<document ulid>_<chunk index>`, so neighbours are found without a second index and re-ingestion is repeatable.
 - **Small custom components are expected.** Stock Langflow components load a file as one text and do not keep page numbers, chunk indexes or transcript timestamps. Where needed, the flows carry small custom components (Python inside the flow JSON). The project still has no Python service.
 - **Grounding.** The answer prompt tells the model to answer only from the passages and to say so when they do not contain the answer. If retrieval returns nothing above the workspace's minimum score, the API returns that "not found" answer with empty citations without calling the chat model.
+- **One direction.** The API calls Langflow. Flows read ChromaDB directly and never call our API, so there are no API keys for Langflow and no loop between the two.
+- **Langflow API key.** The API creates its own Langflow key on first start by signing in as the Langflow superuser from `.env`, and stores it. If that fails, it uses `LANGFLOW_API_KEY` from `.env`. `GET /v1/system` shows which one is in use.
 - **Flows live in git.** `pnpm flows:export` pulls the flows out of the running Langflow into `flows/` (without saved credentials), `pnpm flows:import` pushes them in. Editing in the Langflow editor and forgetting to export is the usual way the repo and the running system drift.
 
 All of this is unproven until the [M0 spike](work-breakdown.md#m0-spike-prove-the-langflow-contract) has run.
@@ -204,7 +224,7 @@ docker-compose.yml, turbo.json, pnpm-workspace.yaml, .env.example
 | API | Fastify, zod (`fastify-type-provider-zod`), `@fastify/swagger` + `@fastify/swagger-ui`, `@fastify/multipart` |
 | AI flows | Langflow (ingest, retrieve, answer, chat), flow JSON versioned in `flows/` |
 | Vector DB | ChromaDB, one collection per workspace |
-| Models | LM Studio on the host by default (OpenAI-compatible); configurable per workspace |
+| Models | LM Studio on the host by default; OpenAI, Gemini, Anthropic (chat only) or any OpenAI-compatible endpoint as a setting, per workspace if wanted |
 | Auth | Keycloak (OIDC) for people, hashed API keys for agents, `@fastify/rate-limit` |
 | Queue | pg-boss on Postgres (no Redis); live status from an in-process event emitter, since there is one API process |
 | App DB | Postgres + Drizzle ORM |

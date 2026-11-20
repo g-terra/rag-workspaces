@@ -45,6 +45,7 @@ The plan rests on things Langflow has to do that nobody has tried yet. Before an
 | Can ingestion keep page numbers and chunk indexes? | Custom loader and splitter component |
 | Does token streaming work through the run API, and do we get token counts? | Stream from the API in chunks; token counts become `null` or estimated |
 | Can vectors be deleted and metadata updated by `document_id` from the API with the Chroma client? | Keep folder out of Chroma and filter by document ids |
+| Do chat and embeddings work through the flows with Gemini, OpenAI and Anthropic (chat only) as well as LM Studio, switched by tweaks? | Use Langflow's own provider components behind a switch component |
 | How long does one 50-page PDF take to ingest on LM Studio? | Sets the timeout and the upload expectations in the UI |
 
 If several of these need custom components, that is fine and expected; if the run API cannot return structured passages at all, the plan comes back to Guilherme before M1 starts.
@@ -60,14 +61,14 @@ Owns `apps/api`, `packages/*` (except test presets), `flows/`, `docker/`, `docke
 3. `packages/db`: Drizzle schema and migrations for `workspaces`, `workspace_members` (keyed by Keycloak user id), `folders`, `documents`, `answers`, `answer_feedback`, `conversations`, `messages`, `api_keys`, `api_key_workspaces`, `api_requests`. Unique `(workspace_id, sha256)` on documents; indexes on `api_requests` by time, workspace and key.
 4. Auth: Keycloak realm export (`docker/keycloak/realm.json`: clients `admin-ui` and `api`, role `admin`, seeded admin from `.env`, fixed public hostname); JWT verification via JWKS with the internal and public URLs kept apart; API key lookup by `rw_` prefix and SHA-256 hash; workspace access checks as one Fastify hook; rate limiting; read-only user list from Keycloak.
 5. Workspaces: CRUD, settings with defaults (embedding model pinned at creation), Chroma collection create/delete, members, reindex with the `reindexing` state.
-6. Langflow: build `flows/ingest.json`, `flows/retrieve.json`, `flows/answer.json`, `flows/chat.json`, all parameterised by workspace (collection, models, prompt, chunking) and run by endpoint name; `flows/README.md` with the contract; `pnpm flows:export` and `flows:import`; import on startup; `packages/langflow-client`; Langflow API key setup (method pending decision).
+6. Langflow: build `flows/ingest.json`, `flows/retrieve.json`, `flows/answer.json`, `flows/chat.json`, all parameterised by workspace (collection, models, prompt, chunking) and run by endpoint name; `flows/README.md` with the contract; `pnpm flows:export` and `flows:import`; import on startup; `packages/langflow-client`; Langflow API key created by the API on first start, with `LANGFLOW_API_KEY` in `.env` as fallback; provider switching for LM Studio, OpenAI, Gemini, Anthropic and custom endpoints.
 7. Ingestion bookkeeping: uploads to `/data/uploads/<slug>/`, size and type limits, sha256 dedupe, pg-boss queue on Postgres, one file at a time, run ingest flow per file with a timeout, clean-before-retry, statuses, retries with backoff, recovery of stuck documents on start, delete and reindex by document id, SSE events with a snapshot on connect.
 8. Asking: passages, answers (with streaming), conversations and messages, feedback, citation shaping, the "not found" answer when nothing scores high enough.
 9. Usage analytics: `onResponse` hook writing `api_requests` (workspace, user or key, route, status, latency, time to first token, tokens when known, question, cited documents); summary, timeseries, top-questions, top-documents, requests endpoints; question retention job.
-10. API keys: admin-only CRUD, workspace binding, expiry, last used, `purpose: langflow` setup text.
+10. API keys: admin-only CRUD, workspace binding, expiry, last used, shown-once secret.
 11. Operations: `GET /v1/system`, structured logs with request id passed to Langflow, `pnpm backup` / `restore` / `doctor`, start-up check that refuses placeholder secrets.
 12. M5: Whisper profile (the ASR service takes video directly, so the API needs no ffmpeg), timestamped transcript stored and fed to the ingest flow in segments so citations carry start seconds.
-13. Docs: `docs/setup.md` (quick start, LM Studio, Keycloak first login, hosted provider, minimum hardware) and `docs/api.md` (auth, examples) by M2; `docs/ingestion.md` and `docs/operations.md` (backup, upgrade, Langflow version bumps, retention) by M6.
+13. Docs: `docs/setup.md` (quick start, LM Studio, Keycloak first login, switching to OpenAI, Gemini, Anthropic or another endpoint, minimum hardware) and `docs/api.md` (auth, examples) by M2; `docs/ingestion.md` and `docs/operations.md` (backup, upgrade, Langflow version bumps, retention) by M6.
 
 ## Workstream 2: Frontend
 
@@ -75,12 +76,12 @@ Owns `apps/admin`. **Starts building only after M3 (design approved).**
 
 1. Vite + React + TypeScript, Tailwind, shadcn/ui, TanStack Query, React Router; API client generated from the committed OpenAPI snapshot (the same file the contract test guards), so the UI and the API cannot drift.
 2. Keycloak login (oidc-client-ts), session handling, role-aware navigation.
-3. Workspace switcher and workspace management (create, settings, members, delete, reindex).
+3. Workspace switcher and workspace management (create, settings including provider and model with a notice when data leaves the machine, members, delete, reindex).
 4. Upload: drag and drop into a workspace and folder, per-file upload progress, then live status (queued, transcribing, processing, ready, failed) with retry.
 5. Document library: folders, filters, detail with passages preview, delete, reindex.
 6. Playground: Ask, Chat and Search modes against the current workspace, streamed answers, clickable citations, feedback buttons.
 7. Usage page: requests over time, by route, workspace, key and user; latency; error rate; top questions; most cited documents; feedback.
-8. API keys (admin): create with workspaces and role, copy-once secret, Langflow setup snippet, revoke.
+8. API keys (admin): create with workspaces and role, copy-once secret, revoke.
 9. System status: a banner when the model provider, Langflow or Chroma is down (most often LM Studio not running), with what to do about it.
 
 ## Workstream 3: Testing and validation
@@ -113,7 +114,7 @@ Delivers mocks for review before frontend builds anything.
    - Document library and document detail with passages
    - Playground with Ask, Chat and Search modes, citations, feedback
    - Usage analytics (global and per workspace)
-   - API keys: list, create with workspaces and role, copy-once secret, Langflow setup
+   - API keys: list, create with workspaces and role, copy-once secret
    - Workspace members: people with access, grant and remove, role
    - Empty states, error states (LM Studio not running, ingestion failed with reason, workspace reindexing), and the delete-workspace confirmation
 3. Clickable prototype: create workspace, drop files, watch status, ask a question.

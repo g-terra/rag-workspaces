@@ -1,6 +1,6 @@
 # Decisions
 
-Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). Open items list a recommendation.
+Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). Nothing is open at the moment.
 
 ## Decided
 
@@ -10,7 +10,7 @@ Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). 
 | 2 | **Workspaces**: dynamic, isolated groups of material, each with its own collection, routes, keys, analytics and optional settings | One install serves study material (`ouc`), personal notes (`personal`) and anything else without data leaking between them. The repo was renamed `rag-workspaces` to match |
 | 3 | **Ingestion runs as a Langflow flow**; the API keeps the bookkeeping | Keeps all AI logic (loading, splitting, embedding) in Langflow, as the assignment intends, and visible in the flow editor. Trade-off: progress is per file, not per chunk |
 | 4 | **ChromaDB**, one collection per workspace | Single server container, first-class Langflow component, metadata filtering. FAISS is a library with no server or filtering; Weaviate is heavier than needed. None of them parses files themselves |
-| 5 | **LM Studio** on the host as the default model provider | Runs offline; its server speaks the OpenAI API, so any OpenAI-compatible provider is a config change. CI uses a stub server instead |
+| 5 | **LM Studio** on the host as the default model provider | Runs offline; other providers are a setting (see 19). CI uses a stub server instead |
 | 6 | **Our own resource-oriented API schema**, no `/ask` `/chat` `/retrieve` aliases | Answers and conversations become stored records, which makes analytics and feedback natural; see [API schema](api-schema.md) and its mapping table |
 | 7 | **Answer feedback** (up/down + comment) kept | Gives analytics a quality signal |
 | 8 | **Keycloak** for login, accounts created by admins only | Standard OIDC, runs in compose with a pre-imported realm; no self sign-up for a personal tool |
@@ -22,6 +22,9 @@ Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). 
 | 14 | **No due date drives the plan**; the whole thing is built over the weekend of 21 November 2026 | M2 stays marked as the point where everything graded exists, as a safety net |
 | 15 | **The ingestion queue runs on Postgres (pg-boss); no Redis** | One database for everything. The queue handles one file at a time for one install, so a second data service, client library and test container bought nothing. Live status needs no pub/sub with a single API process |
 | 16 | **The database schema and the Langflow client stay separate packages** (`packages/db`, `packages/langflow-client`) | Separation of concerns. The review suggested folding them into `apps/api` because only the API uses them; declined |
+| 17 | **The API gets its Langflow key automatically** on first start (signing in as the Langflow superuser from `.env`); `LANGFLOW_API_KEY` in `.env` is the fallback | Nothing to paste on a fresh install |
+| 18 | **One direction: the API calls Langflow.** Flows read ChromaDB directly and never call our API; no API keys for Langflow | Simpler, no loop between the two, and one less key type to explain |
+| 19 | **Hosted model providers are a setting**: LM Studio stays the default; OpenAI, Google Gemini, Anthropic (chat only, it has no embedding models) and any OpenAI-compatible endpoint can be configured, globally or per workspace | Lets a workspace trade privacy for quality where wanted. A hosted provider receives that workspace's passages and questions, and the UI says so |
 
 ### Why TypeScript instead of Flask or FastAPI
 
@@ -45,11 +48,3 @@ Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). 
 | API key storage | `rw_` prefix, 32 random bytes, SHA-256 hash | bcrypt or argon2 (slower, not needed for random secrets) |
 | Retrieval evaluation | Run locally against real models, results committed and used in the report | Nightly in CI (cannot work with a stub model) |
 | Published ports | Bound to `127.0.0.1`; databases not published | Open on all interfaces |
-
-## Open
-
-| Question | Recommendation |
-|---|---|
-| How does our API get its Langflow API key? | API creates it on first start using the Langflow superuser from `.env`, stores it, and reports it in `/ready`; fallback is pasting `LANGFLOW_API_KEY` into `.env` |
-| Which direction(s) of Langflow integration? Our API calling Langflow flows, Langflow flows calling our passages API with a workspace key, or both | Both: the API runs the flows, and agent flows in Langflow can use our API as a tool |
-| Document a hosted model provider? | Yes, as an optional setting in `docs/setup.md` (any OpenAI-compatible endpoint); LM Studio stays the default |

@@ -7,7 +7,7 @@ Resource-oriented REST API. Everything is under `/v1`; material-related resource
 | Convention | Rule |
 |---|---|
 | Versioning | `/v1`; breaking changes go to `/v2` |
-| Auth | `Authorization: Bearer <token or key>`: a Keycloak access token (people) or an API key (agents, scripts, Langflow) |
+| Auth | `Authorization: Bearer <token or key>`: a Keycloak access token (people) or an API key (agents and scripts) |
 | Isolation | A caller only sees workspaces it is granted; others return 404, not 403, so their existence is not revealed |
 | Ids | Prefixed ULIDs: `ws_`, `fld_`, `doc_`, `ans_`, `cnv_`, `msg_`, `key_`. Passages are `psg_<document ulid>_<chunk index>`, so they are stable across re-indexing with the same settings. Users are identified by their Keycloak user id. Workspaces are addressed by `slug` |
 | Fields | JSON, camelCase, ISO 8601 UTC timestamps |
@@ -50,14 +50,16 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 ```json
 { "id": "ws_01J…", "slug": "ouc", "name": "OUC study material", "description": "COS512 and other modules",
   "status": "active",
-  "settings": { "chatModel": null, "embeddingModel": "text-embedding-nomic-embed-text-v1.5",
+  "settings": { "chatProvider": null, "chatModel": null,
+                "embeddingProvider": "lmstudio", "embeddingModel": "text-embedding-nomic-embed-text-v1.5",
                 "systemPrompt": null, "chunkSize": 800, "chunkOverlap": 100, "topK": 5, "minScore": null },
   "stats": { "documents": 42, "passages": 5120, "conversations": 7 },
   "createdAt": "…" }
 ```
 
 - `slug` is 3 to 40 characters, lowercase letters, digits and hyphens, and cannot be changed after creation (the collection and the upload folder are named after it). A taken slug returns `409`.
-- `null` settings use the global defaults from `.env`. `embeddingModel` is the exception: it is filled in from the default when the workspace is created and never `null` afterwards, so a later change to `.env` cannot silently break search in existing workspaces. It is locked while the workspace has documents, except through reindex.
+- `chatProvider` and `embeddingProvider` are one of the providers configured in `.env`: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the configured providers and their models; choosing one that is not configured returns `422`. Provider keys are never accepted or returned by the API.
+- `null` settings use the global defaults from `.env`. `embeddingProvider` and `embeddingModel` are the exception: they are filled in from the default when the workspace is created and are never `null` afterwards, so a later change to `.env` cannot silently break search in existing workspaces. They are locked while the workspace has documents, except through reindex.
 - `chunkSize` and `chunkOverlap` apply to documents ingested after the change; reindex applies them to everything.
 - `status` is `active` or `reindexing`. While reindexing, passages, answers and messages return `503` with `Retry-After`.
 - Deleting a workspace removes its collection, files, documents, conversations and answers, and unbinds it from API keys; a key left with no workspace is revoked. Usage rows are kept with the workspace marked deleted.
@@ -145,10 +147,10 @@ Question text is kept for a configurable time (default 90 days); after that the 
 ```json
 // POST /v1/api-keys → 201 (admin only)
 { "id": "key_01J…", "name": "Claude agent", "role": "reader", "workspaces": ["ouc"],
-  "purpose": "general", "prefix": "rw_7Hk2", "secret": "rw_7Hk2…", "expiresAt": null, "createdAt": "…" }
+  "prefix": "rw_7Hk2", "secret": "rw_7Hk2…", "expiresAt": null, "createdAt": "…" }
 ```
 
-`role`: `reader` (passages, answers, conversations) or `editor` (also documents and folders). `purpose`: `general` or `langflow`; a Langflow key's create screen shows how to store it as a Langflow global variable and call the API from a flow.
+`role`: `reader` (passages, answers, conversations) or `editor` (also documents and folders). Langflow does not use API keys: the API calls Langflow, never the other way round.
 
 ## Errors
 
