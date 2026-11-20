@@ -29,6 +29,25 @@ Versions follow [semantic versioning](https://semver.org) and are picked from th
    while we are below 1.0.
 2. Merging it tags `vX.Y.Z` and creates the GitHub release.
 
+## Run the stack
+
+Requirements: Docker with Compose, about 6 GB of free RAM for the containers, and LM Studio on the host (from M1).
+
+```bash
+pnpm env:init            # once: writes .env with fresh random secrets (or: node scripts/env-init.ts)
+docker compose up -d     # first start pulls about 2 GB of images and takes a few minutes
+docker compose ps        # every service should say (healthy)
+```
+
+| What | Where | Login |
+|---|---|---|
+| API and Swagger UI | http://localhost:3000/docs | none yet |
+| Langflow editor | http://localhost:7860 | `LANGFLOW_SUPERUSER` / `LANGFLOW_SUPERUSER_PASSWORD` from `.env` |
+| Keycloak admin console (create people here) | http://localhost:8081/admin | `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` |
+| rag-workspaces sign-in (realm `rag-workspaces`) | http://localhost:8081/realms/rag-workspaces/account | `RW_ADMIN_USERNAME` / `RW_ADMIN_PASSWORD` |
+
+`docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
+
 ## Development
 
 Requirements: Node 22.18+ and pnpm 10 (`corepack enable` gives you the pinned version).
@@ -47,6 +66,9 @@ pnpm format      # Prettier
 | `apps/api` | Fastify API: `pnpm --filter @rag/api dev`, then Swagger UI at http://localhost:3000/docs |
 | `packages/config` | Shared TypeScript, ESLint and Vitest settings |
 | `packages/shared` | zod schemas shared by the API and the admin UI (the API contract) |
+| `docker-compose.yml`, `docker/` | The stack, the API image, the Postgres init script and the Keycloak realm |
+| `langflow/components/` | Custom Langflow components (Python, run inside Langflow), from the POC |
+| `flows/` | Langflow flows, imported on every Langflow start |
 | `poc/` | The Langflow proof of concept (see `poc/RESULTS.md`) |
 
 CI (`.github/workflows/ci.yml`) runs format check, lint, typecheck, tests and build on every pull request.
