@@ -150,6 +150,7 @@ services:
       DEFAULT_CHAT_MODEL: ${DEFAULT_CHAT_MODEL:-qwen2.5-7b-instruct}
       # Earlier turns of a conversation sent to the model with each new message.
       CHAT_HISTORY_TURNS: ${CHAT_HISTORY_TURNS:-10}
+      USAGE_QUESTION_RETENTION_DAYS: ${USAGE_QUESTION_RETENTION_DAYS:-90}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
