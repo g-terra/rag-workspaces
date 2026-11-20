@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
 import type { Principal } from '../auth/principal.js';
 import { HttpProblem } from '../errors.js';
-import type { AnswerService} from '../services/answers.js';
+import type { AnswerService } from '../services/answers.js';
 import { canSee, toApiAnswer } from '../services/answers.js';
 import { assertSearchable, flowProblem } from '../services/flow-errors.js';
 
