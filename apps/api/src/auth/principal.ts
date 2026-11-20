@@ -1,5 +1,5 @@
 /** Who is calling. Set on every request by the auth plugin; `null` when no credentials were sent. */
-export type Principal = UserPrincipal;
+export type Principal = UserPrincipal | KeyPrincipal;
 
 /** A person signed in through Keycloak. `id` is their Keycloak user id (the token's `sub`). */
 export type UserPrincipal = {
@@ -10,6 +10,15 @@ export type UserPrincipal = {
   name: string | null;
   /** Holds the realm role `admin`: manages everything. */
   isAdmin: boolean;
+};
+
+/** An `rw_` API key: one role, bound to a set of workspaces. */
+export type KeyPrincipal = {
+  kind: 'key';
+  id: string;
+  name: string;
+  role: 'reader' | 'editor';
+  workspaces: { id: string; slug: string }[];
 };
 
 /**

@@ -117,6 +117,9 @@ importers:
       '@rag/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      drizzle-orm:
+        specifier: 0.45.4
+        version: 0.45.4(postgres@3.4.9)
       fastify:
         specifier: 5.12.8
         version: 5.12.8

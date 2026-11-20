@@ -35,13 +35,22 @@ export type Ready = z.infer<typeof Ready>;
 export const page = <T extends z.ZodType>(item: T) =>
   z.object({ data: z.array(item), nextCursor: z.string().nullable() });
 
-/** `GET /v1/me`: the caller. */
-export const Me = z.object({
-  kind: z.enum(['user']),
-  id: z.string(),
-  username: z.string(),
-  email: z.string().nullable(),
-  name: z.string().nullable(),
-  isAdmin: z.boolean(),
-});
+/** `GET /v1/me`: the caller, a person or an API key. */
+export const Me = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('user'),
+    id: z.string(),
+    username: z.string(),
+    email: z.string().nullable(),
+    name: z.string().nullable(),
+    isAdmin: z.boolean(),
+  }),
+  z.object({
+    kind: z.literal('key'),
+    id: z.string(),
+    name: z.string(),
+    role: z.enum(['reader', 'editor']),
+    workspaces: z.array(z.string()),
+  }),
+]);
 export type Me = z.infer<typeof Me>;
