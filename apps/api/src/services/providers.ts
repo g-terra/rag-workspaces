@@ -31,3 +31,44 @@ export function embeddingEndpoint(
       throw new ProviderNotConfigured(`unknown embedding provider "${provider}"`);
   }
 }
+
+export type ChatEndpoint = { provider: string; model: string; baseUrl: string; apiKey: string };
+
+type ChatConfig = Pick<
+  Config,
+  | 'DEFAULT_CHAT_PROVIDER'
+  | 'DEFAULT_CHAT_MODEL'
+  | 'LMSTUDIO_BASE_URL'
+  | 'OPENAI_API_KEY'
+  | 'GEMINI_API_KEY'
+  | 'ANTHROPIC_API_KEY'
+>;
+
+/**
+ * Which chat model answers in a workspace: its own setting, else the global default. An empty
+ * `baseUrl` lets the flow's chat node use the provider's own endpoint.
+ */
+export function chatEndpoint(
+  settings: { chatProvider?: string | null; chatModel?: string | null },
+  config: ChatConfig,
+): ChatEndpoint {
+  const provider = settings.chatProvider ?? config.DEFAULT_CHAT_PROVIDER;
+  const model = settings.chatModel ?? config.DEFAULT_CHAT_MODEL;
+  const key = (name: 'OPENAI_API_KEY' | 'GEMINI_API_KEY' | 'ANTHROPIC_API_KEY') => {
+    const value = config[name];
+    if (!value) throw new ProviderNotConfigured(`${name} is not set`);
+    return value;
+  };
+  switch (provider) {
+    case 'lmstudio':
+      return { provider, model, baseUrl: config.LMSTUDIO_BASE_URL, apiKey: 'lm-studio' };
+    case 'openai':
+      return { provider, model, baseUrl: '', apiKey: key('OPENAI_API_KEY') };
+    case 'anthropic':
+      return { provider, model, baseUrl: '', apiKey: key('ANTHROPIC_API_KEY') };
+    case 'gemini':
+      return { provider, model, baseUrl: '', apiKey: key('GEMINI_API_KEY') };
+    default:
+      throw new ProviderNotConfigured(`unknown chat provider "${provider}"`);
+  }
+}

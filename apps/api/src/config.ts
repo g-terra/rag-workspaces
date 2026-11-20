@@ -39,6 +39,10 @@ const ConfigSchema = z.object({
   DEFAULT_EMBEDDING_PROVIDER: z.enum(['lmstudio', 'openai', 'gemini']).default('lmstudio'),
   DEFAULT_EMBEDDING_MODEL: z.string().default('text-embedding-nomic-embed-text-v1.5'),
 
+  /** Used by workspaces that do not pick their own chat model. */
+  DEFAULT_CHAT_PROVIDER: z.enum(['lmstudio', 'openai', 'anthropic', 'gemini']).default('lmstudio'),
+  DEFAULT_CHAT_MODEL: z.string().default('qwen2.5-7b-instruct'),
+
   DEFAULT_CHUNK_SIZE: z.coerce.number().int().positive().default(800),
   DEFAULT_CHUNK_OVERLAP: z.coerce.number().int().nonnegative().default(100),
   /** Passages given to the model per answer, and the default `limit` of a passage search. */
@@ -66,6 +70,8 @@ const ConfigSchema = z.object({
   // --- Asking ---
   /** A passage search (embedding the query plus one Chroma query) gets this long. */
   RETRIEVE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+  /** A whole answer (search, prompt, generation) gets this long. Local models can be slow. */
+  ANSWER_TIMEOUT_MS: z.coerce.number().int().positive().default(180_000),
 
   // --- Langflow ---
   LANGFLOW_URL: z.url().default('http://langflow:7860'),
