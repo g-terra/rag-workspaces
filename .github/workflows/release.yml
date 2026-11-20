@@ -1,0 +1,27 @@
+name: Release
+
+# On every push to main, release-please keeps a "chore(main): release x.y.z" pull request up
+# to date with the next version (from the Conventional Commit messages) and CHANGELOG.md.
+# Merging that pull request tags vX.Y.Z and creates the GitHub release. (Publishing the
+# Docker images with the same version is added once the images exist.)
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      released: ${{ steps.release.outputs.release_created }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
