@@ -1,8 +1,9 @@
 import type { Config } from '../config.js';
 
 /**
- * The few Chroma operations the API does itself (decision 18: the API manages collections
- * and deletes vectors; writing and searching vectors happens inside the Langflow flows).
+ * The few Chroma operations the API does itself (decision 18: the API manages collections,
+ * deletes vectors and reads chunks back by id; writing vectors and similarity search happen
+ * inside the Langflow flows, because they need the embedding model).
  */
 export class ChromaService {
   private readonly base: string;
@@ -41,10 +42,8 @@ export class ChromaService {
 
   /** Delete every vector of one document. A missing collection means there is nothing to delete. */
   async deleteDocumentVectors(collection: string, documentId: string): Promise<void> {
-    const found = await this.fetchFn(`${this.base}/collections/${encodeURIComponent(collection)}`);
-    if (found.status === 404) return;
-    if (!found.ok) throw new Error(`Chroma: get collection ${collection} failed: HTTP ${found.status}`);
-    const { id } = (await found.json()) as { id: string };
+    const id = await this.collectionId(collection);
+    if (!id) return;
     const res = await this.fetchFn(`${this.base}/collections/${id}/delete`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -52,4 +51,40 @@ export class ChromaService {
     });
     if (!res.ok) throw new Error(`Chroma: delete vectors of ${documentId} failed: HTTP ${res.status}`);
   }
+
+  /**
+   * Read stored chunks by vector id (`<document id>:<chunk index>`), no similarity search.
+   * Missing ids are left out; a missing collection gives an empty list.
+   */
+  async getChunks(collection: string, ids: string[]): Promise<StoredChunk[]> {
+    if (!ids.length) return [];
+    const id = await this.collectionId(collection);
+    if (!id) return [];
+    const res = await this.fetchFn(`${this.base}/collections/${id}/get`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ids, include: ['documents', 'metadatas'] }),
+    });
+    if (!res.ok) throw new Error(`Chroma: get ${ids.length} chunk(s) failed: HTTP ${res.status}`);
+    const body = (await res.json()) as {
+      ids: string[];
+      documents: (string | null)[];
+      metadatas: (Record<string, unknown> | null)[];
+    };
+    return body.ids.map((vectorId, i) => ({
+      id: vectorId,
+      text: body.documents[i] ?? '',
+      metadata: body.metadatas[i] ?? {},
+    }));
+  }
+
+  /** The collection's internal id, or `null` when it does not exist. */
+  private async collectionId(name: string): Promise<string | null> {
+    const res = await this.fetchFn(`${this.base}/collections/${encodeURIComponent(name)}`);
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`Chroma: get collection ${name} failed: HTTP ${res.status}`);
+    return ((await res.json()) as { id: string }).id;
+  }
 }
+
+export type StoredChunk = { id: string; text: string; metadata: Record<string, unknown> };

@@ -41,6 +41,13 @@ const ConfigSchema = z.object({
 
   DEFAULT_CHUNK_SIZE: z.coerce.number().int().positive().default(800),
   DEFAULT_CHUNK_OVERLAP: z.coerce.number().int().nonnegative().default(100),
+  /** Passages given to the model per answer, and the default `limit` of a passage search. */
+  DEFAULT_TOP_K: z.coerce.number().int().min(1).max(50).default(5),
+  /**
+   * Cosine similarity a passage needs to count as relevant. Below it, a search leaves the
+   * passage out and an answer says the workspace does not cover the question.
+   */
+  DEFAULT_MIN_SCORE: z.coerce.number().min(0).max(1).default(0.3),
 
   // --- Model providers (keys stay here, never in Langflow's environment) ---
   /** LM Studio's OpenAI-compatible server, as Langflow's container reaches it. */
@@ -55,6 +62,10 @@ const ConfigSchema = z.object({
   INGEST_TIMEOUT_MS_PER_MB: z.coerce.number().int().nonnegative().default(60_000),
   /** Attempts per document before it is `failed` (1 + retries). */
   INGEST_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(4),
+
+  // --- Asking ---
+  /** A passage search (embedding the query plus one Chroma query) gets this long. */
+  RETRIEVE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
   // --- Langflow ---
   LANGFLOW_URL: z.url().default('http://langflow:7860'),

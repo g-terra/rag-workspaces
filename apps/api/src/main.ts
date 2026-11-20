@@ -43,6 +43,7 @@ const app = await buildApp({
   config,
   loggerInstance: logger,
   db: database.db,
+  langflow: langflow.client,
   chroma,
   queue,
   events,
