@@ -6,7 +6,7 @@ Material is loaded locally (PDF, DOCX, TXT, MD, and optionally video via Whisper
 
 The first workspace, `ouc`, is the project for the COS512 Langflow assignment (Option 4: expose AI interactions via an API).
 
-> Status: **planning**. Nothing is implemented yet.
+> Status: **building milestone M0** (scaffold). The plan is in `docs/`, the Langflow proof of concept in `poc/`.
 
 - [Architecture](docs/architecture.md): components, workspaces, data flow, repo layout
 - [API schema](docs/api-schema.md): resources, routes and shapes
@@ -28,3 +28,24 @@ Versions follow [semantic versioning](https://semver.org) and are picked from th
    and `CHANGELOG.md`. `fix` bumps the patch version; `feat` and breaking changes bump the minor version
    while we are below 1.0.
 2. Merging it tags `vX.Y.Z` and creates the GitHub release.
+
+## Development
+
+Requirements: Node 22.18+ and pnpm 10 (`corepack enable` gives you the pinned version).
+
+```bash
+pnpm install
+pnpm build       # build every package (Turborepo caches the results)
+pnpm test        # Vitest in every package
+pnpm lint        # ESLint
+pnpm typecheck   # tsc --noEmit
+pnpm format      # Prettier
+```
+
+| Path | What it is |
+|---|---|
+| `packages/config` | Shared TypeScript, ESLint and Vitest settings |
+| `packages/shared` | zod schemas shared by the API and the admin UI (the API contract) |
+| `poc/` | The Langflow proof of concept (see `poc/RESULTS.md`) |
+
+CI (`.github/workflows/ci.yml`) runs format check, lint, typecheck, tests and build on every pull request.
