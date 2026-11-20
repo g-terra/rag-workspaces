@@ -15,13 +15,17 @@
 
 Each choice below has a recommendation the plan already assumes. Changing one is cheap now and expensive after M1.
 
-### 1. Vector database: **Qdrant** (recommended)
+### 1. Vector database: **ChromaDB** (decided by Guilherme, 2026-11-20)
+
+Guilherme asked for ChromaDB, FAISS or Weaviate. ChromaDB is chosen:
 
 | Option | For | Against |
 |---|---|---|
-| **Qdrant** | First-class Langflow component, simple single container, payload filtering (by course), good TS client, web dashboard for debugging | One more service to run |
-| pgvector | Reuses Postgres, one fewer container, SQL joins with metadata | Langflow integration is less polished; tuning HNSW in Postgres is fiddlier |
-| Chroma | Very simple | Weaker filtering and ops story; TS client less mature |
+| **ChromaDB** (chosen) | Runs as a single server container; first-class Langflow component; official JS/TS client (`chromadb`); metadata filtering for courses; very simple to operate | Fewer tuning knobs than larger engines; fine at the scale of course material |
+| FAISS | Fast, well known | A library, not a service: no server, no metadata filtering, persistence is files we would manage ourselves; no TS-native binding. Poor fit for a multi-service compose stack |
+| Weaviate | Built-in vectorizer modules and hybrid (keyword + vector) search | Heavier to run and configure; more than this project needs. Worth revisiting if hybrid search turns out to matter |
+
+None of these three does ingestion (reading PDFs/DOCX, chunking, transcription); they only store and search vectors. Our worker keeps that job (see choice 3). The vector store sits behind one adapter in `packages/ingestion-core`, so switching later touches one module plus the Langflow flow.
 
 ### 2. LLM and embedding provider: **local by default (Ollama), hosted optional**
 

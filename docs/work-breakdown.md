@@ -7,8 +7,8 @@ Milestones define the order; a workstream only starts a milestone item when its 
 
 | # | Milestone | Done when |
 |---|---|---|
-| M0 | **Foundation** | Turborepo + pnpm scaffold, shared configs, `docker compose up` brings up postgres, redis, qdrant, langflow and an `api` that answers `/health` and serves `/docs`. CI runs lint, typecheck and tests on every PR |
-| M1 | **Ingestion (documents)** | PDF, DOCX, TXT and MD go from upload or `pnpm ingest` to searchable chunks in Qdrant, with per-stage progress events |
+| M0 | **Foundation** | Turborepo + pnpm scaffold, shared configs, `docker compose up` brings up postgres, redis, chroma, langflow and an `api` that answers `/health` and serves `/docs`. CI runs lint, typecheck and tests on every PR |
+| M1 | **Ingestion (documents)** | PDF, DOCX, TXT and MD go from upload or `pnpm ingest` to searchable chunks in Chroma, with per-stage progress events |
 | M2 | **Query** | `/v1/search` and `/v1/query` return answers with citations through the versioned Langflow flow; API keys enforced |
 | M3 | **Design approved** | Mocks for every admin screen reviewed and approved by Guilherme. **Frontend build does not start before this** |
 | M4 | **Admin UI** | Drag-and-drop upload, live progress, document library, query playground, API keys, all against the real API |
@@ -30,9 +30,9 @@ Design (M3) runs in parallel with M0 to M2, so mocks are ready to approve by the
 
 Owns `apps/api`, `apps/worker`, `packages/*` (except `config` tooling shared with testing), `flows/`, `docker/`, `docker-compose.yml`.
 
-1. **M0 scaffold** (first PR, unblocks everyone): Turborepo + pnpm, `packages/config`, `packages/shared`, `apps/api` with Fastify, zod type provider, Swagger UI at `/docs`, `/health` and `/ready`; `docker-compose.yml` with postgres, redis, qdrant, langflow (pinned versions, healthchecks, named volumes); `.env.example`; minimal CI workflow (install, lint, typecheck, test, build).
+1. **M0 scaffold** (first PR, unblocks everyone): Turborepo + pnpm, `packages/config`, `packages/shared`, `apps/api` with Fastify, zod type provider, Swagger UI at `/docs`, `/health` and `/ready`; `docker-compose.yml` with postgres, redis, chroma, langflow (pinned versions, healthchecks, named volumes); `.env.example`; minimal CI workflow (install, lint, typecheck, test, build).
 2. `packages/db`: Drizzle schema and migrations for `documents`, `jobs`, `job_events`, `api_keys`; migrations run on api start.
-3. `packages/ingestion-core`: parsers (pdf via unpdf, docx via mammoth, md, txt), normaliser, heading-aware chunker, embedder adapters (ollama, openai-compatible), Qdrant writer. Pure functions where possible so they are unit-testable.
+3. `packages/ingestion-core`: parsers (pdf via unpdf, docx via mammoth, md, txt), normaliser, heading-aware chunker, embedder adapters (ollama, openai-compatible), Chroma writer. Pure functions where possible so they are unit-testable.
 4. `apps/worker`: BullMQ consumer, stage-by-stage progress events to redis, retries, idempotent re-index.
 5. Upload and documents endpoints, job endpoints, SSE `/v1/jobs/events`.
 6. `packages/cli`: `pnpm ingest <folder> --course X`, `pnpm parse <file>` (dry run), `pnpm reindex`.
@@ -63,7 +63,7 @@ Owns `tests/`, CI workflows, and test presets in `packages/config`. Works alongs
 2. Vitest presets for packages and apps; coverage thresholds on `ingestion-core` and `api`.
 3. Fixture corpus in `tests/fixtures/`: small PDF (with multiple pages and a table), DOCX with headings, MD with front matter, TXT, a broken PDF, a short audio clip.
 4. Parser and chunker unit tests (golden snapshots of chunk output per fixture).
-5. API integration tests with Testcontainers (postgres, redis, qdrant); Langflow stubbed with MSW at the HTTP boundary.
+5. API integration tests with Testcontainers (postgres, redis, chroma); Langflow stubbed with MSW at the HTTP boundary.
 6. Contract test: generated OpenAPI is valid and matches a committed snapshot; breaking changes fail CI.
 7. Compose smoke test in CI: `docker compose up`, ingest fixtures, query, assert a citation comes back. Uses a tiny local embedding model and a stub LLM so it is deterministic and free.
 8. Playwright e2e for the admin UI (upload, progress, query) once M4 lands.
