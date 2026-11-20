@@ -5,8 +5,9 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
 import type { Principal } from '../auth/principal.js';
-import { HttpProblem, problem } from '../errors.js';
-import { openEventStream, wantsEventStream, type SendEvent } from '../sse.js';
+import { HttpProblem } from '../errors.js';
+import { wantsEventStream } from '../sse.js';
+import { streamGeneration } from './streaming.js';
 import type { AnswerService } from '../services/answers.js';
 import { canSee, toApiAnswer } from '../services/answers.js';
 import { assertSearchable, flowProblem } from '../services/flow-errors.js';
@@ -55,34 +56,14 @@ export const answerRoutes: FastifyPluginAsyncZod<AnswerRoutesOptions> = async (a
         return reply.status(201).send(toApiAnswer(answer, workspace.slug));
       }
 
-      // Streaming. The stream opens with the first token, so a failure before any text
-      // (provider key missing, Langflow down) is still a normal HTTP error response.
-      let send: SendEvent | undefined;
-      const open = () => (send ??= openEventStream(req, reply));
-      const gone = new AbortController();
-      reply.raw.on('close', () => {
-        if (!reply.raw.writableFinished) gone.abort(new Error('The client closed the stream.'));
+      return streamGeneration(req, reply, {
+        what: 'Answering',
+        idKey: 'answerId',
+        run: async (hooks) => {
+          const { answer, error } = await service.ask({ ...input, ...hooks });
+          return { result: toApiAnswer(answer, workspace.slug), error };
+        },
       });
-      const { answer, error } = await service.ask({
-        ...input,
-        signal: gone.signal,
-        onToken: (text) => open()('token', { text }),
-      });
-      if (error && !send) throw flowProblem(error, 'Answering');
-      const emit = open();
-      if (error) {
-        const p = flowProblem(error, 'Answering');
-        const status = p instanceof HttpProblem ? p.status : 500;
-        emit('error', {
-          ...problem(req, status, p instanceof HttpProblem ? p.message : undefined),
-          answerId: answer.id,
-        });
-      } else {
-        const body = toApiAnswer(answer, workspace.slug);
-        emit('citations', { citations: body.citations });
-        emit('done', body);
-      }
-      reply.raw.end();
     },
   );
 

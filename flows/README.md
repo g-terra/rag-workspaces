@@ -10,7 +10,7 @@ The flows use the custom components in `../langflow/components/rag_workspaces/`
 provider is set per request). Why each exists is in `poc/RESULTS.md`.
 
 Pinned to **Langflow 1.13.3**. Flow JSON is tied to the Langflow version: a version bump means
-regenerating the flows (`poc/client/build-flows.ts` for now) and rerunning the checks.
+regenerating the flows (`node poc/client/build-flows.ts`, with the stack up; set `OUT_DIR` to write elsewhere and diff first) and rerunning the checks.
 
 ## Rules
 
@@ -31,7 +31,6 @@ regenerating the flows (`poc/client/build-flows.ts` for now) and rerunning the c
 ## Flows
 
 The API's list of names is `apps/api/src/flows.ts`; `/ready` fails if one is missing.
-A stateless `rw-chat` flow joins them with conversations (M2).
 
 ### `rw-ingest`: load, split, embed and store one file
 
@@ -70,6 +69,21 @@ Same `Embeddings` and `Search` tweaks as `rw-retrieve`, plus:
 
 Outputs `ChatOutput-answer` (the answer text; tokens stream with `?stream=true`) and
 `ChatOutput-citations` (the passages given to the model, same shape as `rw-retrieve`).
+
+### `rw-chat`: answer the latest message of a conversation (streams)
+
+Stateless: the API keeps the history in its `messages` table and sends the last turns on each run.
+Same `Embeddings`, `Search`, `Prompt` and `LLM` tweaks as `rw-answer`, plus:
+
+| Node | Tweak fields |
+|---|---|
+| `ChatInput` | `input_value` (top-level) is **what to search for**: the latest message, plus the previous question so follow-ups find passages |
+| `Question` | `input_value`: the latest message alone, for the prompt |
+| `History` | `input_value`: earlier turns as `User: …` / `Assistant: …` lines |
+
+The prompt template uses `{history}`, `{context}` and `{question}`. Outputs are the same as `rw-answer`.
+The search hangs off the chat input on purpose: Langflow only returns outputs downstream of the chat
+input, so a separate text input for the query loses `ChatOutput-citations`.
 
 ### `rw-delete`: delete a document's vectors
 

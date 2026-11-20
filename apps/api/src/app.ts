@@ -17,6 +17,7 @@ import { errorHandler, notFoundHandler } from './errors.js';
 import type { ReadinessCheck } from './readiness.js';
 import { answerRoutes } from './routes/answers.js';
 import { apiKeyRoutes } from './routes/api-keys.js';
+import { conversationRoutes } from './routes/conversations.js';
 import { documentRoutes } from './routes/documents.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
@@ -24,6 +25,7 @@ import { passageRoutes } from './routes/passages.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 import { AnswerService } from './services/answers.js';
 import { ChromaService } from './services/chroma.js';
+import { ConversationService } from './services/conversations.js';
 import { DocumentEvents } from './services/document-events.js';
 import { noopQueue, type IngestQueue } from './services/ingest-queue.js';
 import { UploadStorage } from './services/storage.js';
@@ -99,6 +101,7 @@ export async function buildApp({
         { name: 'workspaces', description: 'Isolated groups of material, and who can use them' },
         { name: 'documents', description: 'Files in a workspace and their ingestion status' },
         { name: 'answers', description: 'Ask a question, get a cited answer, rate it' },
+        { name: 'conversations', description: 'Chat with history; each reply is cited like an answer' },
         { name: 'passages', description: 'Search the material without an AI answer' },
         { name: 'api-keys', description: 'API keys for agents and scripts (admins only)' },
       ],
@@ -127,6 +130,10 @@ export async function buildApp({
     if (langflow) {
       await app.register(passageRoutes, { db, chroma, langflow, config });
       await app.register(answerRoutes, { db, answers: new AnswerService({ db, langflow, config }) });
+      await app.register(conversationRoutes, {
+        db,
+        conversations: new ConversationService({ db, langflow, config }),
+      });
     }
   }
 
