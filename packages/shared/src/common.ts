@@ -34,3 +34,14 @@ export type Ready = z.infer<typeof Ready>;
 /** List responses: `{ data, nextCursor }`. */
 export const page = <T extends z.ZodType>(item: T) =>
   z.object({ data: z.array(item), nextCursor: z.string().nullable() });
+
+/** `GET /v1/me`: the caller. */
+export const Me = z.object({
+  kind: z.enum(['user']),
+  id: z.string(),
+  username: z.string(),
+  email: z.string().nullable(),
+  name: z.string().nullable(),
+  isAdmin: z.boolean(),
+});
+export type Me = z.infer<typeof Me>;

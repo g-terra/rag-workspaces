@@ -140,6 +140,7 @@ services:
       CHROMA_URL: http://chroma:8000
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080
       KEYCLOAK_REALM: rag-workspaces
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
     volumes:
       - uploads:/data/uploads
     healthcheck:
