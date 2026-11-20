@@ -17,11 +17,15 @@ import type { ReadinessCheck } from './readiness.js';
 import { apiKeyRoutes } from './routes/api-keys.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
+import { workspaceRoutes } from './routes/workspaces.js';
+import { ChromaService } from './services/chroma.js';
 
 export type AppDeps = {
   config: Config;
   /** The app database. Routes that need it are only registered when it is given (tests can leave it out). */
   db?: Database;
+  /** Defaults to a client for CHROMA_URL. */
+  chroma?: ChromaService;
   /** Dependency checks for `/ready`. */
   checks?: ReadinessCheck[];
   /** Turn bearer credentials into a principal: Keycloak tokens now, API keys next. */
@@ -36,6 +40,7 @@ const REQUEST_ID_HEADER = 'x-request-id';
 export async function buildApp({
   config,
   db,
+  chroma = new ChromaService(config),
   checks = [],
   authenticators = [],
   logger,
@@ -71,6 +76,7 @@ export async function buildApp({
       tags: [
         { name: 'system', description: 'Health and readiness' },
         { name: 'me', description: 'The caller' },
+        { name: 'workspaces', description: 'Isolated groups of material, and who can use them' },
         { name: 'api-keys', description: 'API keys for agents and scripts (admins only)' },
       ],
       components: {
@@ -91,7 +97,10 @@ export async function buildApp({
   await app.register(auth, { authenticators });
   await app.register(healthRoutes, { checks, timeoutMs: config.READY_TIMEOUT_MS });
   await app.register(meRoutes);
-  if (db) await app.register(apiKeyRoutes, { db });
+  if (db) {
+    await app.register(workspaceRoutes, { db, chroma, config });
+    await app.register(apiKeyRoutes, { db });
+  }
 
   return app;
 }
