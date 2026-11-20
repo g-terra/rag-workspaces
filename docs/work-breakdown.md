@@ -32,7 +32,7 @@ Owns `apps/api`, `apps/worker`, `packages/*` (except `config` tooling shared wit
 
 1. **M0 scaffold** (first PR, unblocks everyone): Turborepo + pnpm, `packages/config`, `packages/shared`, `apps/api` with Fastify, zod type provider, Swagger UI at `/docs`, `/health` and `/ready`; `docker-compose.yml` with postgres, redis, chroma, langflow (pinned versions, healthchecks, named volumes); `.env.example`; minimal CI workflow (install, lint, typecheck, test, build).
 2. `packages/db`: Drizzle schema and migrations for `documents`, `jobs`, `job_events`, `api_keys`; migrations run on api start.
-3. `packages/ingestion-core`: parsers (pdf via unpdf, docx via mammoth, md, txt), normaliser, heading-aware chunker, embedder adapters (ollama, openai-compatible), Chroma writer. Pure functions where possible so they are unit-testable.
+3. `packages/ingestion-core`: parsers (pdf via unpdf, docx via mammoth, md, txt), normaliser, heading-aware chunker, embedder adapter for OpenAI-compatible APIs (LM Studio by default, hosted providers via env), Chroma writer. Pure functions where possible so they are unit-testable.
 4. `apps/worker`: BullMQ consumer, stage-by-stage progress events to redis, retries, idempotent re-index.
 5. Upload and documents endpoints, job endpoints, SSE `/v1/jobs/events`.
 6. `packages/cli`: `pnpm ingest <folder> --course X`, `pnpm parse <file>` (dry run), `pnpm reindex`.
@@ -65,7 +65,7 @@ Owns `tests/`, CI workflows, and test presets in `packages/config`. Works alongs
 4. Parser and chunker unit tests (golden snapshots of chunk output per fixture).
 5. API integration tests with Testcontainers (postgres, redis, chroma); Langflow stubbed with MSW at the HTTP boundary.
 6. Contract test: generated OpenAPI is valid and matches a committed snapshot; breaking changes fail CI.
-7. Compose smoke test in CI: `docker compose up`, ingest fixtures, query, assert a citation comes back. Uses a tiny local embedding model and a stub LLM so it is deterministic and free.
+7. Compose smoke test in CI: `docker compose up`, ingest fixtures, query, assert a citation comes back. Uses a stub OpenAI-compatible server (fake embeddings and chat) in place of LM Studio, so it is deterministic, free, and needs no GPU.
 8. Playwright e2e for the admin UI (upload, progress, query) once M4 lands.
 9. Retrieval evaluation: `tests/eval/questions.yaml` with expected source documents; report recall@k and MRR; run nightly and on demand, warn on regressions.
 10. GitHub Actions layout: `ci.yml` (lint, typecheck, unit, integration, build) on every PR with Turborepo caching; `e2e.yml` (compose smoke + Playwright) on PRs touching apps; `eval.yml` nightly.

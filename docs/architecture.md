@@ -18,7 +18,7 @@ flowchart LR
   AG[Agents / scripts] --> API[api<br/>Fastify, /v1, /docs]
   API -- query --> LF[langflow<br/>RAG flow]
   LF --> QD[(chroma<br/>vectors)]
-  LF --> LLM[LLM provider<br/>ollama or hosted]
+  LF --> LLM[LLM provider<br/>LM Studio on host, or hosted]
   API -- enqueue --> RD[(redis<br/>BullMQ)]
   RD --> WK[worker<br/>ingestion]
   WK --> QD
@@ -28,6 +28,10 @@ flowchart LR
   WK -- progress --> RD
   RD -- SSE --> API
 ```
+
+### Local models: LM Studio on the host
+
+LM Studio is a desktop app, so it runs on the host machine, not in compose. Its local server speaks the OpenAI API (default `http://localhost:1234/v1`). Containers reach it at `http://host.docker.internal:1234/v1`; compose adds `extra_hosts: ["host.docker.internal:host-gateway"]` to `api`, `worker` and `langflow` so this also works on Linux. The worker (embeddings) and the Langflow flow (embeddings + chat) both use OpenAI-compatible components pointed at that URL, so swapping to a hosted provider is only a change of `LLM_BASE_URL`, `LLM_API_KEY` and model names in `.env`. `/ready` reports whether the provider is reachable and which models it serves.
 
 ### Services (docker compose)
 
@@ -41,14 +45,14 @@ flowchart LR
 | `postgres` | `postgres:16` | Document and job metadata, API keys; also Langflow's own database (separate schema/db) |
 | `redis` | `redis:7` | BullMQ job queue and progress pub/sub |
 | `whisper` | faster-whisper ASR web service | Video/audio transcription. Compose profile `video`, off by default |
-| `ollama` | `ollama/ollama` | Local LLM + embeddings. Compose profile `local-llm`; skip it when using a hosted provider |
 
 Easy start:
 
 ```bash
-cp .env.example .env            # choose provider, set keys if hosted
+# start LM Studio's local server on the host (default port 1234) with a chat model and an embedding model loaded
+cp .env.example .env            # provider settings; defaults point at LM Studio
 docker compose up -d            # core stack
-docker compose --profile video --profile local-llm up -d   # everything, fully local
+docker compose --profile video up -d   # plus video transcription
 pnpm ingest ./materials         # optional: bulk-load a folder from the CLI
 open http://localhost:8080      # admin UI;  http://localhost:3000/docs for Swagger
 ```
@@ -143,7 +147,7 @@ docker-compose.yml, turbo.json, pnpm-workspace.yaml, .env.example
 | Metadata DB | Postgres + Drizzle ORM |
 | Vector DB | ChromaDB, server mode (see [decisions](decisions.md)) |
 | RAG orchestration | Langflow, flows versioned in `flows/` |
-| LLM / embeddings | Configurable; default Ollama (local), OpenAI-compatible and Anthropic supported |
+| LLM / embeddings | Configurable; default LM Studio on the host (OpenAI-compatible API), hosted OpenAI-compatible and Anthropic supported |
 | Transcription | faster-whisper ASR service + ffmpeg (optional profile) |
 | Admin UI | Vite + React, Tailwind CSS, shadcn/ui, TanStack Query, react-dropzone |
 | Tests | Vitest, Testcontainers, Playwright, MSW |

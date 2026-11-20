@@ -27,9 +27,11 @@ Guilherme asked for ChromaDB, FAISS or Weaviate. ChromaDB is chosen:
 
 None of these three does ingestion (reading PDFs/DOCX, chunking, transcription); they only store and search vectors. Our worker keeps that job (see choice 3). The vector store sits behind one adapter in `packages/ingestion-core`, so switching later touches one module plus the Langflow flow.
 
-### 2. LLM and embedding provider: **local by default (Ollama), hosted optional**
+### 2. LLM and embedding provider: **LM Studio by default (decided by Guilherme, 2026-11-20), hosted optional**
 
-"Tool is agnostic" is read as: no provider is hard-wired. Default `.env` uses Ollama (`nomic-embed-text` for embeddings, a small instruct model for answers) so it runs fully offline. Switching to OpenAI-compatible or Anthropic is an env change. Needs a call: which hosted provider, if any, should be the documented "best quality" setup.
+"Tool is agnostic" is read as: no provider is hard-wired. The default `.env` points at LM Studio's OpenAI-compatible server on the host (`http://host.docker.internal:1234/v1`), with an embedding model (e.g. `nomic-embed-text`) and a chat model loaded in LM Studio, so it runs fully offline. Any OpenAI-compatible endpoint, or Anthropic, is an env change. LM Studio is not part of compose, so CI uses a small stub OpenAI-compatible server instead.
+
+Still open: which hosted provider, if any, should be documented as the "best quality" setup.
 
 ### 3. Who embeds during ingestion: **our worker** (recommended) vs a Langflow ingestion flow
 
