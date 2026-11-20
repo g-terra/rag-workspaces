@@ -22,6 +22,11 @@ const ConfigSchema = z.object({
   /** The app database. Migrations run against it on every start. */
   DATABASE_URL: z.string().default('postgres://rag@postgres:5432/rag'),
 
+  // --- Defaults for new workspaces (each can override them) ---
+  /** Pinned into a workspace when it is created; changing it later needs a reindex. */
+  DEFAULT_EMBEDDING_PROVIDER: z.enum(['lmstudio', 'openai', 'gemini']).default('lmstudio'),
+  DEFAULT_EMBEDDING_MODEL: z.string().default('text-embedding-nomic-embed-text-v1.5'),
+
   // --- Langflow ---
   LANGFLOW_URL: z.url().default('http://langflow:7860'),
   /** The API signs in as this user on start to mint its own Langflow API key (decision 17). */

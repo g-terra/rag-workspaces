@@ -90,3 +90,25 @@ export const apiKeyWorkspaces = pgTable(
 );
 
 export type ApiKey = typeof apiKeys.$inferSelect;
+
+/** People with access to a workspace, keyed by their Keycloak user id. Admins need no row. */
+export const workspaceMembers = pgTable(
+  'workspace_members',
+  {
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Keycloak user id (the token's `sub`). Accounts live in Keycloak, not here. */
+    userId: text().notNull(),
+    role: workspaceRole().notNull(),
+    /** Keycloak user id of the admin who granted it. */
+    grantedBy: text().notNull(),
+    ...timestamps,
+  },
+  (t) => [
+    primaryKey({ columns: [t.workspaceId, t.userId] }),
+    index('workspace_members_user_idx').on(t.userId),
+  ],
+);
+
+export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
