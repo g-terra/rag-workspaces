@@ -18,3 +18,14 @@ export type Health = z.infer<typeof Health>;
 /** `GET /ready`: every dependency answers. No detail here; admins get it from `/v1/system`. */
 export const Ready = z.object({ status: z.enum(['ok', 'unavailable']) });
 export type Ready = z.infer<typeof Ready>;
+
+/** `GET /v1/me`: the caller. */
+export const Me = z.object({
+  kind: z.enum(['user']),
+  id: z.string(),
+  username: z.string(),
+  email: z.string().nullable(),
+  name: z.string().nullable(),
+  isAdmin: z.boolean(),
+});
+export type Me = z.infer<typeof Me>;

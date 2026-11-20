@@ -37,6 +37,10 @@ const ConfigSchema = z.object({
   /** Where the API reaches Keycloak inside the compose network (keys, health). Not the token issuer. */
   KEYCLOAK_INTERNAL_URL: z.url().default('http://keycloak:8080'),
   KEYCLOAK_REALM: z.string().default('rag-workspaces'),
+  /** The URL browsers use for Keycloak. Tokens carry `<this>/realms/<realm>` as their issuer. */
+  KEYCLOAK_PUBLIC_URL: z.url().default('http://localhost:8081'),
+  /** Access tokens must name this audience (the `api` client in realm.json). */
+  KEYCLOAK_AUDIENCE: z.string().default('api'),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

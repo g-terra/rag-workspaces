@@ -50,6 +50,7 @@ export function errorHandler(err: FastifyError, req: FastifyRequest, reply: Fast
       .send(problem(req, 400, 'The request did not match the schema.', { errors }));
   }
   if (err instanceof HttpProblem) {
+    if (err.status === 401) reply.header('www-authenticate', 'Bearer realm="rag-workspaces"');
     return reply
       .status(err.status)
       .type('application/problem+json')
