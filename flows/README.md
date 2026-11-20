@@ -1,0 +1,79 @@
+# Flows: the contract between the API and Langflow
+
+Langflow imports every `*.json` in this folder on each start (`LANGFLOW_LOAD_FLOWS_PATH`)
+and updates existing flows in place, matched by their fixed `id`. The repo is the source of
+truth: an edit made only in the Langflow editor is overwritten on the next restart, so export
+it first (`pnpm flows:export`, M1).
+
+The flows use the custom components in `../langflow/components/rag_workspaces/`
+(Chroma over REST, document loader with page numbers, LM Studio embeddings, a chat model whose
+provider is set per request). Why each exists is in `poc/RESULTS.md`.
+
+Pinned to **Langflow 1.13.3**. Flow JSON is tied to the Langflow version: a version bump means
+regenerating the flows (`poc/client/build-flows.ts` for now) and rerunning the checks.
+
+## Rules
+
+1. **Run by endpoint name**, never by flow id: `POST /api/v1/run/<endpoint_name>`.
+2. **Inputs are tweaks keyed by node id**: `{ "tweaks": { "<node id>": { "<field>": value } } }`.
+   Node ids below are fixed and are part of the contract. Renaming one breaks the API.
+3. **Chat input and output nodes keep the `ChatInput-` / `ChatOutput-` id prefix.** Langflow
+   decides a node's kind from the text before the first `-`, and a model only streams tokens when
+   it is wired to a node it recognises as a Chat Output.
+4. **Structured output is fenced JSON inside a chat message** (` ```json ... ``` `). The API
+   strips the fence (`parseJsonMessage` in `packages/langflow-client`).
+5. **Always send a `session_id`** (conversation id, or a fresh id per request).
+6. **Provider keys never live in Langflow's environment.** The API sends `provider`, `model_name`,
+   `api_key` and `base_url` as tweaks on the `LLM` node. Langflow refuses to send a key that
+   matches one of its own environment values to a non-OpenAI host.
+7. **The API chooses `collection_name`** (`ws_<slug>`). It never comes from a caller.
+
+## Flows
+
+The API's list of names is `apps/api/src/flows.ts`; `/ready` fails if one is missing.
+M1 renames them to `rw-*` and adds a stateless `chat` flow.
+
+### `rag-ingest`: load, split, embed and store one file
+
+| Node | Tweak fields the API sets |
+|---|---|
+| `Loader` | `file_path` (relative to `/data/uploads`), `document_id`, `filename`, `folder` |
+| `Split` | `chunk_size`, `chunk_overlap` |
+| `Embeddings` | `model`, `base_url` |
+| `Upsert` | `collection_name`, `document_id` |
+
+Output `ChatOutput-result`: `{ collection, document_id, chunks, pages }` (`pages` is `null` for non-PDFs). Re-ingesting a document deletes its
+vectors first, so retries never duplicate. Vector ids are `<document_id>:<chunk index>`, with metadata
+`document_id`, `filename`, `folder`, `chunk_index` and `page` (PDF only, otherwise `null`).
+A failure (for example, file not found) comes back as HTTP 500 with the reason in `detail.message`.
+
+### `rag-retrieve`: best matching passages, no generation
+
+| Node | Tweak fields |
+|---|---|
+| `ChatInput` | the query goes in `input_value` (top-level) |
+| `Embeddings` | `model`, `base_url` |
+| `Search` | `collection_name`, `top_k`, `min_score`, `folder` |
+
+Output `ChatOutput-passages`: a list of `{ rank, id, text, score, document_id, filename, folder, page, chunk_index }`, best first; `score` is cosine similarity.
+An unknown collection returns an empty list.
+
+### `rag-answer`: retrieve, prompt, generate (streams)
+
+Same `Embeddings` and `Search` tweaks as `rag-retrieve`, plus:
+
+| Node | Tweak fields |
+|---|---|
+| `Prompt` | `template` (uses `{context}` and `{question}`) |
+| `LLM` | `provider` (`lmstudio`, `openai`, `anthropic`, `gemini`), `model_name`, `api_key`, `base_url`, `temperature`, `system_message` |
+
+Outputs `ChatOutput-answer` (the answer text; tokens stream with `?stream=true`) and
+`ChatOutput-citations` (the passages given to the model, same shape as `rag-retrieve`).
+
+### `rag-delete`: delete a document's vectors
+
+| Node | Tweak fields |
+|---|---|
+| `Delete` | `collection_name`, `document_id` |
+
+Output `ChatOutput-result`: `{ document_id, deleted }`.
