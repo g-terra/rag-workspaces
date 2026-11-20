@@ -1,0 +1,79 @@
+{
+  "realm": "rag-workspaces",
+  "displayName": "rag-workspaces",
+  "enabled": true,
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "sslRequired": "external",
+  "accessTokenLifespan": 900,
+  "bruteForceProtected": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Manages everything in rag-workspaces: workspaces, members, API keys, usage."
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "admin-ui",
+      "name": "rag-workspaces admin UI",
+      "description": "The browser app. Public client: authorization code with PKCE, no secret.",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["${RW_ADMIN_UI_URL}/*", "http://localhost:5173/*"],
+      "webOrigins": ["${RW_ADMIN_UI_URL}", "http://localhost:5173"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${RW_ADMIN_UI_URL}/*##http://localhost:5173/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "api",
+      "name": "rag-workspaces API",
+      "description": "Resource server. Exists so access tokens can name it as their audience; it signs nobody in.",
+      "enabled": true,
+      "publicClient": false,
+      "bearerOnly": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    }
+  ],
+  "users": [
+    {
+      "username": "${RW_ADMIN_USERNAME}",
+      "email": "${RW_ADMIN_EMAIL}",
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "rag-workspaces",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "${RW_ADMIN_PASSWORD}", "temporary": false }],
+      "realmRoles": ["default-roles-rag-workspaces", "admin"]
+    }
+  ]
+}
