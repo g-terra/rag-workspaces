@@ -36,6 +36,19 @@ documented REST API. Start with the [README](README.md), then:
 5. **Don't merge without the owner's approval.** Open the PR, make CI green, and wait.
 6. **Keep docs true.** When behaviour changes, update the doc that describes it in the same PR.
 
+## Agents
+
+Role agents live in `.claude/agents/` (Claude Code subagents; other tools can read them as prompts):
+
+| Agent | Use it to | Edits files |
+|---|---|---|
+| `architect` | turn a request into a plan of small PRs, checked against the decisions | no |
+| `coder` | implement one planned change as a small PR with tests | yes |
+| `tester` | cover a change with tests and check it against the running stack | yes |
+| `reviewer` | review a PR against these rules before the owner does (runs on Fable 5.2) | no |
+
+A typical change goes architect → coder → tester → reviewer → owner.
+
 ## Commands
 
 ```sh
