@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
 import { HttpProblem } from '../errors.js';
-import { InvalidCredentials, type Authenticator, type Principal } from './principal.js';
+import { InvalidCredentials, type Authenticator, type Principal, type UserPrincipal } from './principal.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -14,7 +14,8 @@ export type AuthPluginOptions = { authenticators: Authenticator[] };
 
 /**
  * Reads `Authorization: Bearer <credential>` on every request and sets `request.principal`.
- * It does not reject anonymous requests itself: routes opt in with `requireUser`, so `/health`, `/ready` and `/docs` stay public.
+ * It does not reject anonymous requests itself: routes opt in with `requireUser` or
+ * `requireAdmin`, so `/health`, `/ready` and `/docs` stay public.
  */
 const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (app, { authenticators }) => {
   app.decorateRequest('principal', null);
@@ -53,4 +54,18 @@ function unauthorized(detail: string) {
 /** preHandler: any signed-in caller. */
 export async function requireUser(req: FastifyRequest, _reply: FastifyReply) {
   if (!req.principal) throw unauthorized('Sign in or send an API key.');
+}
+
+/** preHandler: a person with the realm role `admin`. */
+export async function requireAdmin(req: FastifyRequest, _reply: FastifyReply) {
+  if (!req.principal) throw unauthorized('Sign in or send an API key.');
+  if (!(req.principal.kind === 'user' && req.principal.isAdmin)) {
+    throw new HttpProblem(403, 'This needs the admin role.');
+  }
+}
+
+/** The signed-in person, for routes behind `requireUser` that only people may use. */
+export function currentUser(req: FastifyRequest): UserPrincipal {
+  if (req.principal?.kind !== 'user') throw new HttpProblem(403, 'Only signed-in people can do this.');
+  return req.principal;
 }

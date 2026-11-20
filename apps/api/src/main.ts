@@ -1,6 +1,7 @@
 import { createDb, runMigrations } from '@rag/db';
 import pino from 'pino';
 import { buildApp } from './app.js';
+import { apiKeyAuthenticator } from './auth/api-keys.js';
 import { keycloakAuthenticator, keycloakOptionsFromConfig } from './auth/keycloak.js';
 import { loadConfig } from './config.js';
 import { chromaCheck, keycloakCheck } from './services/checks.js';
@@ -22,7 +23,11 @@ const langflow = new LangflowService({ config, log: logger.child({ component: 'l
 const app = await buildApp({
   config,
   loggerInstance: logger,
-  authenticators: [keycloakAuthenticator(keycloakOptionsFromConfig(config))],
+  db: database.db,
+  authenticators: [
+    apiKeyAuthenticator(database.db),
+    keycloakAuthenticator(keycloakOptionsFromConfig(config)),
+  ],
   checks: [
     { name: 'postgres', check: () => database.ping() },
     chromaCheck(config),

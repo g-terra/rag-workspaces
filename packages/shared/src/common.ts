@@ -1,5 +1,17 @@
 import { z } from 'zod';
 
+/**
+ * Workspace slug: 3 to 40 characters, lowercase letters, digits and hyphens,
+ * starting with a letter and not ending with a hyphen. It names the Chroma
+ * collection (`ws_<slug>`) and the upload folder, so it never changes.
+ */
+export const WorkspaceSlug = z
+  .string()
+  .min(3)
+  .max(40)
+  .regex(/^[a-z][a-z0-9-]*[a-z0-9]$/, 'lowercase letters, digits and hyphens; start with a letter');
+export type WorkspaceSlug = z.infer<typeof WorkspaceSlug>;
+
 /** RFC 9457 problem details, the body of every error response. */
 export const Problem = z.object({
   type: z.string(),
@@ -19,13 +31,26 @@ export type Health = z.infer<typeof Health>;
 export const Ready = z.object({ status: z.enum(['ok', 'unavailable']) });
 export type Ready = z.infer<typeof Ready>;
 
-/** `GET /v1/me`: the caller. */
-export const Me = z.object({
-  kind: z.enum(['user']),
-  id: z.string(),
-  username: z.string(),
-  email: z.string().nullable(),
-  name: z.string().nullable(),
-  isAdmin: z.boolean(),
-});
+/** List responses: `{ data, nextCursor }`. */
+export const page = <T extends z.ZodType>(item: T) =>
+  z.object({ data: z.array(item), nextCursor: z.string().nullable() });
+
+/** `GET /v1/me`: the caller, a person or an API key. */
+export const Me = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('user'),
+    id: z.string(),
+    username: z.string(),
+    email: z.string().nullable(),
+    name: z.string().nullable(),
+    isAdmin: z.boolean(),
+  }),
+  z.object({
+    kind: z.literal('key'),
+    id: z.string(),
+    name: z.string(),
+    role: z.enum(['reader', 'editor']),
+    workspaces: z.array(z.string()),
+  }),
+]);
 export type Me = z.infer<typeof Me>;
