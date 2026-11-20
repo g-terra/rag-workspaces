@@ -41,6 +41,7 @@ docker compose ps        # every service should say (healthy)
 
 | What | Where | Login |
 |---|---|---|
+| Admin UI (a placeholder until M4) | http://localhost:8080 | none yet |
 | API and Swagger UI | http://localhost:3000/docs | none yet |
 | Langflow editor | http://localhost:7860 | `LANGFLOW_SUPERUSER` / `LANGFLOW_SUPERUSER_PASSWORD` from `.env` |
 | Keycloak admin console (create people here) | http://localhost:8081/admin | `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` |
@@ -63,6 +64,7 @@ pnpm format      # Prettier
 
 | Path | What it is |
 |---|---|
+| `apps/admin` | Vite + React + Tailwind + shadcn/ui shell: `pnpm --filter @rag/admin dev` (http://localhost:5173, forwards `/api` to the API) |
 | `apps/api` | Fastify API: `pnpm --filter @rag/api dev`, then Swagger UI at http://localhost:3000/docs |
 | `packages/config` | Shared TypeScript, ESLint and Vitest settings |
 | `packages/db` | Drizzle schema, SQL migrations (`drizzle/`) and the Postgres connection. Migrations run when the API starts |
