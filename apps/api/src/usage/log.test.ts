@@ -120,7 +120,7 @@ describe.skipIf(!url)('usage log (against TEST_DATABASE_URL)', () => {
 
   async function rows() {
     await usage.flush();
-    return t.db.select().from(apiRequests).orderBy(asc(apiRequests.id));
+    return t.db.select().from(apiRequests).orderBy(asc(apiRequests.createdAt));
   }
 
   it('logs each /v1 request with route pattern, status, caller and workspace, but not /health', async () => {

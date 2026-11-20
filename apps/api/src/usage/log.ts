@@ -84,6 +84,7 @@ const usagePlugin: FastifyPluginAsync<{ usage: UsageLog }> = async (app, { usage
   app.decorateRequest('usage', null);
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/v1/')) return;
+    const receivedAt = new Date();
     const started = performance.now();
     let done = false;
     const finish = () => {
@@ -91,6 +92,8 @@ const usagePlugin: FastifyPluginAsync<{ usage: UsageLog }> = async (app, { usage
       done = true;
       const slug = (req.params as { slug?: unknown } | undefined)?.slug;
       usage.record({
+        // When the request arrived: rows are written concurrently, so insert order is not request order.
+        createdAt: receivedAt,
         requestId: req.id,
         method: req.method,
         route: req.routeOptions.url ?? req.url.split('?')[0]!,
