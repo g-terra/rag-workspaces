@@ -4,7 +4,13 @@
 
 export type RunOutput = {
   component_id?: string;
-  results?: { message?: { text?: string } };
+  results?: {
+    message?: {
+      text?: string;
+      /** Chat model messages carry token counts here (zeros when the provider reports none). */
+      properties?: { usage?: { input_tokens?: number | null; output_tokens?: number | null } | null };
+    };
+  };
   outputs?: { message?: { message?: string } };
   messages?: { message?: string }[];
 };
@@ -39,4 +45,17 @@ export function messageText(output: RunOutput | undefined): string {
 export function parseJsonMessage<T = unknown>(text: string): T {
   const fenced = /^\s*```(?:json)?\s*\n([\s\S]*?)\n?```\s*$/.exec(text);
   return JSON.parse(fenced ? fenced[1]! : text) as T;
+}
+
+/**
+ * Token counts of a chat model's message, or `null` for each the provider did not report.
+ * Langflow fills in zeros when it got none, so zero means unknown.
+ */
+export function messageUsage(output: RunOutput | undefined): {
+  promptTokens: number | null;
+  completionTokens: number | null;
+} {
+  const usage = output?.results?.message?.properties?.usage;
+  const known = (n: number | null | undefined) => (typeof n === 'number' && n > 0 ? n : null);
+  return { promptTokens: known(usage?.input_tokens), completionTokens: known(usage?.output_tokens) };
 }

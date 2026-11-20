@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   index,
   integer,
   jsonb,
@@ -169,3 +170,61 @@ export const documents = pgTable(
 );
 
 export type Document = typeof documents.$inferSelect;
+
+export const answerStatus = pgEnum('answer_status', ['complete', 'failed']);
+export const callerKind = pgEnum('caller_kind', ['user', 'key']);
+export const feedbackRating = pgEnum('feedback_rating', ['up', 'down']);
+
+/** A passage given to the model, as stored with the answer (a snapshot: later re-indexing does not change it). */
+export type StoredCitation = {
+  /** The `[n]` the model saw for this passage. */
+  rank: number;
+  passageId: string;
+  documentId: string;
+  documentTitle: string;
+  page: number | null;
+  snippet: string;
+  score: number;
+};
+
+/**
+ * One question answered from a workspace's material. Stored whether it worked or not, so
+ * failures show in usage. Only the caller who asked (and admins) can read it back.
+ */
+export const answers = pgTable(
+  'answers',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    askedByKind: callerKind().notNull(),
+    /** Keycloak user id or API key id. Not a foreign key: answers outlive revoked keys. */
+    askedBy: text().notNull(),
+    question: text().notNull(),
+    /** `null` when generation failed. */
+    text: text(),
+    status: answerStatus().notNull(),
+    /** False when no passage reached the minimum score; the model was not called. */
+    grounded: boolean().notNull(),
+    citations: jsonb().$type<StoredCitation[]>().notNull().default([]),
+    /** `null` for an ungrounded answer (no model was called). */
+    provider: text(),
+    model: text(),
+    promptTokens: integer(),
+    completionTokens: integer(),
+    latencyMs: integer().notNull(),
+    /** Streaming only. */
+    timeToFirstTokenMs: integer(),
+    error: text(),
+    requestId: text(),
+    feedbackRating: feedbackRating(),
+    feedbackComment: text(),
+    feedbackAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('answers_workspace_created_idx').on(t.workspaceId, t.createdAt)],
+);
+
+export type Answer = typeof answers.$inferSelect;
+export type NewAnswer = typeof answers.$inferInsert;

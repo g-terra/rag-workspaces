@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { provisionApiKey } from './bootstrap.js';
 import { LangflowClient } from './client.js';
 import { LangflowError } from './errors.js';
-import { messageText, outputsByComponent, parseJsonMessage } from './output.js';
+import { messageText, messageUsage, outputsByComponent, parseJsonMessage } from './output.js';
 
 type Call = { method: string; path: string; headers: Headers; body: string };
 
@@ -151,5 +151,18 @@ describe('output helpers', () => {
 
   it('parses unfenced JSON too', () => {
     expect(parseJsonMessage('{"a":1}')).toEqual({ a: 1 });
+  });
+
+  it('reads token usage, treating zeros as not reported', () => {
+    const out = (usage: unknown) => ({ results: { message: { properties: { usage } } } }) as never;
+    expect(messageUsage(out({ input_tokens: 120, output_tokens: 30 }))).toEqual({
+      promptTokens: 120,
+      completionTokens: 30,
+    });
+    expect(messageUsage(out({ input_tokens: 0, output_tokens: 0 }))).toEqual({
+      promptTokens: null,
+      completionTokens: null,
+    });
+    expect(messageUsage(undefined)).toEqual({ promptTokens: null, completionTokens: null });
   });
 });

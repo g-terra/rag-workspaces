@@ -146,8 +146,11 @@ services:
       KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
       LMSTUDIO_BASE_URL: ${LMSTUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
       DEFAULT_MIN_SCORE: ${DEFAULT_MIN_SCORE:-0.3}
+      DEFAULT_CHAT_PROVIDER: ${DEFAULT_CHAT_PROVIDER:-lmstudio}
+      DEFAULT_CHAT_MODEL: ${DEFAULT_CHAT_MODEL:-qwen2.5-7b-instruct}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - uploads:/data/uploads
     healthcheck:
