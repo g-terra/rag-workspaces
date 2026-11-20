@@ -27,7 +27,9 @@ Versions follow [semantic versioning](https://semver.org) and are picked from th
 1. Every push to `main` updates a release pull request (`chore(main): release x.y.z`) with the next version
    and `CHANGELOG.md`. `fix` bumps the patch version; `feat` and breaking changes bump the minor version
    while we are below 1.0.
-2. Merging it tags `vX.Y.Z` and creates the GitHub release.
+2. Merging it tags `vX.Y.Z`, creates the GitHub release, sets that version in the API's `package.json` (shown
+   in Swagger), and publishes `ghcr.io/g-terra/rag-workspaces-api` and `-admin` tagged `X.Y.Z`,
+   `X.Y` and `latest`.
 
 ## Run the stack
 
