@@ -10,6 +10,7 @@ import { wantsEventStream } from '../sse.js';
 import { streamGeneration } from './streaming.js';
 import type { AnswerService } from '../services/answers.js';
 import { canSee, toApiAnswer } from '../services/answers.js';
+import { answerUsage } from '../usage/details.js';
 import { assertSearchable, flowProblem } from '../services/flow-errors.js';
 
 export type AnswerRoutesOptions = { db: Database; answers: AnswerService };
@@ -52,6 +53,7 @@ export const answerRoutes: FastifyPluginAsyncZod<AnswerRoutesOptions> = async (a
 
       if (!wantsEventStream(req)) {
         const { answer, error } = await service.ask(input);
+        req.usage = answerUsage(answer);
         if (error) throw flowProblem(error, 'Answering');
         return reply.status(201).send(toApiAnswer(answer, workspace.slug));
       }
@@ -61,6 +63,7 @@ export const answerRoutes: FastifyPluginAsyncZod<AnswerRoutesOptions> = async (a
         idKey: 'answerId',
         run: async (hooks) => {
           const { answer, error } = await service.ask({ ...input, ...hooks });
+          req.usage = answerUsage(answer);
           return { result: toApiAnswer(answer, workspace.slug), error };
         },
       });

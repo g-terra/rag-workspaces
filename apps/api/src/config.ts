@@ -73,6 +73,8 @@ const ConfigSchema = z.object({
   /** A whole answer (search, prompt, generation) gets this long. Local models can be slow. */
   ANSWER_TIMEOUT_MS: z.coerce.number().int().positive().default(180_000),
   /** Earlier turns (a question and its reply) sent to the model with each chat message. */
+  /** Question text in the usage log is cleared after this many days; counts and latency stay. */
+  USAGE_QUESTION_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
   CHAT_HISTORY_TURNS: z.coerce.number().int().min(0).max(50).default(10),
 
   // --- Langflow ---

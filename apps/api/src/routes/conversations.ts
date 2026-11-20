@@ -23,6 +23,7 @@ import {
 } from '../services/conversations.js';
 import { assertSearchable, flowProblem } from '../services/flow-errors.js';
 import { wantsEventStream } from '../sse.js';
+import { messageUsage } from '../usage/details.js';
 import { streamGeneration } from './streaming.js';
 
 export type ConversationRoutesOptions = { db: Database; conversations: ConversationService };
@@ -176,6 +177,7 @@ export const conversationRoutes: FastifyPluginAsyncZod<ConversationRoutesOptions
 
       if (!wantsEventStream(req)) {
         const { reply: message, error } = await service.send(input);
+        req.usage = messageUsage(message, input.content);
         if (error) throw flowProblem(error, 'Replying');
         return reply.status(201).send(toApiMessage(message));
       }
@@ -184,6 +186,7 @@ export const conversationRoutes: FastifyPluginAsyncZod<ConversationRoutesOptions
         idKey: 'messageId',
         run: async (hooks) => {
           const { reply: message, error } = await service.send({ ...input, ...hooks });
+          req.usage = messageUsage(message, input.content);
           return { result: toApiMessage(message), error };
         },
       });

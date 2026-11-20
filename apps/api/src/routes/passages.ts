@@ -82,6 +82,7 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'reader');
       assertSearchable(workspace);
       const { query, limit, minScore } = req.query;
+      req.usage = { question: query };
       let hits;
       try {
         hits = await retrieve(langflow, workspace, query, config, { limit, minScore });
@@ -89,7 +90,9 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
         throw flowProblem(err, 'Search');
       }
 
-      return { data: await resolveHits(db, workspace.id, hits) };
+      const data = await resolveHits(db, workspace.id, hits);
+      req.usage = { question: query, citedDocumentIds: [...new Set(data.map((p) => p.documentId))] };
+      return { data };
     },
   );
 

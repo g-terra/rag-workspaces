@@ -29,6 +29,7 @@ import { ConversationService } from './services/conversations.js';
 import { DocumentEvents } from './services/document-events.js';
 import { noopQueue, type IngestQueue } from './services/ingest-queue.js';
 import { UploadStorage } from './services/storage.js';
+import { UsageLog, usageLogging } from './usage/log.js';
 
 export type AppDeps = {
   config: Config;
@@ -44,6 +45,8 @@ export type AppDeps = {
   queue?: IngestQueue;
   /** Document status changes, for the live status stream. */
   events?: DocumentEvents;
+  /** Where `/v1` requests are logged for analytics. Defaults to the app database. */
+  usage?: UsageLog;
   /** Dependency checks for `/ready`. */
   checks?: ReadinessCheck[];
   /** Turn bearer credentials into a principal: Keycloak tokens now, API keys next. */
@@ -63,6 +66,7 @@ export async function buildApp({
   storage = new UploadStorage(config.UPLOADS_DIR, config.MAX_UPLOAD_BYTES),
   queue = noopQueue,
   events = new DocumentEvents(),
+  usage,
   checks = [],
   authenticators = [],
   logger,
@@ -121,6 +125,8 @@ export async function buildApp({
   app.get('/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 
   await app.register(auth, { authenticators });
+  const usageLog = usage ?? (db ? new UsageLog(db, app.log) : undefined);
+  if (usageLog) await app.register(usageLogging, { usage: usageLog });
   await app.register(healthRoutes, { checks, timeoutMs: config.READY_TIMEOUT_MS });
   await app.register(meRoutes);
   if (db) {
