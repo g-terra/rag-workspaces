@@ -57,8 +57,9 @@ A failure (for example, file not found) comes back as HTTP 500 with the reason i
 | `Embeddings` | `model`, `base_url` |
 | `Search` | `collection_name`, `top_k`, `min_score`, `folder` |
 
-Output `ChatOutput-passages`: a list of `{ rank, id, text, score, document_id, filename, folder, page, chunk_index }`, best first; `score` is cosine similarity.
-An unknown collection returns an empty list.
+Output `ChatOutput-passages`: `{ collection, query, passages }`, where `passages` is a list of
+`{ rank, id, text, score, document_id, filename, folder, page, chunk_index }`, best first; `score` is cosine
+similarity and hits below `min_score` are left out. An unknown collection returns an empty list.
 
 ### `rw-answer`: retrieve, prompt, generate (streams)
 

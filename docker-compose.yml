@@ -145,6 +145,7 @@ services:
       KEYCLOAK_REALM: rag-workspaces
       KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
       LMSTUDIO_BASE_URL: ${LMSTUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
+      DEFAULT_MIN_SCORE: ${DEFAULT_MIN_SCORE:-0.3}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     volumes:

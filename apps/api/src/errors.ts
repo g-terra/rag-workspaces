@@ -13,7 +13,9 @@ const TITLES: Record<number, string> = {
   422: 'Unprocessable Content',
   429: 'Too Many Requests',
   500: 'Internal Server Error',
+  502: 'Bad Gateway',
   503: 'Service Unavailable',
+  504: 'Gateway Timeout',
 };
 
 /** An error a route throws on purpose; becomes an RFC 9457 problem response. */
@@ -22,6 +24,8 @@ export class HttpProblem extends Error {
     readonly status: number,
     detail?: string,
     readonly type = 'about:blank',
+    /** Extra response headers, such as `Retry-After`. */
+    readonly headers: Record<string, string> = {},
   ) {
     super(detail ?? TITLES[status] ?? 'Error');
   }
@@ -51,6 +55,7 @@ export function errorHandler(err: FastifyError, req: FastifyRequest, reply: Fast
   }
   if (err instanceof HttpProblem) {
     if (err.status === 401) reply.header('www-authenticate', 'Bearer realm="rag-workspaces"');
+    reply.headers(err.headers);
     return reply
       .status(err.status)
       .type('application/problem+json')

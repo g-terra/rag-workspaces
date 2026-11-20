@@ -9,6 +9,7 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import type { Database } from '@rag/db';
+import type { LangflowClient } from '@rag/langflow-client';
 import { auth } from './auth/plugin.js';
 import type { Authenticator } from './auth/principal.js';
 import type { Config } from './config.js';
@@ -18,6 +19,7 @@ import { apiKeyRoutes } from './routes/api-keys.js';
 import { documentRoutes } from './routes/documents.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
+import { passageRoutes } from './routes/passages.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 import { ChromaService } from './services/chroma.js';
 import { DocumentEvents } from './services/document-events.js';
@@ -28,6 +30,8 @@ export type AppDeps = {
   config: Config;
   /** The app database. Routes that need it are only registered when it is given (tests can leave it out). */
   db?: Database;
+  /** Runs the search and answer flows. Routes that need it are only registered when it is given. */
+  langflow?: LangflowClient;
   /** Defaults to a client for CHROMA_URL. */
   chroma?: ChromaService;
   /** Defaults to UPLOADS_DIR. */
@@ -50,6 +54,7 @@ const REQUEST_ID_HEADER = 'x-request-id';
 export async function buildApp({
   config,
   db,
+  langflow,
   chroma = new ChromaService(config),
   storage = new UploadStorage(config.UPLOADS_DIR, config.MAX_UPLOAD_BYTES),
   queue = noopQueue,
@@ -91,6 +96,7 @@ export async function buildApp({
         { name: 'me', description: 'The caller' },
         { name: 'workspaces', description: 'Isolated groups of material, and who can use them' },
         { name: 'documents', description: 'Files in a workspace and their ingestion status' },
+        { name: 'passages', description: 'Search the material without an AI answer' },
         { name: 'api-keys', description: 'API keys for agents and scripts (admins only)' },
       ],
       components: {
@@ -115,6 +121,7 @@ export async function buildApp({
     await app.register(workspaceRoutes, { db, chroma, storage, config });
     await app.register(documentRoutes, { db, storage, chroma, queue, events, config });
     await app.register(apiKeyRoutes, { db });
+    if (langflow) await app.register(passageRoutes, { db, chroma, langflow, config });
   }
 
   return app;
