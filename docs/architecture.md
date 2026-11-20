@@ -2,7 +2,7 @@
 
 ## Context
 
-This is the project for the COS512 Langflow assignment, Option 4: expose AI interactions via an API. The brief asks for `/ask`, `/chat` and `/retrieve` style endpoints, analytics on API usage, Langflow for the flow-based AI logic, a functional, interactive and tested system, and setup docs. Deliverables are the source code (including the Langflow flow JSON), a 3 to 5 page report and a 3 to 5 minute demo video. The brief suggests Flask or FastAPI; this project uses TypeScript instead, for the reasons recorded in [decisions](decisions.md#0-language-typescript-instead-of-flask-or-fastapi).
+This is the project for the COS512 Langflow assignment, Option 4: expose AI interactions via an API. The brief asks for `/ask`, `/chat` and `/retrieve` style endpoints, analytics on API usage, Langflow for the flow-based AI logic, a functional, interactive and tested system, and setup docs. Deliverables are the source code (including the Langflow flow JSON), a 3 to 5 page report and a 3 to 5 minute demo video. The brief suggests Flask or FastAPI; this project uses TypeScript instead, for the reasons recorded in [decisions](decisions.md).
 
 ## Goals
 
