@@ -131,6 +131,14 @@ services:
       NODE_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-info}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
+      LANGFLOW_URL: http://langflow:7860
+      # The API signs in with these on start and mints its own Langflow key (decision 17).
+      LANGFLOW_SUPERUSER: ${LANGFLOW_SUPERUSER:-admin}
+      LANGFLOW_SUPERUSER_PASSWORD: ${LANGFLOW_SUPERUSER_PASSWORD}
+      LANGFLOW_API_KEY: ${LANGFLOW_API_KEY:-}
+      CHROMA_URL: http://chroma:8000
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_REALM: rag-workspaces
     volumes:
       - uploads:/data/uploads
     healthcheck:

@@ -83,3 +83,9 @@ describe('config', () => {
     expect(() => loadConfig({ PORT: 'abc' })).toThrow(/PORT/);
   });
 });
+
+describe('config: optional values', () => {
+  it('treats empty strings from compose as unset', () => {
+    expect(loadConfig({ LANGFLOW_API_KEY: '' }).LANGFLOW_API_KEY).toBeUndefined();
+  });
+});

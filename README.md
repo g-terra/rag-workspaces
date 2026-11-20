@@ -65,6 +65,7 @@ pnpm format      # Prettier
 |---|---|
 | `apps/api` | Fastify API: `pnpm --filter @rag/api dev`, then Swagger UI at http://localhost:3000/docs |
 | `packages/config` | Shared TypeScript, ESLint and Vitest settings |
+| `packages/langflow-client` | Typed client for Langflow's login, API key, flow and run/stream endpoints |
 | `packages/shared` | zod schemas shared by the API and the admin UI (the API contract) |
 | `docker-compose.yml`, `docker/` | The stack, the API image, the Postgres init script and the Keycloak realm |
 | `langflow/components/` | Custom Langflow components (Python, run inside Langflow), from the POC |

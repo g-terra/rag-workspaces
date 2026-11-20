@@ -17,14 +17,16 @@ export type AppDeps = {
   config: Config;
   /** Dependency checks for `/ready`. Later PRs add Postgres, Chroma, Langflow and Keycloak. */
   checks?: ReadinessCheck[];
+  /** Logger options, or a ready pino instance shared with services started outside Fastify. */
   logger?: FastifyServerOptions['logger'];
+  loggerInstance?: FastifyServerOptions['loggerInstance'];
 };
 
 const REQUEST_ID_HEADER = 'x-request-id';
 
-export async function buildApp({ config, checks = [], logger }: AppDeps) {
+export async function buildApp({ config, checks = [], logger, loggerInstance }: AppDeps) {
   const app = Fastify({
-    logger: logger ?? { level: config.LOG_LEVEL },
+    ...(loggerInstance ? { loggerInstance } : { logger: logger ?? { level: config.LOG_LEVEL } }),
     // Keep a caller's request id (useful when a proxy sets one), otherwise make one.
     requestIdHeader: REQUEST_ID_HEADER,
     genReqId: () => randomUUID(),
