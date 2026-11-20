@@ -51,9 +51,20 @@ A typical change goes architect → coder → tester → reviewer → owner.
 
 ## Commands
 
+Node 22.18+ and pnpm 10 (`corepack enable` gives the pinned version). Turborepo runs each task in every
+package and caches the results.
+
 ```sh
 pnpm install          # dependencies, plus the commit-message hook
+pnpm format:check     # Prettier (pnpm format to fix)
+pnpm lint             # ESLint
+pnpm typecheck        # tsc --noEmit
+pnpm test             # Vitest
+pnpm build
 ```
+
+CI (`.github/workflows/ci.yml`) runs the same five checks on every pull request. Run them before you
+push.
 
 ## Langflow
 
