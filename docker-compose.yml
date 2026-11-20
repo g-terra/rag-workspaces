@@ -148,6 +148,8 @@ services:
       DEFAULT_MIN_SCORE: ${DEFAULT_MIN_SCORE:-0.3}
       DEFAULT_CHAT_PROVIDER: ${DEFAULT_CHAT_PROVIDER:-lmstudio}
       DEFAULT_CHAT_MODEL: ${DEFAULT_CHAT_MODEL:-qwen2.5-7b-instruct}
+      # Earlier turns of a conversation sent to the model with each new message.
+      CHAT_HISTORY_TURNS: ${CHAT_HISTORY_TURNS:-10}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

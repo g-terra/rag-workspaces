@@ -228,3 +228,57 @@ export const answers = pgTable(
 
 export type Answer = typeof answers.$inferSelect;
 export type NewAnswer = typeof answers.$inferInsert;
+
+/** A chat in a workspace. Private to whoever started it (admins can read any). */
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    ownerKind: callerKind().notNull(),
+    /** Keycloak user id or API key id. */
+    ownerId: text().notNull(),
+    /** Set from the first message unless given. */
+    title: text(),
+    ...timestamps,
+  },
+  (t) => [index('conversations_owner_idx').on(t.workspaceId, t.ownerKind, t.ownerId, t.updatedAt)],
+);
+
+export type Conversation = typeof conversations.$inferSelect;
+
+export const messageRole = pgEnum('message_role', ['user', 'assistant']);
+
+/**
+ * One turn. The history the flow sees comes from here (the flow itself is stateless).
+ * Assistant messages carry the same fields as an answer.
+ */
+export const messages = pgTable(
+  'messages',
+  {
+    id: text().primaryKey(),
+    conversationId: text()
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    role: messageRole().notNull(),
+    /** `null` for an assistant reply that failed. */
+    content: text(),
+    status: answerStatus().notNull().default('complete'),
+    grounded: boolean(),
+    citations: jsonb().$type<StoredCitation[]>().notNull().default([]),
+    provider: text(),
+    model: text(),
+    promptTokens: integer(),
+    completionTokens: integer(),
+    latencyMs: integer(),
+    timeToFirstTokenMs: integer(),
+    error: text(),
+    requestId: text(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('messages_conversation_created_idx').on(t.conversationId, t.createdAt)],
+);
+
+export type Message = typeof messages.$inferSelect;

@@ -1,54 +1,10 @@
-import {
-  answers,
-  newId,
-  type Answer as AnswerRow,
-  type Database,
-  type NewAnswer,
-  type StoredCitation,
-  type Workspace,
-} from '@rag/db';
-import {
-  LangflowError,
-  messageText,
-  messageUsage,
-  outputsByComponent,
-  parseJsonMessage,
-  type LangflowClient,
-  type RunRequest,
-  type RunResponse,
-} from '@rag/langflow-client';
+import { answers, newId, type Answer as AnswerRow, type Database, type Workspace } from '@rag/db';
+import type { LangflowClient } from '@rag/langflow-client';
 import type { Answer } from '@rag/shared';
 import type { Principal } from '../auth/principal.js';
-import type { Config } from '../config.js';
-import { HttpProblem } from '../errors.js';
-import { FLOWS } from '../flows.js';
-import { normalise, resolveHits, retrieve, searchTweaks } from './passages.js';
-import { chatEndpoint, ProviderNotConfigured, type ChatEndpoint } from './providers.js';
+import { Generator, type GenerateConfig } from './generate.js';
 
-/** The reply when nothing in the workspace is relevant enough. The model is not asked. */
-export const NOT_FOUND_TEXT = "I couldn't find anything about this in this workspace's material.";
-
-/** Used when a workspace has no system prompt of its own. */
-export const DEFAULT_SYSTEM_PROMPT =
-  'You answer questions using only the numbered passages you are given. ' +
-  'Cite the passages you use as [n]. If the passages do not contain the answer, ' +
-  'say that the material does not cover it. Answer in the language of the question.';
-
-const SNIPPET_CHARS = 240;
-
-export type AnswerConfig = Pick<
-  Config,
-  | 'DEFAULT_TOP_K'
-  | 'DEFAULT_MIN_SCORE'
-  | 'DEFAULT_CHAT_PROVIDER'
-  | 'DEFAULT_CHAT_MODEL'
-  | 'RETRIEVE_TIMEOUT_MS'
-  | 'ANSWER_TIMEOUT_MS'
-  | 'LMSTUDIO_BASE_URL'
-  | 'OPENAI_API_KEY'
-  | 'GEMINI_API_KEY'
-  | 'ANTHROPIC_API_KEY'
->;
+export { DEFAULT_SYSTEM_PROMPT, NOT_FOUND_TEXT } from './generate.js';
 
 export type AskInput = {
   workspace: Workspace;
@@ -65,162 +21,38 @@ export type AskInput = {
 /** The stored answer, plus the error that made it fail (for the route to turn into a problem response). */
 export type AskResult = { answer: AnswerRow; error?: unknown };
 
-/**
- * Answers one question from a workspace's material and stores the result, success or not.
- *
- * 1. Search first (`rw-retrieve`). If nothing reaches the minimum score, store an
- *    ungrounded answer with a fixed text: no model call, no made-up answer.
- * 2. Otherwise run `rw-answer`, which searches again with the same settings, builds the
- *    prompt and calls the workspace's chat model. Its citations output is exactly the
- *    passages the model saw.
- */
+/** Answers one question (see `Generator`) and stores the result, success or not. */
 export class AnswerService {
-  constructor(private readonly deps: { db: Database; langflow: LangflowClient; config: AnswerConfig }) {}
+  private readonly generator: Generator;
+
+  constructor(private readonly deps: { db: Database; langflow: LangflowClient; config: GenerateConfig }) {
+    this.generator = new Generator(deps);
+  }
 
   async ask(input: AskInput): Promise<AskResult> {
-    const { db, langflow, config } = this.deps;
-    const { workspace, caller, question, maxPassages, requestId, onToken, signal } = input;
-    const started = performance.now();
-    const base: NewAnswer = {
-      id: newId('answer'),
-      workspaceId: workspace.id,
-      askedByKind: caller.kind,
-      askedBy: caller.id,
-      question,
-      requestId: requestId ?? null,
-      status: 'complete',
-      grounded: true,
-      latencyMs: 0,
-    };
-    const elapsed = () => Math.round(performance.now() - started);
-    let chat: ChatEndpoint | undefined;
-    let timeToFirstTokenMs: number | null = null;
-
-    try {
-      chat = chatEndpoint(workspace.settings, config);
-      const opts = { limit: maxPassages };
-      // Resolve before deciding: a hit whose document was deleted or is not ready doesn't count.
-      const hits = await resolveHits(
-        db,
-        workspace.id,
-        await retrieve(langflow, workspace, question, config, opts),
-      );
-      if (!hits.length) {
-        onToken?.(NOT_FOUND_TEXT);
-        return {
-          answer: await this.store({ ...base, text: NOT_FOUND_TEXT, grounded: false, latencyMs: elapsed() }),
-        };
-      }
-
-      const request: RunRequest = {
-        input_value: question,
-        session_id: base.id!,
-        tweaks: {
-          ...searchTweaks(workspace, config, opts),
-          LLM: {
-            provider: chat.provider,
-            model_name: chat.model,
-            api_key: chat.apiKey,
-            base_url: chat.baseUrl,
-            system_message: workspace.settings.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
-            stream: Boolean(onToken),
-          },
-        },
-      };
-      const timeout = AbortSignal.timeout(config.ANSWER_TIMEOUT_MS);
-      const runSignal = signal ? AbortSignal.any([timeout, signal]) : timeout;
-      let run: RunResponse;
-      if (onToken) {
-        run = await this.stream(request, runSignal, (text) => {
-          timeToFirstTokenMs ??= elapsed();
-          onToken(text);
-        });
-      } else {
-        run = await langflow.run(FLOWS.answer, request, runSignal);
-      }
-      const outputs = outputsByComponent(run);
-      const citationsText = messageText(outputs['ChatOutput-citations']);
-      const cited = await resolveHits(
-        db,
-        workspace.id,
-        normalise(citationsText ? parseJsonMessage(citationsText) : []),
-      );
-      const usage = messageUsage(outputs['ChatOutput-answer']);
-      const text = messageText(outputs['ChatOutput-answer']);
-      if (!text.trim()) throw new HttpProblem(502, 'The model returned an empty answer.');
-      return {
-        answer: await this.store({
-          ...base,
-          text,
-          citations: cited.map((p): StoredCitation => ({
-            rank: p.rank,
-            passageId: p.id,
-            documentId: p.documentId,
-            documentTitle: p.documentTitle,
-            page: p.page,
-            snippet: p.text.length > SNIPPET_CHARS ? `${p.text.slice(0, SNIPPET_CHARS)}…` : p.text,
-            score: p.score,
-          })),
-          provider: chat.provider,
-          model: chat.model,
-          ...usage,
-          latencyMs: elapsed(),
-          timeToFirstTokenMs,
-        }),
-      };
-    } catch (error) {
-      const answer = await this.store({
-        ...base,
-        status: 'failed',
-        provider: chat?.provider ?? null,
-        model: chat?.model ?? null,
-        error: signal?.aborted ? 'The caller left before the answer finished.' : describe(error),
-        latencyMs: elapsed(),
-        timeToFirstTokenMs,
-      });
-      return { answer, error };
-    }
+    const id = newId('answer');
+    const { failure, ...gen } = await this.generator.generate({
+      workspace: input.workspace,
+      question: input.question,
+      maxPassages: input.maxPassages,
+      sessionId: id,
+      onToken: input.onToken,
+      signal: input.signal,
+    });
+    const [answer] = await this.deps.db
+      .insert(answers)
+      .values({
+        id,
+        workspaceId: input.workspace.id,
+        askedByKind: input.caller.kind,
+        askedBy: input.caller.id,
+        question: input.question,
+        requestId: input.requestId ?? null,
+        ...gen,
+      })
+      .returning();
+    return { answer: answer!, error: failure };
   }
-
-  /**
-   * Run `rw-answer` with streaming. Langflow sends `token` events while the model writes and
-   * an `end` event with the same result a plain run returns (so citations arrive at the end).
-   */
-  private async stream(
-    request: RunRequest,
-    signal: AbortSignal,
-    onText: (text: string) => void,
-  ): Promise<RunResponse> {
-    for await (const ev of this.deps.langflow.stream(FLOWS.answer, request, signal)) {
-      const data = (ev.data ?? {}) as { chunk?: string; text?: string; error?: string; result?: RunResponse };
-      if (ev.event === 'token' && data.chunk) onText(data.chunk);
-      // Langflow sends the component's message first ("Connection error."), then a long trace.
-      if (ev.event === 'error') {
-        throw new LangflowError(`stream ${FLOWS.answer}`, 500, (data.text ?? data.error ?? 'failed').trim());
-      }
-      if (ev.event === 'end') return data.result ?? {};
-    }
-    throw new LangflowError(`stream ${FLOWS.answer}`, 502, 'the stream ended without a result');
-  }
-
-  private async store(row: NewAnswer): Promise<AnswerRow> {
-    const [stored] = await this.deps.db.insert(answers).values(row).returning();
-    return stored!;
-  }
-}
-
-/**
- * Short reason stored with a failed answer, and shown to whoever reads it back. Langflow's own
- * message and our own problems are meant for people; anything else may be internal, so it is
- * described generically (the route logs the real error).
- */
-function describe(err: unknown): string {
-  if (err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')) {
-    return 'The answer took too long and was stopped.';
-  }
-  if (err instanceof LangflowError) return err.detail || err.message;
-  if (err instanceof HttpProblem || err instanceof ProviderNotConfigured) return err.message;
-  return 'Something went wrong while answering.';
 }
 
 /** Only the caller who asked, and admins, can read an answer back or rate it. */
