@@ -2,7 +2,7 @@
 title: Database package with Drizzle, migrations on start and the workspaces table
 date: 2026-11-20
 pr: '#8'
-status: in review
+status: merged
 areas: [db, api, ci]
 ---
 
