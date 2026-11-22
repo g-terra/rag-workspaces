@@ -66,7 +66,8 @@ pnpm format      # Prettier
 ```
 
 End-to-end tests drive the admin UI in a real browser against the running stack (`docker compose up -d --build`
-first). They sign in as the seeded admin from `.env`:
+first). They sign in as the seeded admin from `.env`, and create and delete their own workspaces in whatever
+stack they point at:
 
 ```bash
 pnpm --filter @rag/admin exec playwright install chromium   # once

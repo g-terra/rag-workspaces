@@ -42,7 +42,7 @@ does not return them yet. The work was split in two to keep each PR reviewable (
    - `/workspaces` (`src/routes/workspaces.tsx`): the "All workspaces" grid. Each card has the avatar
      initial, name, `/v1/workspaces/<slug>`, description and an Open button.
    - `/w/:slug` (`src/routes/workspace-layout.tsx`) is a layout route: it loads the workspace, shows a
-     "not found or no access" state on `404`, remembers the slug as the last used one, and passes the
+     "not found or no access" state on `404` (and on `400`, which the API sends for a malformed slug), remembers the slug as the last used one, and passes the
      workspace to its children through the outlet context (`useCurrentWorkspace()` in
      `src/workspaces/current.ts`). Its index child (`src/routes/workspace-home.tsx`) shows the name,
      slug, description, status and the caller's access. Upload and documents join as children later.

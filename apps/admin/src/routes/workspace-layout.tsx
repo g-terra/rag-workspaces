@@ -1,10 +1,9 @@
 import { useEffect } from 'react';
 import { Link, Outlet, useParams } from 'react-router';
-import { ApiError } from '@/api/client';
 import { ErrorState, Loading, Notice } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { rememberSlug } from '@/workspaces/landing';
-import { useWorkspace } from '@/workspaces/queries';
+import { isMissingWorkspace, useWorkspace } from '@/workspaces/queries';
 
 /** `/w/:slug`: loads the workspace once for every screen inside it, and remembers it as the last used. */
 export function WorkspaceLayout() {
@@ -18,8 +17,7 @@ export function WorkspaceLayout() {
 
   if (workspace.isPending) return <Loading what="the workspace" />;
   if (workspace.isError) {
-    // The API answers 404 both for a slug that doesn't exist and for one the caller can't see.
-    const notFound = workspace.error instanceof ApiError && workspace.error.status === 404;
+    const notFound = isMissingWorkspace(workspace.error);
     return (
       <div className="px-6 py-7">
         {notFound ? (
