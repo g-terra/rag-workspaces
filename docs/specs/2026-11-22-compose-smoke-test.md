@@ -1,8 +1,8 @@
 ---
 title: Compose smoke test for the ingestion path
 date: 2026-11-22
-pr: pending
-status: proposed
+pr: '#34'
+status: in review
 areas: [ci, infra]
 ---
 
@@ -34,13 +34,14 @@ Langflow spike used (`poc/standin/server.ts`, `poc/RESULTS.md`).
    - makes `api` and `langflow` wait for `standin` to be healthy;
    - publishes Chroma on `127.0.0.1:${CHROMA_PORT}` so the checks can count vectors.
 2. `scripts/smoke/stack.ts up|down|logs`: runs `docker compose` with project name
-   `rag-workspaces-smoke`, both compose files and `--env-file .env.smoke`. `up` creates `.env.smoke`
-   when missing (fresh secrets, the same way `pnpm env:init` does, plus the smoke ports and URLs below)
+   `rag-workspaces-smoke`, both compose files and `--env-file .env.smoke`. `up` writes a new `.env.smoke`
+   whenever the project has no containers (fresh secrets, the same way `pnpm env:init` does, plus the smoke ports and URLs below)
    and runs `docker compose up -d --build --wait`. `down` removes the containers and volumes. Kept
    separate from the checks so other suites (the admin UI's Playwright tests) can reuse the stack.
 3. `scripts/smoke/check.ts`: the checks, against a running smoke stack:
    1. turns on the password grant for the `admin-ui` client in that stack's Keycloak with `kcadm.sh`
-      inside the container (never in the realm file);
+      inside the container (never in the realm file), using the Keycloak admin login from the
+      container's own environment so it never appears in a command line or log;
    2. gets a token for the seeded admin from Keycloak and calls `GET /v1/me` (expects `isAdmin`);
    3. creates workspace `smoke-<timestamp>`;
    4. uploads `poc/samples/ouc/cos512-notes.pdf`, `assignment-brief.docx` and `langflow-tips.md` in one
@@ -54,10 +55,11 @@ Langflow spike used (`poc/standin/server.ts`, `poc/RESULTS.md`).
    Each step prints one line; the first failure exits non-zero with what was expected and what came
    back.
 4. `scripts/smoke/run.ts` (`pnpm smoke`): `up`, `check`, then `down`, also when the check fails;
-   prints the API and Langflow logs on failure. `--keep` leaves the stack running for debugging.
-5. `.github/workflows/smoke.yml`: one job on `ubuntu-latest` that runs `pnpm smoke`. Triggers:
+   prints every service's state and recent logs on failure. `--keep` leaves the stack running for debugging.
+5. `.github/workflows/smoke.yml`: one job on `ubuntu-latest` that runs `node scripts/smoke/run.ts` (no `pnpm install` needed). Triggers:
    pull requests touching `flows/`, `langflow/`, `docker/`, `apps/api/`, `packages/`, the compose
-   files, `poc/standin/` or `scripts/smoke/` (and the workflow itself); nightly at 03:00 UTC on `main`;
+   files, `.env.example`, `.dockerignore`, `package.json`, `pnpm-lock.yaml`, `poc/standin/` or
+   `scripts/smoke/` (and the workflow itself); nightly at 03:00 UTC on `main`;
    manual dispatch.
 
 ## Decisions and trade-offs

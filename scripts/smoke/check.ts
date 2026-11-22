@@ -11,6 +11,8 @@ const API = env.PUBLIC_API_URL!;
 const KEYCLOAK = env.KEYCLOAK_PUBLIC_URL!;
 const CHROMA = `http://127.0.0.1:${env.CHROMA_PORT}/api/v2/tenants/default_tenant/databases/default_database`;
 const READY_TIMEOUT_MS = 5 * 60_000;
+const REQUEST_TIMEOUT_MS = 30_000;
+const repoRoot = new URL('../../', import.meta.url);
 
 const FIXTURES = [
   { path: 'poc/samples/ouc/cos512-notes.pdf', hasPages: true },
@@ -48,6 +50,7 @@ async function call(token: string, method: string, path: string, body?: unknown)
       ...(body instanceof FormData || body === undefined ? {} : { 'content-type': 'application/json' }),
     },
     body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   const text = await res.text();
   expect(res.ok, `${method} ${path}: expected 2xx, got ${res.status} ${text}`);
@@ -59,29 +62,23 @@ async function chroma(path: string, body?: unknown): Promise<Response> {
     method: body === undefined ? 'GET' : 'POST',
     headers: { 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 }
 
-/** Password grant is off in the realm; switch it on for admin-ui in this throwaway stack only. */
+/**
+ * Password grant is off in the realm; switch it on for admin-ui in this throwaway stack only.
+ * kcadm reads the Keycloak admin login from the container's own environment, so it never appears
+ * in a command line or a log.
+ */
 function allowPasswordLogin() {
   const kcadm = '/opt/keycloak/bin/kcadm.sh';
   const script = [
-    `${kcadm} config credentials --server http://localhost:8080 --realm master --user "$KEYCLOAK_ADMIN" --password "$KEYCLOAK_ADMIN_PASSWORD" >/dev/null`,
+    `${kcadm} config credentials --server http://localhost:8080 --realm master --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null`,
     `id=$(${kcadm} get clients -r rag-workspaces -q clientId=admin-ui --fields id --format csv --noquotes)`,
     `${kcadm} update "clients/$id" -r rag-workspaces -s directAccessGrantsEnabled=true`,
   ].join(' && ');
-  compose([
-    'exec',
-    '-T',
-    '-e',
-    `KEYCLOAK_ADMIN=${env.KEYCLOAK_ADMIN}`,
-    '-e',
-    `KEYCLOAK_ADMIN_PASSWORD=${env.KEYCLOAK_ADMIN_PASSWORD}`,
-    'keycloak',
-    'bash',
-    '-c',
-    script,
-  ]);
+  compose(['exec', '-T', 'keycloak', 'bash', '-c', script]);
 }
 
 async function login(): Promise<string> {
@@ -93,6 +90,7 @@ async function login(): Promise<string> {
       username: env.RW_ADMIN_USERNAME!,
       password: env.RW_ADMIN_PASSWORD!,
     }),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   const body = (await res.json()) as { access_token?: string; error_description?: string };
   expect(res.ok && body.access_token, `Keycloak login failed: ${res.status} ${body.error_description}`);
@@ -145,7 +143,8 @@ async function main() {
 
   const uploaded = await step('uploaded PDF, DOCX and MD', async () => {
     const form = new FormData();
-    for (const f of FIXTURES) form.append('files', new Blob([readFileSync(f.path)]), basename(f.path));
+    for (const f of FIXTURES)
+      form.append('files', new Blob([readFileSync(new URL(f.path, repoRoot))]), basename(f.path));
     const { data } = (await call(token, 'POST', `/v1/workspaces/${slug}/documents`, form)) as {
       data: { document: Doc; duplicate: boolean }[];
     };

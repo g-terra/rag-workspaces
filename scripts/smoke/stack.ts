@@ -2,17 +2,17 @@
 // docker-compose.smoke.yml, as its own project on its own ports, so it never touches the dev stack.
 //   node scripts/smoke/stack.ts up     create .env.smoke if missing, build, start and wait until healthy
 //   node scripts/smoke/stack.ts down   remove the containers and their volumes
-//   node scripts/smoke/stack.ts logs   print the API, Langflow and stand-in logs
+//   node scripts/smoke/stack.ts logs   print every service's state and recent logs
 // Other scripts import `compose` and `smokeEnv` from here.
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const root = new URL('../../', import.meta.url);
 const envFile = new URL('.env.smoke', root);
 
-export const PROJECT = 'rag-workspaces-smoke';
+const PROJECT = 'rag-workspaces-smoke';
 
 // Host ports and the browser-facing URLs that go with them. Keycloak only reads ADMIN_UI_URL on the
 // first start (realm import), which is fine: `down` removes the volumes every time.
@@ -58,8 +58,12 @@ export function smokeEnv(): Record<string, string> {
   );
 }
 
-/** Run `docker compose` against the smoke project. Throws on a non-zero exit unless `allowFail`. */
-export function compose(args: string[], opts: { allowFail?: boolean; input?: string } = {}) {
+/**
+ * Run `docker compose` against the smoke project. Throws on a non-zero exit unless `allowFail`.
+ * `capture` returns stdout instead of printing it. Errors name only the subcommand, never the
+ * arguments, so nothing passed to it can end up in a CI log.
+ */
+export function compose(args: string[], opts: { allowFail?: boolean; capture?: boolean } = {}) {
   const res = spawnSync(
     'docker',
     [
@@ -78,18 +82,28 @@ export function compose(args: string[], opts: { allowFail?: boolean; input?: str
     ],
     {
       cwd: root,
-      stdio: opts.input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'],
-      input: opts.input,
+      stdio: opts.capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',
+      encoding: 'utf8',
     },
   );
   if (res.status !== 0 && !opts.allowFail) {
-    throw new Error(`docker compose ${args.join(' ')} exited with ${res.status}`);
+    throw new Error(`docker compose ${args[0]} exited with ${res.status}`);
   }
-  return res.status ?? 1;
+  return { status: res.status ?? 1, stdout: res.stdout ?? '' };
+}
+
+/** True when the smoke project has containers (running or not). */
+function stackExists() {
+  return (
+    existsSync(envFile) &&
+    compose(['ps', '--all', '--quiet'], { capture: true, allowFail: true }).stdout.trim() !== ''
+  );
 }
 
 export function up() {
-  if (!existsSync(envFile)) {
+  // A fresh file for every new stack, so it always matches the current .env.example. A running stack
+  // keeps its file: its databases were created with those passwords.
+  if (!stackExists()) {
     writeEnvFile();
     console.log('Wrote .env.smoke (admin login: RW_ADMIN_USERNAME / RW_ADMIN_PASSWORD in it).');
   }
@@ -105,11 +119,13 @@ export function down() {
   compose(['down', '--volumes', '--remove-orphans'], { allowFail: true });
 }
 
+/** What every service is doing, and its recent logs: printed when something fails. */
 export function logs() {
-  compose(['logs', '--no-color', '--tail', '200', 'api', 'langflow', 'standin'], { allowFail: true });
+  compose(['ps', '--all'], { allowFail: true });
+  compose(['logs', '--no-color', '--tail', '200'], { allowFail: true });
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const command = process.argv[2];
   if (command === 'up') up();
   else if (command === 'down') down();
