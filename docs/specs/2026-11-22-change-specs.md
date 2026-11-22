@@ -1,7 +1,7 @@
 ---
 title: One spec per pull request, with a template, a skill and Superpowers
 date: 2026-11-22
-pr: pending
+pr: '#29'
 status: in review
 areas: [docs]
 ---
