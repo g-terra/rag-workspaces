@@ -2,7 +2,7 @@
 title: Keycloak token verification and GET /v1/me (auth 1/3)
 date: 2026-11-20
 pr: '#11'
-status: in review
+status: merged
 areas: [api]
 ---
 
