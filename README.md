@@ -44,6 +44,9 @@ pnpm format      # Prettier
 
 | Path | What it is |
 |---|---|
+| `apps/api` | Fastify API: `pnpm --filter @rag/api dev`, then Swagger UI at http://localhost:3000/docs |
+| `packages/config` | Shared TypeScript, ESLint and Vitest settings |
+| `packages/shared` | zod schemas shared by the API and the admin UI (the API contract) |
 | `poc/` | The Langflow proof of concept (see `poc/RESULTS.md`) |
 
 CI (`.github/workflows/ci.yml`) runs format check, lint, typecheck, tests and build on every pull request.
