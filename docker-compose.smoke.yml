@@ -1,0 +1,38 @@
+# Overlay for the smoke test (and other suites that need the real stack without LM Studio).
+# Don't run it by hand: `node scripts/smoke/stack.ts up` adds the project name and .env.smoke.
+# It swaps LM Studio for the spike's stand-in model server (poc/standin/server.ts): deterministic
+# embeddings and canned chat replies, so the flows run end to end without a real model.
+services:
+  standin:
+    image: node:22.23-alpine
+    command: ['node', '/standin/server.ts']
+    environment:
+      STANDIN_TOKEN_DELAY_MS: '0'
+    volumes:
+      - ./poc/standin:/standin:ro
+    healthcheck:
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:1234/v1/models').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+
+  langflow:
+    depends_on:
+      standin: { condition: service_healthy }
+    environment:
+      # Langflow blocks model URLs on private networks; the stand-in is one.
+      LANGFLOW_SSRF_ALLOWED_HOSTS: host.docker.internal,standin
+
+  api:
+    depends_on:
+      standin: { condition: service_healthy }
+    environment:
+      LMSTUDIO_BASE_URL: http://standin:1234/v1
+
+  # Published so the checks can count what the ingest flow wrote.
+  chroma:
+    ports: ['127.0.0.1:${CHROMA_PORT:-18000}:8000']

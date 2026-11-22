@@ -3,5 +3,6 @@
 **/.turbo
 .git
 .env
+.env.smoke
 poc
 docs
