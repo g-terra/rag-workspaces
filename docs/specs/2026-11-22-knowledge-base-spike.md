@@ -1,8 +1,8 @@
 ---
 title: spike Langflow's native knowledge bases as a Chroma replacement
 date: 2026-11-22
-pr: pending
-status: proposed
+pr: "#31"
+status: in review
 areas: [flows, infra]
 ---
 
