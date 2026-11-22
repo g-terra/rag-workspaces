@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { UploadResult } from '@rag/shared';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { bearer, requireCredentials, signIn } from './sign-in';
 
 requireCredentials();
@@ -14,38 +13,18 @@ test.afterEach(async ({ page }) => {
   expect([204, 404]).toContain(res.status());
 });
 
-/** The id of the document the next upload answer names. */
-async function nextUploadedId(page: Page) {
-  const res = await page.waitForResponse(
-    (r) => r.request().method() === 'POST' && r.url().endsWith(`/workspaces/${ws.slug}/documents`),
-  );
-  return ((await res.json()) as UploadResult).data[0]!.document.id;
-}
-
-/** The page doesn't follow ingestion yet, so ask the API until the document is ready. */
-async function expectReadyInApi(page: Page, id: string) {
-  const headers = await bearer(page);
-  await expect
-    .poll(
-      async () => {
-        const res = await page.request.get(`/api/v1/workspaces/${ws.slug}/documents/${id}`, { headers });
-        return ((await res.json()) as { status: string }).status;
-      },
-      { timeout: 60_000 },
-    )
-    .toBe('ready');
-}
-
-test('uploads files with progress; a second copy is skipped and bad files are refused', async ({ page }) => {
+test('uploads files and follows them live to Ready; a second copy is skipped', async ({ page }) => {
   await signIn(page, '/workspaces');
   const created = await page.request.post('/api/v1/workspaces', { headers: await bearer(page), data: ws });
   expect(created.status()).toBe(201);
   await page.reload();
   await page.getByRole('link', { name: `Open ${ws.name}` }).click();
 
-  // The sidebar's Workspace section leads to the upload page.
+  // The sidebar's Workspace section leads to the upload page, which opens the status stream.
+  const stream = page.waitForRequest((r) => r.url().endsWith(`/workspaces/${ws.slug}/documents/events`));
   await page.getByRole('navigation', { name: 'Workspace' }).getByRole('link', { name: 'Upload' }).click();
   await expect(page.getByRole('heading', { name: 'Upload material' })).toBeVisible();
+  await stream;
 
   // Hold the upload for a moment so the Uploading state can be seen.
   await page.route(`**/api/v1/workspaces/${ws.slug}/documents`, async (route) => {
@@ -53,15 +32,30 @@ test('uploads files with progress; a second copy is skipped and bad files are re
     await route.continue();
   });
 
-  // Browse files: Uploading with a progress bar, then the API's answer, Queued.
-  let uploaded = nextUploadedId(page);
+  // Record every status the first row shows: ingestion can pass Queued and Processing quicker than
+  // Playwright polls.
+  await page.evaluate(() => {
+    const seen: string[] = [];
+    (window as unknown as { seen: string[] }).seen = seen;
+    new MutationObserver(() => {
+      const text = document.querySelector('[data-testid=upload-row] [data-testid=status]')?.textContent;
+      if (text && seen.at(-1) !== text) seen.push(text);
+    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+  });
+
+  // Browse files.
   await page.getByLabel('Choose files to upload').setInputFiles(path.join(fixtures, 'retrieval-notes.md'));
   const notes = page.getByTestId('upload-row').filter({ hasText: 'retrieval-notes.md' });
   await expect(notes.getByTestId('status')).toHaveText('Uploading');
   await expect(notes.getByRole('progressbar')).toBeVisible();
-  await expect(notes.getByTestId('status')).toHaveText('Queued');
-  await expect(notes).toContainText('waiting for the ingest flow');
-  await expectReadyInApi(page, await uploaded);
+  // Then Ready with its passages, all from the stream: the page never reloads.
+  await expect(notes.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await expect(notes).toContainText(/\d+ passages?/);
+  const seen = await page.evaluate(() => (window as unknown as { seen: string[] }).seen);
+  expect(seen[0]).toBe('Uploading');
+  expect(seen.slice(1, -1).length).toBeGreaterThan(0);
+  expect(seen.slice(1, -1).every((s) => s === 'Queued' || s === 'Processing')).toBe(true);
+  expect(seen.at(-1)).toBe('Ready');
 
   // Drop a file on the drop zone.
   const text = await readFile(path.join(fixtures, 'embedding-notes.txt'), 'utf8');
@@ -70,11 +64,9 @@ test('uploads files with progress; a second copy is skipped and bad files are re
     dt.items.add(new File([content], 'embedding-notes.txt', { type: 'text/plain' }));
     return dt;
   }, text);
-  uploaded = nextUploadedId(page);
   await page.getByTestId('drop-zone').dispatchEvent('drop', { dataTransfer: dropped });
   const drop = page.getByTestId('upload-row').filter({ hasText: 'embedding-notes.txt' });
-  await expect(drop.getByTestId('status')).toHaveText('Queued');
-  await expectReadyInApi(page, await uploaded);
+  await expect(drop.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
 
   // The same file again is skipped as a duplicate.
   await page.getByLabel('Choose files to upload').setInputFiles(path.join(fixtures, 'retrieval-notes.md'));
@@ -93,5 +85,5 @@ test('uploads files with progress; a second copy is skipped and bad files are re
     await expect(row).toContainText('Not a supported file. Use PDF, DOCX, TXT or MD.');
   }
 
-  await expect(page.getByRole('heading', { name: /This session · 2 uploaded, 0 uploading/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /This session · 2 ready, 0 in progress/ })).toBeVisible();
 });
