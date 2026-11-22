@@ -2,7 +2,7 @@
 title: Live document status stream over server-sent events
 date: 2026-11-20
 pr: '#17'
-status: in review
+status: merged
 areas: [api]
 ---
 
