@@ -44,3 +44,16 @@ test('returns to the page asked for after signing in', async ({ page }) => {
   await page.getByRole('button', { name: 'Sign In' }).click();
   await expect(page).toHaveURL(/\/\?from=e2e$/);
 });
+
+test('says so when Keycloak cannot be reached', async ({ page }) => {
+  await page.route(/\/realms\/rag-workspaces\//, (route) => route.abort());
+  await page.goto('/sign-in');
+  await page.getByRole('button', { name: 'Continue with Keycloak' }).click();
+  await expect(page.getByRole('alert')).toContainText("Couldn't reach the sign-in service");
+  await expect(page.getByRole('button', { name: 'Continue with Keycloak' })).toBeEnabled();
+});
+
+test('sends an anonymous visitor at an unknown address to sign in, keeping the address', async ({ page }) => {
+  await page.goto('/no-such-page');
+  await expect(page).toHaveURL(/\/sign-in\?returnTo=%2Fno-such-page$/);
+});

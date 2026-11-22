@@ -18,7 +18,7 @@ export function AuthCallback() {
       (user) => {
         pending = null;
         const state = user.state as SignInState | undefined;
-        void navigate(safeReturnTo(state?.returnTo), { replace: true });
+        void navigate(safeReturnTo(state?.returnTo, window.location.origin), { replace: true });
       },
       (e: unknown) => {
         pending = null;

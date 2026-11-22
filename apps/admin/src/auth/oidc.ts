@@ -1,7 +1,7 @@
 import { UserManager } from 'oidc-client-ts';
 
 /** Keycloak as the browser sees it. Baked in at build time; see docker/admin.Dockerfile. */
-export const KEYCLOAK_URL: string = import.meta.env.VITE_KEYCLOAK_URL ?? 'http://localhost:8081';
+const KEYCLOAK_URL: string = import.meta.env.VITE_KEYCLOAK_URL ?? 'http://localhost:8081';
 
 /**
  * The `admin-ui` client in docker/keycloak/realm.json: public, authorization code with PKCE (S256).

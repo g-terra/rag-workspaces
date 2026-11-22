@@ -6,10 +6,17 @@ describe('safeReturnTo', () => {
     expect(safeReturnTo('/workspaces/ouc?tab=docs')).toBe('/workspaces/ouc?tab=docs');
   });
 
-  it.each(['//evil.example', 'https://evil.example', '/\\evil.example', 'workspaces', '', null, undefined])(
-    'falls back to / for %j',
-    (value) => {
-      expect(safeReturnTo(value)).toBe('/');
-    },
-  );
+  it.each([
+    '//evil.example',
+    'https://evil.example',
+    '/\\evil.example',
+    '/\t/evil.example',
+    '/\n/evil.example',
+    'workspaces',
+    '',
+    null,
+    undefined,
+  ])('falls back to / for %j', (value) => {
+    expect(safeReturnTo(value)).toBe('/');
+  });
 });

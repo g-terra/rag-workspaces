@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createApiClient } from '@/api/client';
 import { AuthContext, type AuthContextValue, type MeUser } from './auth-context';
 import { userManager, type SignInState } from './oidc';
+import { isSessionRefused } from './renew-error';
 
 const api = createApiClient({
-  getToken: async () => (await userManager.getUser())?.access_token ?? null,
+  getToken: async () => (await currentUser())?.access_token ?? null,
   // The token was refused, so the session is over: drop it and RequireAuth sends them to sign in.
   onUnauthorized: () => void userManager.removeUser(),
 });
@@ -23,12 +24,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const events = userManager.events;
     const onLoaded = (u: User) => setUser(u);
     const onUnloaded = () => setUser(null);
-    // The refresh token was refused (expired or revoked): end the session.
-    const onRenewError = () => void userManager.removeUser();
+    // End the session only if Keycloak refused the refresh token; if it was just unreachable, keep the
+    // session: the access token is still valid for a minute and renewal runs again.
+    const onRenewError = (err: Error) => {
+      if (isSessionRefused(err)) void userManager.removeUser();
+    };
     events.addUserLoaded(onLoaded);
     events.addUserUnloaded(onUnloaded);
     events.addSilentRenewError(onRenewError);
-    void restore().then(setUser);
+    void currentUser().then(setUser);
     return () => {
       events.removeUserLoaded(onLoaded);
       events.removeUserUnloaded(onUnloaded);
@@ -70,15 +74,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext value={value}>{children}</AuthContext>;
 }
 
-/** The stored session, renewed first if its access token has already expired. */
-async function restore(): Promise<User | null> {
+/**
+ * The stored session, renewed first if its access token has already expired (after a reload, or when
+ * the computer wakes from sleep before the renewal timer fires). Concurrent callers share one renewal.
+ */
+let renewing: Promise<User | null> | null = null;
+async function currentUser(): Promise<User | null> {
   const stored = await userManager.getUser();
-  if (!stored) return null;
-  if (!stored.expired) return stored;
-  try {
-    return await userManager.signinSilent();
-  } catch {
-    await userManager.removeUser();
-    return null;
-  }
+  if (!stored || !stored.expired) return stored;
+  renewing ??= userManager
+    .signinSilent()
+    .catch(async (err: unknown) => {
+      if (isSessionRefused(err)) await userManager.removeUser();
+      return null;
+    })
+    .finally(() => {
+      renewing = null;
+    });
+  return renewing;
 }

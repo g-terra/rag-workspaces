@@ -3,6 +3,7 @@ import { AppLayout } from '@/components/app-layout';
 import { RequireAuth } from '@/components/require-auth';
 import { AuthCallback } from '@/routes/auth-callback';
 import { Home } from '@/routes/home';
+import { NotFound } from '@/routes/not-found';
 import { SignIn } from '@/routes/sign-in';
 
 export const router = createBrowserRouter([
@@ -10,6 +11,14 @@ export const router = createBrowserRouter([
   { path: '/auth/callback', element: <AuthCallback /> },
   {
     element: <RequireAuth />,
-    children: [{ element: <AppLayout />, children: [{ index: true, element: <Home /> }] }],
+    children: [
+      {
+        element: <AppLayout />,
+        children: [
+          { index: true, element: <Home /> },
+          { path: '*', element: <NotFound /> },
+        ],
+      },
+    ],
   },
 ]);

@@ -43,14 +43,19 @@ follow the approved mocks (Sign in and the sidebar of every other screen).
    reload keeps the session but a new tab signs in again (Keycloak's own session cookie makes that a
    redirect without a password).
 4. **Refresh**. `automaticSilentRenew` renews the access token a minute before it expires (Keycloak's
-   lifespan is 15 minutes) with the refresh token. If renewal fails, the session ends and the person
-   lands on the sign-in page.
+   lifespan is 15 minutes) with the refresh token. A token that has already expired (after a reload, or
+   when the computer wakes from sleep) is renewed before it is used. If Keycloak refuses the refresh
+   token (`src/auth/renew-error.ts`: an OAuth error such as `invalid_grant`), the session ends and the
+   person lands on the sign-in page; if Keycloak is only unreachable, the session is kept and renewal
+   tries again.
 5. **API calls** (`src/api/client.ts`). `apiFetch(path, init)` prefixes `/api`, adds the bearer token,
    and turns problem JSON into an `ApiError` with the status and `detail`. A `401` signs the person out
    locally and sends them to sign in again.
 6. **Routes** (`src/router.tsx`, React Router). `/sign-in` and `/auth/callback` are public. Everything
    else is under `RequireAuth`, which sends anonymous visitors to `/sign-in?returnTo=<path>`, and renders
-   inside `AppLayout`.
+   inside `AppLayout`; unknown paths show a not-found page. `returnTo` is resolved like a URL and kept
+   only if it stays on this origin (`src/auth/return-to.ts`). If Keycloak can't be reached, the sign-in
+   page says so instead of doing nothing.
 7. **Layout** (`src/components/app-layout.tsx`). The mock's sidebar: product name, the person's name and
    role at the bottom, and a sign-out button that calls `signoutRedirect()` (Keycloak ends its session
    and returns to `/`). Nav sections for workspaces arrive with the screens that fill them. The home page
@@ -109,9 +114,12 @@ undo.
 
 - `apps/admin/src/api/client.test.ts`: the bearer header and `/api` prefix, problem JSON to `ApiError`,
   and the sign-out on `401`.
-- `apps/admin/src/auth/return-to.test.ts`: the `returnTo` path only accepts same-origin paths, so the
-  callback can't be used to send someone to another site.
-- `apps/admin/e2e/sign-in.spec.ts`: the real login, reload and sign-out, as above.
+- `apps/admin/src/auth/return-to.test.ts`: the `returnTo` path only accepts same-origin paths (including
+  tricks like `/\t/evil.example`), so the callback can't be used to send someone to another site.
+- `apps/admin/src/auth/renew-error.test.ts`: a refused refresh token ends the session, a network error
+  doesn't.
+- `apps/admin/e2e/sign-in.spec.ts`: the real login, reload and sign-out; `returnTo` after sign-in;
+  the message when Keycloak is unreachable; an unknown address sends an anonymous visitor to sign in.
 
 By hand (zsh): `docker compose up -d --build`, open http://localhost:8080, sign in with
 `RW_ADMIN_USERNAME` and `RW_ADMIN_PASSWORD` from `.env`, then run
@@ -126,4 +134,4 @@ smoke-test stack once that PR exists.
 
 ## Docs updated
 
-`README.md` (signing in to the admin UI, and the e2e command).
+`README.md` (signing in to the admin UI, and the e2e command); `docs/architecture.md` (React Router in the stack table).

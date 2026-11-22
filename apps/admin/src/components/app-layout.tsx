@@ -32,7 +32,16 @@ export function AppLayout() {
               {me ? (me.isAdmin ? 'admin' : 'member') : ''}
             </span>
           </span>
-          <Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => void signOut()}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Sign out"
+            onClick={() => {
+              // The local session is dropped first, so the person is signed out here even if Keycloak
+              // can't be reached to end its own session.
+              signOut().catch(() => undefined);
+            }}
+          >
             <LogOut />
           </Button>
         </div>

@@ -1,4 +1,5 @@
 import { Layers, ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router';
 import { useAuth } from '@/auth/auth-context';
 import { safeReturnTo } from '@/auth/return-to';
@@ -8,8 +9,21 @@ import { Button } from '@/components/ui/button';
 export function SignIn() {
   const { user, signIn } = useAuth();
   const [params] = useSearchParams();
-  const returnTo = safeReturnTo(params.get('returnTo'));
+  const returnTo = safeReturnTo(params.get('returnTo'), window.location.origin);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   if (user) return <Navigate to={returnTo} replace />;
+
+  // The library fetches Keycloak's discovery document before redirecting, so a Keycloak that is down
+  // fails here, on our page, instead of in the browser's address bar.
+  const start = () => {
+    setPending(true);
+    setError(null);
+    signIn(returnTo).catch(() => {
+      setPending(false);
+      setError("Couldn't reach the sign-in service (Keycloak). Try again in a moment.");
+    });
+  };
 
   return (
     <div className="flex min-h-screen flex-wrap">
@@ -39,9 +53,14 @@ export function SignIn() {
               You'll continue to the organisation's Keycloak sign-in page, then come back here.
             </p>
           </div>
-          <Button size="lg" className="w-full" onClick={() => void signIn(returnTo)}>
+          <Button size="lg" className="w-full" disabled={pending} onClick={start}>
             <ShieldCheck /> Continue with Keycloak
           </Button>
+          {error && (
+            <p role="alert" className="bg-destructive/10 text-destructive rounded-lg px-3.5 py-3 text-sm">
+              {error}
+            </p>
+          )}
           <div className="bg-muted text-muted-foreground rounded-lg border px-3.5 py-3 text-sm leading-normal">
             No account? Accounts are created by an administrator. There is no self sign-up.
           </div>
