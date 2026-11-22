@@ -1,8 +1,8 @@
 ---
 title: Live per-file ingestion status over server-sent events in the admin UI
 date: 2026-11-22
-pr: pending
-status: proposed
+pr: '#38'
+status: in review
 areas: [admin]
 ---
 
