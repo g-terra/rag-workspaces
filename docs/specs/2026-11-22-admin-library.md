@@ -1,8 +1,8 @@
 ---
 title: Live document library with download, reindex and delete in the admin UI
 date: 2026-11-22
-pr: pending
-status: proposed
+pr: '#39'
+status: in review
 areas: [admin]
 ---
 
