@@ -55,10 +55,10 @@ flowchart LR
 |---|---|---|
 | `api` | `apps/api` | Public REST API, Swagger docs, auth, workspace bookkeeping, ingestion queue consumer, analytics |
 | `web` | `apps/admin` | Admin UI (static build served by nginx, proxies `/api`) |
-| `langflow` | `langflowai/langflow` (pinned to an exact version) | Runs the ingest, retrieve, answer and chat flows; flow JSON in `flows/` is imported on startup. Flow JSON is tied to the Langflow version, so upgrades are deliberate and re-export the flows |
-| `chroma` | `chromadb/chroma` (pinned, server mode) | Vector store; one collection per workspace |
-| `keycloak` | `quay.io/keycloak/keycloak` (pinned) | Login; realm `rag-workspaces` imported from `docker/keycloak/realm.json` on first start |
-| `postgres` | `postgres:16` | App data and the ingestion queue (pg-boss), plus separate databases for Langflow and Keycloak (created by an init script on first start) |
+| `langflow` | `langflowai/langflow:1.13.3` | Runs the ingest, retrieve, answer and chat flows; flow JSON in `flows/` is imported on every start, and our custom components in `langflow/components/` are loaded with it. Its own data lives in Postgres. Flow JSON is tied to the Langflow version, so upgrades are deliberate and re-export the flows |
+| `chroma` | `chromadb/chroma:1.5.9` (server mode) | Vector store; one collection per workspace |
+| `keycloak` | `keycloak/keycloak:26.8.2` (the official image, from Docker Hub) | Login; realm `rag-workspaces` imported from `docker/keycloak/realm.json` on first start |
+| `postgres` | `postgres:16.16-alpine` | App data and the ingestion queue (pg-boss), plus separate databases for Langflow and Keycloak (created by an init script on first start) |
 | `whisper` | faster-whisper ASR web service | Video and audio transcription; compose profile `video`, off by default |
 
 LM Studio is a desktop app on the host. Containers reach it at `http://host.docker.internal:1234/v1` (compose adds `extra_hosts: host.docker.internal:host-gateway` so this works on Linux too).
@@ -79,9 +79,9 @@ The provider is a setting, not code. LM Studio is the default and needs no key.
 - Chat and embeddings are chosen separately: a global default for each in `.env`, and a workspace can override either (`chatProvider` and `chatModel`, `embeddingProvider` and `embeddingModel`). A common mix is local embeddings with a hosted chat model.
 - The embedding provider and model are pinned per workspace like the embedding model was; changing either means a reindex.
 - **A hosted provider sends that workspace's passages and questions to the provider.** The workspace settings screen says so in plain words, and a workspace on LM Studio stays fully local.
-- How the flows switch provider (one OpenAI-compatible component with a base URL, or Langflow's own OpenAI, Gemini and Anthropic components behind a switch) is settled in the M0 spike.
+- How the flows switch provider was settled by the M0 spike (`poc/RESULTS.md` F7): one custom "Workspace Chat Model" node builds the right LangChain client for `lmstudio`, `openai`, `anthropic` or `gemini`. The API reads provider keys from `.env` and sends provider, model, key and base URL as tweaks on that node, so keys never sit in Langflow's environment (Langflow 1.13 refuses to send environment keys to non-OpenAI hosts, F3).
 
-Published ports: only `web` (8080), `api` (3000), `keycloak` and `langflow` (7860) are published, all bound to `127.0.0.1` by default. `postgres`, `chroma` and `whisper` are reachable only on the compose network. Every service has a healthcheck, and `api` waits for postgres, chroma, langflow and keycloak to be healthy before it starts.
+Published ports: only `web` (8080), `api` (3000), `keycloak` (8081) and `langflow` (7860) are published, all bound to `127.0.0.1` by default. `postgres`, `chroma` and `whisper` are reachable only on the compose network. Every service has a healthcheck, and `api` waits for postgres, chroma, langflow and keycloak to be healthy before it starts.
 
 Footprint: Keycloak and Langflow each want roughly 1 to 2 GB of RAM on top of the models LM Studio loads. `docs/setup.md` states a minimum (16 GB recommended) and which services can be left out.
 
@@ -126,17 +126,18 @@ The embedding model is fixed per workspace once it holds documents, because vect
 
 The API and the flows meet at a small, tested contract, because this is the part of the design most likely to break quietly:
 
-- **Run by name, not id.** Each flow has a fixed endpoint name (`rw-ingest`, `rw-retrieve`, `rw-answer`, `rw-chat`). Flow ids change on import; names do not.
+- **Run by name, not id.** Each flow has a fixed endpoint name (`rw-ingest`, `rw-retrieve`, `rw-answer`, `rw-chat`; the M0 flows still use the spike's `rag-*` names until M1). The full contract, node by node, is in [`flows/README.md`](../flows/README.md).
+- **Node ids are part of the contract.** Tweaks are keyed by node id (`Loader`, `Split`, `Embeddings`, `Search`, `Prompt`, `LLM`, `Upsert`, `Delete`), so those ids are fixed. Chat input and output nodes must keep the `ChatInput-` and `ChatOutput-` prefixes, or tokens silently stop streaming.
 - **Inputs are tweaks on named components.** The API passes collection name, embedding model, chat model, system prompt, chunk size and overlap, top-k, folder filter and document id as tweaks. The component names the API relies on are listed in `flows/README.md`, and a CI test fails if a committed flow no longer has them.
-- **Outputs are structured.** `rw-retrieve`, `rw-answer` and `rw-chat` return the retrieved passages as data (passage id, document id, chunk index, page or start seconds, text, score) next to the answer text. Citations are the passages that were given to the model; the API does not guess which ones the model used.
+- **Outputs are structured.** Langflow's run API has no "return this data" mode, so flows send passages as fenced JSON inside a chat message and the API parses it. `rw-retrieve`, `rw-answer` and `rw-chat` return the retrieved passages (passage id, document id, chunk index, page or start seconds, text, score) next to the answer text. Citations are the passages that were given to the model; the API does not guess which ones the model used.
 - **Passage metadata is written at ingestion:** `document_id`, `folder_id`, `chunk_index`, and `page` or `start_seconds`. The passage id is `psg_<document ulid>_<chunk index>`, so neighbours are found without a second index and re-ingestion is repeatable.
-- **Small custom components are expected.** Stock Langflow components load a file as one text and do not keep page numbers, chunk indexes or transcript timestamps. Where needed, the flows carry small custom components (Python inside the flow JSON). The project still has no Python service.
+- **Custom components (proven necessary by the spike).** Langflow 1.13 retired its Chroma integration, its OpenAI embeddings component cannot talk to LM Studio, and stock loaders lose page numbers. So `langflow/components/rag_workspaces/` holds about 300 lines of Python that run inside Langflow: Chroma upsert, search and delete over Chroma's REST API, a document loader with page numbers, LM Studio embeddings, and the per-request chat model. The project still has no Python service.
 - **Grounding.** The answer prompt tells the model to answer only from the passages and to say so when they do not contain the answer. If retrieval returns nothing above the workspace's minimum score, the API returns that "not found" answer with empty citations without calling the chat model.
 - **One direction.** The API calls Langflow. Flows read ChromaDB directly and never call our API, so there are no API keys for Langflow and no loop between the two.
-- **Langflow API key.** The API creates its own Langflow key on first start by signing in as the Langflow superuser from `.env`, and stores it. If that fails, it uses `LANGFLOW_API_KEY` from `.env`. `GET /v1/system` shows which one is in use.
+- **Langflow API key.** Langflow shows a key's value only once, so on every start the API signs in as the Langflow superuser from `.env`, mints a new `rag-api-<timestamp>` key, keeps it in memory and revokes the older `rag-api-*` keys. If signing in fails, it uses `LANGFLOW_API_KEY` from `.env`. `GET /v1/system` shows which one is in use. Consequence: only one API process per Langflow.
 - **Flows live in git.** `pnpm flows:export` pulls the flows out of the running Langflow into `flows/` (without saved credentials), `pnpm flows:import` pushes them in. Editing in the Langflow editor and forgetting to export is the usual way the repo and the running system drift.
 
-All of this is unproven until the [M0 spike](work-breakdown.md#m0-spike-prove-the-langflow-contract) has run.
+The [M0 spike](work-breakdown.md#m0-spike-prove-the-langflow-contract) proved all of this against Langflow 1.13.3 (30 of 30 checks, `poc/RESULTS.md`). Still to verify on a real machine: answer quality with LM Studio and a real Gemini call.
 
 ## Ingestion
 
@@ -208,8 +209,10 @@ packages/
   langflow-client/ typed client for Langflow's run API
   config/         shared tsconfig, eslint, prettier, vitest presets
 flows/            ingest.json, retrieve.json, answer.json, chat.json, README.md (the flow contract)
+langflow/components/  custom Langflow components (Python, run inside Langflow)
 scripts/          flows export/import, backup/restore, doctor
-docker/           Dockerfiles, nginx config, keycloak/realm.json
+docker/           Dockerfiles, nginx config, keycloak/realm.json, postgres init script
+poc/              the Langflow spike, kept as reference until M1 replaces it
 docs/
 tests/            e2e (Playwright, compose smoke), eval (golden questions, run locally), fixtures, stub model server
 docker-compose.yml, turbo.json, pnpm-workspace.yaml, .env.example
@@ -223,7 +226,7 @@ docker-compose.yml, turbo.json, pnpm-workspace.yaml, .env.example
 | Monorepo | Turborepo + pnpm workspaces |
 | API | Fastify, zod (`fastify-type-provider-zod`), `@fastify/swagger` + `@fastify/swagger-ui`, `@fastify/multipart` |
 | AI flows | Langflow (ingest, retrieve, answer, chat), flow JSON versioned in `flows/` |
-| Vector DB | ChromaDB, one collection per workspace |
+| Vector DB | ChromaDB, one collection per workspace, reached from Langflow through our own components over Chroma's REST API |
 | Models | LM Studio on the host by default; OpenAI, Gemini, Anthropic (chat only) or any OpenAI-compatible endpoint as a setting, per workspace if wanted |
 | Auth | Keycloak (OIDC) for people, hashed API keys for agents, `@fastify/rate-limit` |
 | Queue | pg-boss on Postgres (no Redis); live status from an in-process event emitter, since there is one API process |

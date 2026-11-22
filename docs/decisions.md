@@ -25,6 +25,7 @@ Decided items are Guilherme's calls (all on 2026-11-20 unless dated otherwise). 
 | 17 | **The API gets its Langflow key automatically** on first start (signing in as the Langflow superuser from `.env`); `LANGFLOW_API_KEY` in `.env` is the fallback | Nothing to paste on a fresh install |
 | 18 | **One direction: the API calls Langflow.** Flows read ChromaDB directly and never call our API; no API keys for Langflow | Simpler, no loop between the two, and one less key type to explain |
 | 19 | **Hosted model providers are a setting**: LM Studio stays the default; OpenAI, Google Gemini, Anthropic (chat only, it has no embedding models) and any OpenAI-compatible endpoint can be configured, globally or per workspace | Lets a workspace trade privacy for quality where wanted. A hosted provider receives that workspace's passages and questions, and the UI says so |
+| 20 | **Keep ChromaDB through small custom Langflow components** (from the M0 spike, PR #3) | Langflow 1.13 retired its Chroma integration. Custom components over Chroma's REST API keep the ChromaDB decision and also give delete by document id, idempotent re-ingest and scored passages, which the stock component never did. Rejected: pinning Langflow 1.12 (frozen on an old line) or Langflow's Postgres knowledge bases (ties storage to Langflow users, not workspaces) |
 
 ### Why TypeScript instead of Flask or FastAPI
 
