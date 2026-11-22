@@ -2,7 +2,7 @@
 title: Langflow client; the API creates its Langflow key on start and checks its dependencies
 date: 2026-11-20
 pr: '#7'
-status: in review
+status: merged
 areas: [langflow-client, api, infra]
 ---
 
