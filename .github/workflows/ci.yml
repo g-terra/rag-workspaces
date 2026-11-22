@@ -40,11 +40,11 @@ jobs:
       - run: pnpm build
 
   docker:
-    name: Compose config and API image
+    name: Compose config and images
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - run: node scripts/env-init.ts
       - run: docker compose config --quiet
-      - run: docker compose build api
+      - run: docker compose build api web
