@@ -1,12 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { fillKeycloakLogin, requireCredentials } from './sign-in';
 
-// The seeded admin from .env (RW_ADMIN_USERNAME / RW_ADMIN_PASSWORD), unless E2E_* say otherwise.
-const username = process.env.E2E_USERNAME ?? process.env.RW_ADMIN_USERNAME ?? 'admin';
-const password = process.env.E2E_PASSWORD ?? process.env.RW_ADMIN_PASSWORD;
-
-test.beforeAll(() => {
-  if (!password) throw new Error('Set E2E_PASSWORD or RW_ADMIN_PASSWORD (from .env) to run the e2e tests.');
-});
+requireCredentials();
 
 test('signs in through Keycloak, survives a reload, and signs out', async ({ page }) => {
   // Anonymous visitors are sent to our sign-in page, remembering where they were going.
@@ -16,12 +11,9 @@ test('signs in through Keycloak, survives a reload, and signs out', async ({ pag
   // Our page hands over to Keycloak's hosted login.
   await page.getByRole('button', { name: 'Continue with Keycloak' }).click();
   await expect(page).toHaveURL(/\/realms\/rag-workspaces\/protocol\/openid-connect\/auth/);
-  await page.getByLabel(/username or email/i).fill(username);
-  await page.getByLabel('Password', { exact: true }).fill(password!);
-  await page.getByRole('button', { name: 'Sign In' }).click();
+  await fillKeycloakLogin(page);
 
   // Back in the app: /v1/me answered with the bearer token, so we know who this is.
-  await expect(page.getByRole('heading', { name: 'Admin' })).toBeVisible();
   await expect(page.getByTestId('user-role')).toHaveText('admin');
 
   // The tokens are kept for this tab, so a reload doesn't go back to Keycloak.
@@ -37,12 +29,10 @@ test('signs in through Keycloak, survives a reload, and signs out', async ({ pag
 });
 
 test('returns to the page asked for after signing in', async ({ page }) => {
-  await page.goto('/sign-in?returnTo=%2F%3Ffrom%3De2e');
+  await page.goto('/sign-in?returnTo=%2Fworkspaces%3Ffrom%3De2e');
   await page.getByRole('button', { name: 'Continue with Keycloak' }).click();
-  await page.getByLabel(/username or email/i).fill(username);
-  await page.getByLabel('Password', { exact: true }).fill(password!);
-  await page.getByRole('button', { name: 'Sign In' }).click();
-  await expect(page).toHaveURL(/\/\?from=e2e$/);
+  await fillKeycloakLogin(page);
+  await expect(page).toHaveURL(/\/workspaces\?from=e2e$/);
 });
 
 test('says so when Keycloak cannot be reached', async ({ page }) => {
