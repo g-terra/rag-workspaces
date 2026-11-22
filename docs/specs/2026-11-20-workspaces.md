@@ -2,7 +2,7 @@
 title: Workspaces CRUD, Chroma collections, members and the 404-not-403 access check (auth 3/3)
 date: 2026-11-20
 pr: '#13'
-status: in review
+status: merged
 areas: [api, db]
 ---
 
