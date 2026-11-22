@@ -55,7 +55,7 @@ Requirements: Node 22.18+ and pnpm 10 (`corepack enable` gives you the pinned ve
 ```bash
 pnpm install
 pnpm build       # build every package (Turborepo caches the results)
-pnpm test        # Vitest in every package
+pnpm test        # Vitest in every package (database tests run when TEST_DATABASE_URL is set)
 pnpm lint        # ESLint
 pnpm typecheck   # tsc --noEmit
 pnpm format      # Prettier
@@ -65,6 +65,7 @@ pnpm format      # Prettier
 |---|---|
 | `apps/api` | Fastify API: `pnpm --filter @rag/api dev`, then Swagger UI at http://localhost:3000/docs |
 | `packages/config` | Shared TypeScript, ESLint and Vitest settings |
+| `packages/db` | Drizzle schema, SQL migrations (`drizzle/`) and the Postgres connection. Migrations run when the API starts |
 | `packages/langflow-client` | Typed client for Langflow's login, API key, flow and run/stream endpoints |
 | `packages/shared` | zod schemas shared by the API and the admin UI (the API contract) |
 | `docker-compose.yml`, `docker/` | The stack, the API image, the Postgres init script and the Keycloak realm |

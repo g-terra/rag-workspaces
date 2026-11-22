@@ -17,6 +17,7 @@
   "dependencies": {
     "@fastify/swagger": "9.9.5",
     "@fastify/swagger-ui": "6.1.4",
+    "@rag/db": "workspace:*",
     "@rag/langflow-client": "workspace:*",
     "@rag/shared": "workspace:*",
     "fastify": "5.12.8",
