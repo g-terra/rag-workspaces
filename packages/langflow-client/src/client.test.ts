@@ -57,13 +57,13 @@ describe('LangflowClient', () => {
   it('lists flows with their endpoint names', async () => {
     const { fn, calls } = fakeFetch(() =>
       json([
-        { id: '1', name: 'rag-answer', endpoint_name: 'rag-answer', data: null },
+        { id: '1', name: 'rw-answer', endpoint_name: 'rw-answer', data: null },
         { id: '2', name: 'Scratch' },
       ]),
     );
     const client = new LangflowClient({ baseUrl: 'http://lf', apiKey: 'k', fetch: fn });
     expect(await client.listFlows()).toEqual([
-      { id: '1', name: 'rag-answer', endpoint_name: 'rag-answer' },
+      { id: '1', name: 'rw-answer', endpoint_name: 'rw-answer' },
       { id: '2', name: 'Scratch', endpoint_name: null },
     ]);
     expect(calls[0]!.headers.get('x-api-key')).toBe('k');
