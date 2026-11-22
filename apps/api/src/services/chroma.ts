@@ -38,4 +38,18 @@ export class ChromaService {
       throw new Error(`Chroma: delete collection ${name} failed: HTTP ${res.status} ${await res.text()}`);
     }
   }
+
+  /** Delete every vector of one document. A missing collection means there is nothing to delete. */
+  async deleteDocumentVectors(collection: string, documentId: string): Promise<void> {
+    const found = await this.fetchFn(`${this.base}/collections/${encodeURIComponent(collection)}`);
+    if (found.status === 404) return;
+    if (!found.ok) throw new Error(`Chroma: get collection ${collection} failed: HTTP ${found.status}`);
+    const { id } = (await found.json()) as { id: string };
+    const res = await this.fetchFn(`${this.base}/collections/${id}/delete`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ where: { document_id: documentId } }),
+    });
+    if (!res.ok) throw new Error(`Chroma: delete vectors of ${documentId} failed: HTTP ${res.status}`);
+  }
 }
