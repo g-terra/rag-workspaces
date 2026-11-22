@@ -43,7 +43,7 @@ upload PR to keep each reviewable (rule 2).
    (the answer to Retry). Documents are kept by id even before their upload answers, because the stream
    can report a document first, and an older copy (by `updatedAt`) never replaces a newer one. A removed
    document shows "Deleted from the library." Rows show "N passages" when ready, "Attempt N failed:
-   <error>" when failed; the heading counts "N ready, M in progress".
+   <error>" when failed; the heading counts "N ready, M in progress" (files waiting their upload turn count as in progress).
 5. **Retry** (`src/routes/upload.tsx`). On a failed document, `POST .../documents/<id>/reindex` through
    `api`; the answer (back to Queued) shows at once and the stream takes it from there. A refused retry
    shows the API's message above the list.

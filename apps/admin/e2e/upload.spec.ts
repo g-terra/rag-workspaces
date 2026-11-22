@@ -87,3 +87,42 @@ test('uploads files and follows them live to Ready; a second copy is skipped', a
 
   await expect(page.getByRole('heading', { name: /This session · 2 ready, 0 in progress/ })).toBeVisible();
 });
+
+test('sends at most three files at once; the rest wait their turn', async ({ page }) => {
+  await signIn(page, '/workspaces');
+  const created = await page.request.post('/api/v1/workspaces', { headers: await bearer(page), data: ws });
+  expect(created.status()).toBe(201);
+  await page.goto(`/w/${ws.slug}/upload`);
+  await expect(page.getByRole('heading', { name: 'Upload material' })).toBeVisible();
+
+  // A drop beside the zone is cancelled, so the browser doesn't open the file and leave the page.
+  const prevented = await page.evaluate(() => {
+    const drop = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() });
+    document.body.dispatchEvent(drop);
+    return drop.defaultPrevented;
+  });
+  expect(prevented).toBe(true);
+
+  // Hold each upload long enough to see the fourth file wait.
+  await page.route(`**/api/v1/workspaces/${ws.slug}/documents`, async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.continue();
+  });
+  const names = ['one.md', 'two.md', 'three.md', 'four.md'];
+  await page.getByLabel('Choose files to upload').setInputFiles(
+    names.map((name) => ({
+      name,
+      mimeType: 'text/markdown',
+      buffer: Buffer.from(`# ${name}\n\nQueue ${ws.slug}`),
+    })),
+  );
+  const status = (name: string) =>
+    page.getByTestId('upload-row').filter({ hasText: name }).getByTestId('status');
+  await expect(status('four.md')).toHaveText('Waiting');
+  for (const name of names.slice(0, 3)) await expect(status(name)).toHaveText('Uploading');
+  await expect(page.getByText('This session: 0 ready, 4 in progress')).toBeAttached();
+
+  // Then each one is stored and followed live through ingestion.
+  for (const name of names)
+    await expect(status(name)).toHaveText(/Queued|Processing|Ready/, { timeout: 15_000 });
+});

@@ -56,7 +56,7 @@ describe('toDocumentEvent', () => {
 });
 
 describe('sessionReducer', () => {
-  it('adds files as uploading, or as rejected with the reason', () => {
+  it('adds files as waiting, or as rejected with the reason', () => {
     const s = sessionReducer(initialSession, {
       type: 'added',
       files: [
@@ -65,9 +65,15 @@ describe('sessionReducer', () => {
       ],
     });
     expect(s.rows.map((r) => [r.phase, r.error])).toEqual([
-      ['uploading', null],
+      ['waiting', null],
       ['rejected', 'Not supported'],
     ]);
+    expect(rowView(s, s.rows[0]!)).toMatchObject({ label: 'Waiting', tone: 'waiting', progress: null });
+  });
+
+  it('shows a file as uploading once its turn in the queue comes', () => {
+    const s = sessionReducer(withUpload(), { type: 'started', key: 'k1' });
+    expect(rowView(s, s.rows[0]!)).toMatchObject({ label: 'Uploading', tone: 'uploading', progress: 0 });
   });
 
   it('puts newer drops above earlier ones', () => {
@@ -77,7 +83,8 @@ describe('sessionReducer', () => {
   });
 
   it('tracks upload progress, then the stored document', () => {
-    let s = sessionReducer(withUpload(), { type: 'progress', key: 'k1', fraction: 0.45 });
+    let s = sessionReducer(withUpload(), { type: 'started', key: 'k1' });
+    s = sessionReducer(s, { type: 'progress', key: 'k1', fraction: 0.45 });
     expect(rowView(s, s.rows[0]!)).toMatchObject({ label: 'Uploading', tone: 'uploading', progress: 45 });
     s = sessionReducer(s, { type: 'uploaded', key: 'k1', document: doc(), duplicate: false });
     expect(rowView(s, s.rows[0]!)).toMatchObject({
@@ -205,7 +212,7 @@ describe('sessionReducer', () => {
 });
 
 describe('sessionSummary', () => {
-  it('counts ready files and files still in progress', () => {
+  it('counts ready files and files still in progress, waiting ones included', () => {
     let s = sessionReducer(initialSession, {
       type: 'added',
       files: [
@@ -213,6 +220,7 @@ describe('sessionSummary', () => {
         { key: 'b', name: 'b.md', sizeBytes: 1 },
         { key: 'c', name: 'c.md', sizeBytes: 1 },
         { key: 'd', name: 'd.exe', sizeBytes: 1, error: 'no' },
+        { key: 'e', name: 'e.md', sizeBytes: 1 },
       ],
     });
     s = sessionReducer(s, {
@@ -222,6 +230,7 @@ describe('sessionSummary', () => {
       duplicate: false,
     });
     s = sessionReducer(s, { type: 'uploaded', key: 'b', document: doc({ id: 'y' }), duplicate: false });
-    expect(sessionSummary(s)).toBe('1 ready, 2 in progress');
+    s = sessionReducer(s, { type: 'started', key: 'c' });
+    expect(sessionSummary(s)).toBe('1 ready, 3 in progress');
   });
 });

@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 
 // The status colours from the approved mocks.
 const TONES: Record<Tone, string> = {
+  waiting: 'bg-background text-muted-foreground border border-dashed',
   uploading: 'bg-background text-zinc-700 border',
   queued: 'bg-zinc-100 text-zinc-700',
   transcribing: 'bg-purple-100 text-purple-800',
