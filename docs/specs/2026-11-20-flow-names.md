@@ -2,7 +2,7 @@
 title: Rename flow endpoints to rw-*
 date: 2026-11-20
 pr: '#14'
-status: in review
+status: merged
 areas: [flows, api, docs]
 ---
 
