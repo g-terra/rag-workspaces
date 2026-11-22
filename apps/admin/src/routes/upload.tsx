@@ -1,14 +1,23 @@
 import type { Document } from '@rag/shared';
 import { Upload as UploadIcon } from 'lucide-react';
-import { Fragment, useReducer, useRef, useState, type DragEvent } from 'react';
+import { Fragment, useEffect, useReducer, useRef, useState, type DragEvent } from 'react';
 import { Link } from 'react-router';
+import { ApiError } from '@/api/client';
 import { useAuth } from '@/auth/auth-context';
+import { sendAuthorized } from '@/auth/authorized';
 import { Notice } from '@/components/states';
 import { StatusBadge } from '@/components/status-badge';
 import { TopBar } from '@/components/top-bar';
 import { Button } from '@/components/ui/button';
 import { ACCEPT, checkFile, uploadErrorMessage } from '@/documents/files';
-import { initialSession, rowView, sessionReducer, sessionSummary } from '@/documents/session';
+import { createLimiter } from '@/documents/queue';
+import {
+  initialSession,
+  missingFromSnapshot,
+  rowView,
+  sessionReducer,
+  sessionSummary,
+} from '@/documents/session';
 import { uploadFile } from '@/documents/upload';
 import { useDocumentEvents } from '@/documents/use-document-events';
 import { cn } from '@/lib/utils';
@@ -20,9 +29,24 @@ const LIFECYCLE = [
   ['ready', 'Ready'],
 ] as const;
 
+/** Files sent at once; the rest wait in the page's queue. */
+const PARALLEL_UPLOADS = 3;
+
 /** `/w/:slug/upload`: drop files, watch each one upload and go through ingestion live. */
 export function Upload() {
   const w = useCurrentWorkspace();
+
+  // A file dropped beside the drop zone would otherwise open in the tab and leave the page.
+  useEffect(() => {
+    const prevent = (e: Event) => e.preventDefault();
+    window.addEventListener('dragover', prevent);
+    window.addEventListener('drop', prevent);
+    return () => {
+      window.removeEventListener('dragover', prevent);
+      window.removeEventListener('drop', prevent);
+    };
+  }, []);
+
   return (
     <>
       <TopBar trail={[w.name, 'Upload']} />
@@ -40,7 +64,8 @@ export function Upload() {
             body="Your access to this workspace is read-only. Ask an administrator for editor access."
           />
         ) : (
-          <Uploader slug={w.slug} />
+          // A fresh uploader per workspace, so rows don't carry over when switching.
+          <Uploader key={w.slug} slug={w.slug} />
         )}
       </div>
     </>
@@ -48,14 +73,50 @@ export function Upload() {
 }
 
 function Uploader({ slug }: { slug: string }) {
-  const { api, getToken } = useAuth();
+  const auth = useAuth();
+  const { api } = auth;
   const [session, dispatch] = useReducer(sessionReducer, initialSession);
   const [dragging, setDragging] = useState(false);
-  const [retryError, setRetryError] = useState<string | null>(null);
   const nextKey = useRef(0);
   const input = useRef<HTMLInputElement>(null);
+  const [queue] = useState(() => createLimiter(PARALLEL_UPLOADS));
+  const abort = useRef(new AbortController());
 
-  useDocumentEvents(slug, (event) => dispatch({ type: 'event', event }));
+  // Leaving the page cancels the uploads still running or waiting.
+  useEffect(() => {
+    const controller = new AbortController();
+    abort.current = controller;
+    return () => controller.abort();
+  }, []);
+
+  // Closing or reloading the tab mid-upload asks first.
+  const busy = session.rows.some((r) => r.phase === 'waiting' || r.phase === 'uploading');
+  useEffect(() => {
+    if (!busy) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [busy]);
+
+  /** Fetches a document that finished or was deleted while the stream was down. */
+  async function catchUp(id: string) {
+    try {
+      const document = await api<Document>(
+        `/v1/workspaces/${encodeURIComponent(slug)}/documents/${encodeURIComponent(id)}`,
+      );
+      dispatch({ type: 'document', document });
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404)
+        dispatch({ type: 'event', event: { type: 'removed', id } });
+      // Anything else: the next snapshot tries again.
+    }
+  }
+
+  const stopped = useDocumentEvents(slug, (event) => {
+    dispatch({ type: 'event', event });
+    if (event.type === 'snapshot')
+      for (const id of missingFromSnapshot(session, event.documents)) void catchUp(id);
+  });
 
   function addFiles(list: FileList | null) {
     const files = [...(list ?? [])].map((file) => ({
@@ -73,32 +134,44 @@ function Uploader({ slug }: { slug: string }) {
         error: f.error ?? undefined,
       })),
     });
+    const { signal } = abort.current;
     for (const f of files) {
       if (f.error) continue;
-      void (async () => {
-        const outcome = await uploadFile({
-          slug,
-          file: f.file,
-          token: await getToken(),
-          onProgress: (fraction) => dispatch({ type: 'progress', key: f.key, fraction }),
-        });
+      void queue(async () => {
+        if (signal.aborted) return;
+        dispatch({ type: 'started', key: f.key });
+        // The token is fetched as the file's turn comes, so it can't expire while the file waits.
+        const outcome = await sendAuthorized(auth, (token) =>
+          uploadFile({
+            slug,
+            file: f.file,
+            token,
+            signal,
+            onProgress: (fraction) => dispatch({ type: 'progress', key: f.key, fraction }),
+          }),
+        );
+        if (signal.aborted) return;
         if (outcome.ok) dispatch({ type: 'uploaded', key: f.key, ...outcome.result });
         else
           dispatch({ type: 'failed', key: f.key, error: uploadErrorMessage(outcome.status, outcome.detail) });
-      })();
+      });
     }
   }
 
-  async function retry(id: string) {
-    setRetryError(null);
+  async function retry(key: string, id: string) {
+    dispatch({ type: 'retry', key });
     try {
       const document = await api<Document>(
         `/v1/workspaces/${encodeURIComponent(slug)}/documents/${encodeURIComponent(id)}/reindex`,
         { method: 'POST' },
       );
-      dispatch({ type: 'document', document });
+      dispatch({ type: 'retried', key, document });
     } catch (e) {
-      setRetryError(`Couldn't retry: ${e instanceof Error ? e.message : String(e)}`);
+      dispatch({
+        type: 'retryFailed',
+        key,
+        error: `Couldn't retry: ${e instanceof Error ? e.message : String(e)}`,
+      });
     }
   }
 
@@ -161,6 +234,16 @@ function Uploader({ slug }: { slug: string }) {
         <StatusBadge tone="failed" label="Failed" />
       </div>
 
+      {stopped && (
+        <p role="alert" className="text-destructive text-sm">
+          Live updates stopped: {stopped}
+        </p>
+      )}
+
+      <p className="sr-only" aria-live="polite">
+        {session.rows.length > 0 && `This session: ${sessionSummary(session)}`}
+      </p>
+
       {session.rows.length > 0 && (
         <section className="bg-card rounded-xl border" aria-label="This session">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3.5">
@@ -169,11 +252,6 @@ function Uploader({ slug }: { slug: string }) {
               <Link to={`/w/${slug}/documents`}>View in library</Link>
             </Button>
           </div>
-          {retryError && (
-            <p role="alert" className="text-destructive border-b px-5 py-2 text-sm">
-              {retryError}
-            </p>
-          )}
           <ul>
             {session.rows.map((row) => {
               const v = rowView(session, row);
@@ -197,6 +275,11 @@ function Uploader({ slug }: { slug: string }) {
                     >
                       {v.meta}
                     </p>
+                    {v.retryError && (
+                      <p role="alert" className="text-destructive mt-0.5 text-xs">
+                        {v.retryError}
+                      </p>
+                    )}
                     {v.progress !== null && (
                       <div
                         role="progressbar"
@@ -211,7 +294,13 @@ function Uploader({ slug }: { slug: string }) {
                   <StatusBadge tone={v.tone} label={v.label} />
                   <div className="flex w-21 justify-end">
                     {v.canRetry && v.document && (
-                      <Button variant="outline" size="sm" onClick={() => void retry(v.document!.id)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Retry ${row.name}`}
+                        disabled={v.retryPending}
+                        onClick={() => void retry(row.key, v.document!.id)}
+                      >
                         Retry
                       </Button>
                     )}
