@@ -2,7 +2,7 @@
 title: Langflow spike findings in the plan; flow contract in flows/README.md
 date: 2026-11-20
 pr: '#10'
-status: in review
+status: merged
 areas: [docs, flows]
 ---
 
