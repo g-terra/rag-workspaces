@@ -2,7 +2,7 @@
 title: One spec per pull request, with a template, a skill and mandatory Superpowers
 date: 2026-11-22
 pr: '#29'
-status: in review
+status: merged
 areas: [docs]
 ---
 
