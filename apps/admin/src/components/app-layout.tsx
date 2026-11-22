@@ -1,7 +1,9 @@
 import { Layers, LogOut } from 'lucide-react';
-import { Outlet } from 'react-router';
+import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '@/auth/auth-context';
 import { Button } from '@/components/ui/button';
+import { WorkspaceSwitcher } from '@/components/workspace-switcher';
+import { cn } from '@/lib/utils';
 
 /** The sidebar from the approved mocks, with the signed-in person and sign-out at the bottom. */
 export function AppLayout() {
@@ -17,6 +19,23 @@ export function AppLayout() {
           </span>
           rag-workspaces
         </div>
+        <WorkspaceSwitcher />
+        {me?.isAdmin && (
+          <nav aria-label="Admin" className="flex flex-col gap-0.5">
+            <p className="text-muted-foreground mb-1 px-2.5 text-xs font-medium">Admin</p>
+            <NavLink
+              to="/workspaces"
+              className={({ isActive }) =>
+                cn(
+                  'hover:bg-accent flex h-8.5 items-center gap-2.5 rounded-md px-2.5 text-sm',
+                  isActive ? 'bg-accent font-semibold' : 'text-muted-foreground hover:text-foreground',
+                )
+              }
+            >
+              <Layers className="size-4" /> All workspaces
+            </NavLink>
+          </nav>
+        )}
         <div className="mt-auto flex items-center gap-2.5 border-t px-1 pt-2">
           <span
             aria-hidden
