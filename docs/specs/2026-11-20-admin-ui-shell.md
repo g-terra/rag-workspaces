@@ -2,7 +2,7 @@
 title: Admin UI shell with Vite, React, Tailwind and shadcn/ui, served by nginx
 date: 2026-11-20
 pr: '#9'
-status: in review
+status: merged
 areas: [admin, infra, ci]
 ---
 
