@@ -104,7 +104,9 @@ test('an admin creates workspaces from the list and from the switcher', async ({
   // Closing the dialog gives focus back to what opened it.
   await page.getByRole('button', { name: 'Switch workspace' }).click();
   await page.getByRole('button', { name: /Create workspace/ }).click();
+  await expect(dialog).toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toBeFocused();
 
   // The list shows the new one without a reload.
@@ -112,7 +114,9 @@ test('an admin creates workspaces from the list and from the switcher', async ({
   await expect(page.getByText(`/v1/workspaces/${d.slug}`)).toBeVisible();
   const newButton = page.getByRole('button', { name: 'New workspace' }).first();
   await newButton.click();
+  await expect(dialog).toBeVisible();
   await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
   await expect(newButton).toBeFocused();
 });
 
