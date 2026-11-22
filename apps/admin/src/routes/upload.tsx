@@ -1,6 +1,7 @@
 import type { Document } from '@rag/shared';
 import { Upload as UploadIcon } from 'lucide-react';
 import { Fragment, useReducer, useRef, useState, type DragEvent } from 'react';
+import { Link } from 'react-router';
 import { useAuth } from '@/auth/auth-context';
 import { Notice } from '@/components/states';
 import { StatusBadge } from '@/components/status-badge';
@@ -164,6 +165,9 @@ function Uploader({ slug }: { slug: string }) {
         <section className="bg-card rounded-xl border" aria-label="This session">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3.5">
             <h2 className="text-sm font-semibold">This session · {sessionSummary(session)}</h2>
+            <Button variant="outline" size="sm" asChild>
+              <Link to={`/w/${slug}/documents`}>View in library</Link>
+            </Button>
           </div>
           {retryError && (
             <p role="alert" className="text-destructive border-b px-5 py-2 text-sm">
