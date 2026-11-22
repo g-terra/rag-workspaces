@@ -1,6 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { App } from './App';
+import { RouterProvider } from 'react-router';
+import { AuthProvider } from './auth/auth-provider';
+import { router } from './router';
 import './index.css';
 
 // Follow the system light/dark setting until the UI has its own switch.
@@ -11,6 +13,8 @@ dark.addEventListener('change', applyTheme);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <AuthProvider>
+      <RouterProvider router={router} />
+    </AuthProvider>
   </StrictMode>,
 );

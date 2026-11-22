@@ -41,7 +41,7 @@ docker compose ps        # every service should say (healthy)
 
 | What | Where | Login |
 |---|---|---|
-| Admin UI (a placeholder until M4) | http://localhost:8080 | none yet |
+| Admin UI | http://localhost:8080 | `RW_ADMIN_USERNAME` / `RW_ADMIN_PASSWORD`, through Keycloak's sign-in page |
 | API and Swagger UI | http://localhost:3000/docs | none yet |
 | Langflow editor | http://localhost:7860 | `LANGFLOW_SUPERUSER` / `LANGFLOW_SUPERUSER_PASSWORD` from `.env` |
 | Keycloak admin console (create people here) | http://localhost:8081/admin | `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` |
@@ -62,9 +62,18 @@ pnpm typecheck   # tsc --noEmit
 pnpm format      # Prettier
 ```
 
+End-to-end tests drive the admin UI in a real browser against the running stack (`docker compose up -d --build`
+first). They sign in as the seeded admin from `.env`:
+
+```bash
+pnpm --filter @rag/admin exec playwright install chromium   # once
+set -a; source .env; set +a                                 # RW_ADMIN_USERNAME / RW_ADMIN_PASSWORD
+pnpm --filter @rag/admin e2e
+```
+
 | Path | What it is |
 |---|---|
-| `apps/admin` | Vite + React + Tailwind + shadcn/ui shell: `pnpm --filter @rag/admin dev` (http://localhost:5173, forwards `/api` to the API) |
+| `apps/admin` | Admin UI (Vite + React + Tailwind + shadcn/ui), Keycloak sign-in; Playwright tests in `e2e/`: `pnpm --filter @rag/admin dev` (http://localhost:5173, forwards `/api` to the API) |
 | `apps/api` | Fastify API: `pnpm --filter @rag/api dev`, then Swagger UI at http://localhost:3000/docs |
 | `packages/config` | Shared TypeScript, ESLint and Vitest settings |
 | `packages/db` | Drizzle schema, SQL migrations (`drizzle/`) and the Postgres connection. Migrations run when the API starts |

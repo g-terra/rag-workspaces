@@ -161,6 +161,9 @@ services:
     build:
       context: .
       dockerfile: docker/admin.Dockerfile
+      # Same value the API checks token issuers against, so the UI signs in at the same Keycloak.
+      args:
+        KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
     restart: unless-stopped
     depends_on:
       api: { condition: service_healthy }
