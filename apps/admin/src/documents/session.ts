@@ -6,7 +6,8 @@ export interface SessionRow {
   key: string;
   name: string;
   sizeBytes: number;
-  phase: 'uploading' | 'rejected' | 'stored' | 'skipped';
+  /** `waiting`: in the upload queue, behind the files being sent. */
+  phase: 'waiting' | 'uploading' | 'rejected' | 'stored' | 'skipped';
   /** Share of the upload sent, from 0 to 1. */
   progress: number;
   /** Why the upload was refused (phase `rejected`). */
@@ -22,6 +23,7 @@ export interface SessionState {
 
 export type SessionAction =
   | { type: 'added'; files: { key: string; name: string; sizeBytes: number; error?: string }[] }
+  | { type: 'started'; key: string }
   | { type: 'progress'; key: string; fraction: number }
   | { type: 'uploaded'; key: string; document: Document; duplicate: boolean }
   | { type: 'failed'; key: string; error: string };
@@ -39,13 +41,15 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         key: f.key,
         name: f.name,
         sizeBytes: f.sizeBytes,
-        phase: f.error ? 'rejected' : 'uploading',
+        phase: f.error ? 'rejected' : 'waiting',
         progress: 0,
         error: f.error ?? null,
         documentId: null,
       }));
       return { ...state, rows: [...added, ...state.rows] };
     }
+    case 'started':
+      return update(action.key, { phase: 'uploading' });
     case 'progress':
       return update(action.key, { progress: action.fraction });
     case 'failed':
@@ -61,7 +65,8 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
   }
 }
 
-export type Tone = 'uploading' | 'queued' | 'transcribing' | 'processing' | 'ready' | 'failed' | 'skipped';
+export type Tone =
+  'waiting' | 'uploading' | 'queued' | 'transcribing' | 'processing' | 'ready' | 'failed' | 'skipped';
 
 export interface RowView {
   label: string;
@@ -75,6 +80,7 @@ export interface RowView {
 export function rowView(state: SessionState, row: SessionRow): RowView {
   const size = formatBytes(row.sizeBytes);
   const base = { progress: null };
+  if (row.phase === 'waiting') return { ...base, label: 'Waiting', tone: 'waiting', meta: size };
   if (row.phase === 'uploading') {
     const pct = Math.round(row.progress * 100);
     return { ...base, label: 'Uploading', tone: 'uploading', meta: `${size} · ${pct}%`, progress: pct };
@@ -100,9 +106,9 @@ export function rowView(state: SessionState, row: SessionRow): RowView {
   return { ...base, label: statusLabel(d.status), tone: d.status, meta: meta[d.status] };
 }
 
-/** "2 uploaded, 1 uploading", for the session list's heading. */
+/** "2 uploaded, 1 uploading, 3 waiting", for the session list's heading and screen readers. */
 export function sessionSummary(state: SessionState): string {
-  const uploaded = state.rows.filter((r) => r.phase === 'stored').length;
-  const uploading = state.rows.filter((r) => r.phase === 'uploading').length;
-  return `${uploaded} uploaded, ${uploading} uploading`;
+  const count = (phase: SessionRow['phase']) => state.rows.filter((r) => r.phase === phase).length;
+  const waiting = count('waiting');
+  return `${count('stored')} uploaded, ${count('uploading')} uploading${waiting ? `, ${waiting} waiting` : ''}`;
 }

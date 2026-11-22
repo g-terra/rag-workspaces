@@ -1,11 +1,13 @@
 import { Upload as UploadIcon } from 'lucide-react';
-import { Fragment, useReducer, useRef, useState, type DragEvent } from 'react';
+import { Fragment, useEffect, useReducer, useRef, useState, type DragEvent } from 'react';
 import { useAuth } from '@/auth/auth-context';
+import { sendAuthorized } from '@/auth/authorized';
 import { Notice } from '@/components/states';
 import { StatusBadge } from '@/components/status-badge';
 import { TopBar } from '@/components/top-bar';
 import { Button } from '@/components/ui/button';
 import { ACCEPT, checkFile, uploadErrorMessage } from '@/documents/files';
+import { createLimiter } from '@/documents/queue';
 import { initialSession, rowView, sessionReducer, sessionSummary } from '@/documents/session';
 import { uploadFile } from '@/documents/upload';
 import { cn } from '@/lib/utils';
@@ -17,9 +19,24 @@ const LIFECYCLE = [
   ['ready', 'Ready'],
 ] as const;
 
+/** Files sent at once; the rest wait in the page's queue. */
+const PARALLEL_UPLOADS = 3;
+
 /** `/w/:slug/upload`: drop files, watch each one upload and go through ingestion live. */
 export function Upload() {
   const w = useCurrentWorkspace();
+
+  // A file dropped beside the drop zone would otherwise open in the tab and leave the page.
+  useEffect(() => {
+    const prevent = (e: Event) => e.preventDefault();
+    window.addEventListener('dragover', prevent);
+    window.addEventListener('drop', prevent);
+    return () => {
+      window.removeEventListener('dragover', prevent);
+      window.removeEventListener('drop', prevent);
+    };
+  }, []);
+
   return (
     <>
       <TopBar trail={[w.name, 'Upload']} />
@@ -37,7 +54,8 @@ export function Upload() {
             body="Your access to this workspace is read-only. Ask an administrator for editor access."
           />
         ) : (
-          <Uploader slug={w.slug} />
+          // A fresh uploader per workspace, so rows don't carry over when switching.
+          <Uploader key={w.slug} slug={w.slug} />
         )}
       </div>
     </>
@@ -45,11 +63,29 @@ export function Upload() {
 }
 
 function Uploader({ slug }: { slug: string }) {
-  const { getToken } = useAuth();
+  const auth = useAuth();
   const [session, dispatch] = useReducer(sessionReducer, initialSession);
   const [dragging, setDragging] = useState(false);
   const nextKey = useRef(0);
   const input = useRef<HTMLInputElement>(null);
+  const [queue] = useState(() => createLimiter(PARALLEL_UPLOADS));
+  const abort = useRef(new AbortController());
+
+  // Leaving the page cancels the uploads still running or waiting.
+  useEffect(() => {
+    const controller = new AbortController();
+    abort.current = controller;
+    return () => controller.abort();
+  }, []);
+
+  // Closing or reloading the tab mid-upload asks first.
+  const busy = session.rows.some((r) => r.phase === 'waiting' || r.phase === 'uploading');
+  useEffect(() => {
+    if (!busy) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [busy]);
 
   function addFiles(list: FileList | null) {
     const files = [...(list ?? [])].map((file) => ({
@@ -67,19 +103,27 @@ function Uploader({ slug }: { slug: string }) {
         error: f.error ?? undefined,
       })),
     });
+    const { signal } = abort.current;
     for (const f of files) {
       if (f.error) continue;
-      void (async () => {
-        const outcome = await uploadFile({
-          slug,
-          file: f.file,
-          token: await getToken(),
-          onProgress: (fraction) => dispatch({ type: 'progress', key: f.key, fraction }),
-        });
+      void queue(async () => {
+        if (signal.aborted) return;
+        dispatch({ type: 'started', key: f.key });
+        // The token is fetched as the file's turn comes, so it can't expire while the file waits.
+        const outcome = await sendAuthorized(auth, (token) =>
+          uploadFile({
+            slug,
+            file: f.file,
+            token,
+            signal,
+            onProgress: (fraction) => dispatch({ type: 'progress', key: f.key, fraction }),
+          }),
+        );
+        if (signal.aborted) return;
         if (outcome.ok) dispatch({ type: 'uploaded', key: f.key, ...outcome.result });
         else
           dispatch({ type: 'failed', key: f.key, error: uploadErrorMessage(outcome.status, outcome.detail) });
-      })();
+      });
     }
   }
 
@@ -141,6 +185,10 @@ function Uploader({ slug }: { slug: string }) {
         <span>or</span>
         <StatusBadge tone="failed" label="Failed" />
       </div>
+
+      <p className="sr-only" aria-live="polite">
+        {session.rows.length > 0 && `This session: ${sessionSummary(session)}`}
+      </p>
 
       {session.rows.length > 0 && (
         <section className="bg-card rounded-xl border" aria-label="This session">
