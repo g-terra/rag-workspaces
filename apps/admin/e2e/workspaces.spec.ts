@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { requireCredentials, signIn } from './sign-in';
+import { bearer, requireCredentials, signIn } from './sign-in';
 
 requireCredentials();
 
@@ -7,15 +7,6 @@ const run = Date.now().toString(36);
 const a = { name: `E2E Alpha ${run}`, slug: `e2e-${run}-a` };
 const b = { name: `E2E Beta ${run}`, slug: `e2e-${run}-b` };
 const created: string[] = [];
-
-/** The signed-in page's access token, as `oidc-client-ts` keeps it in sessionStorage. */
-async function bearer(page: Page) {
-  const token = await page.evaluate(() => {
-    const key = Object.keys(sessionStorage).find((k) => k.startsWith('oidc.user:'));
-    return key ? (JSON.parse(sessionStorage.getItem(key)!) as { access_token: string }).access_token : null;
-  });
-  return { authorization: `Bearer ${token}` };
-}
 
 async function createThroughApi(page: Page, ws: { name: string; slug: string }) {
   created.push(ws.slug);

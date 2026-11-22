@@ -25,3 +25,12 @@ export async function signIn(page: Page, returnTo = '/') {
   await fillKeycloakLogin(page);
   await page.getByTestId('user-role').getByText('admin').waitFor();
 }
+
+/** The signed-in page's access token, as `oidc-client-ts` keeps it in sessionStorage. */
+export async function bearer(page: Page) {
+  const token = await page.evaluate(() => {
+    const key = Object.keys(sessionStorage).find((k) => k.startsWith('oidc.user:'));
+    return key ? (JSON.parse(sessionStorage.getItem(key)!) as { access_token: string }).access_token : null;
+  });
+  return { authorization: `Bearer ${token}` };
+}
