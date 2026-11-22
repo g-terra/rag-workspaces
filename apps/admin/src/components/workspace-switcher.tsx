@@ -1,5 +1,5 @@
 import { ChevronsUpDown, LayoutGrid, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link, useMatch } from 'react-router';
 import { useAuth } from '@/auth/auth-context';
 import { CreateWorkspaceDialog } from '@/components/create-workspace-dialog';
@@ -17,10 +17,12 @@ export function WorkspaceSwitcher() {
   const current = workspaces.data?.find((w) => w.slug === slug);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
+        ref={triggerRef}
         aria-label="Switch workspace"
         className="bg-card hover:bg-accent flex w-full items-center gap-2.5 rounded-lg border p-2 text-left"
       >
@@ -69,12 +71,14 @@ export function WorkspaceSwitcher() {
             }}
           >
             <Plus className="size-4" /> Create workspace
-            <span className="text-muted-foreground ml-auto text-[11px]">admin</span>
+            <span aria-hidden className="text-muted-foreground ml-auto text-[11px]">
+              admin
+            </span>
           </button>
         )}
       </PopoverContent>
       {/* The dialog renders in its own portal, so it can sit inside the popover root. */}
-      <CreateWorkspaceDialog open={creating} onOpenChange={setCreating} />
+      <CreateWorkspaceDialog open={creating} onOpenChange={setCreating} returnFocusTo={triggerRef} />
     </Popover>
   );
 }

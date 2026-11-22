@@ -32,10 +32,17 @@ taken slug) is in `2026-11-20-workspaces.md`. Layout and copy follow the dialog 
    closes the popover and opens the dialog. Non-admins see neither; the API would refuse them anyway.
 2. **Dialog** (`src/components/create-workspace-dialog.tsx`, shadcn `ui/dialog.tsx` and `ui/input.tsx`).
    The form lives inside the dialog content, so it unmounts on close and starts empty next time. The slug
-   follows `suggestSlug(name)` (`src/workspaces/slug.ts`) until the admin types in the slug field.
+   follows `suggestSlug(name)` (`src/workspaces/slug.ts`) until the admin types in the slug field. The
+   suggestion spells out letters like `ß` and `æ`, drops accents, and is left empty when the name gives
+   fewer than 3 usable characters ("AI", or a name in another script), so the admin types one instead
+   of getting a slug the API would refuse. The dialog stays open while the request runs, and on close
+   focus goes back to the control that opened it (`returnFocusTo`). Each field's hint or error is its
+   accessible description (`aria-describedby`) and is announced when it changes; editing a field clears
+   its error.
 3. **Validation** (`src/workspaces/create.ts`). On submit, `validateCreate()` runs the shared
    `CreateWorkspace` zod schema from `@rag/shared`, the same one the API uses, and puts the first
-   message for each field under that field. An empty description is sent as `null`.
+   message for each field under that field, with zod's length messages rewritten in plain words ("Enter
+   a name.", "Use at least 3 characters."). An empty description is sent as `null`.
 4. **Request** (`useCreateWorkspace()` in `src/workspaces/queries.ts`). `POST /v1/workspaces` through
    `useAuth().api`, then invalidates `['workspaces']`, which refreshes the list, the switcher and any
    cached workspace.
@@ -70,12 +77,14 @@ Existing installs: `docker compose up -d --build web`. A created workspace can b
 ## Testing
 
 - `apps/admin/src/workspaces/slug.test.ts`: `suggestSlug()` lowercases, turns spaces and symbols into
-  single hyphens, drops accents, starts with a letter, trims to 40 characters without a trailing hyphen.
-- `apps/admin/src/workspaces/create.test.ts`: `validateCreate()` field errors and the body it sends;
+  single hyphens, drops accents, spells out `ß`/`æ`/`œ`, starts with a letter, trims to 40 characters
+  without a trailing hyphen, and suggests nothing for names that would give an invalid slug.
+- `apps/admin/src/workspaces/create.test.ts`: `validateCreate()` field errors in plain words and the body it sends;
   `createErrorMessage()` for `409`, `400`/`422` and other errors.
 - `apps/admin/e2e/workspaces.spec.ts`, "an admin creates workspaces from the list and from the
   switcher": checks the slug suggestion, creates one workspace from each entry point, lands on each, sees
-  a taken slug refused under the slug field, and finds the new one in the list without a reload. The
+  a taken slug refused under the slug field (as the field's accessible description), focus going back to
+  the opener after Escape from both entry points, and finds the new one in the list without a reload. The
   workspaces are deleted through the API afterwards.
 
 By hand: sign in as an admin, create a workspace from "All workspaces" and from the switcher, try a

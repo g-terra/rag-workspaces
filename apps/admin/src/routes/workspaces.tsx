@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState, type MouseEvent } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '@/auth/auth-context';
 import { CreateWorkspaceDialog } from '@/components/create-workspace-dialog';
@@ -14,6 +14,12 @@ export function Workspaces() {
   const { me } = useAuth();
   const workspaces = useWorkspaces();
   const [creating, setCreating] = useState(false);
+  // The button that opened the dialog, so focus goes back to it on close.
+  const opener = useRef<HTMLElement | null>(null);
+  const openCreate = (e: MouseEvent<HTMLElement>) => {
+    opener.current = e.currentTarget;
+    setCreating(true);
+  };
   const isAdmin = me?.isAdmin ?? false;
 
   return (
@@ -29,7 +35,7 @@ export function Workspaces() {
             </p>
           </div>
           {isAdmin && (
-            <Button onClick={() => setCreating(true)}>
+            <Button onClick={openCreate}>
               <Plus /> New workspace
             </Button>
           )}
@@ -48,7 +54,7 @@ export function Workspaces() {
               title="Create your first workspace"
               body="A workspace holds one set of material and its API."
             >
-              <Button onClick={() => setCreating(true)}>
+              <Button onClick={openCreate}>
                 <Plus /> New workspace
               </Button>
             </Notice>
@@ -82,7 +88,7 @@ export function Workspaces() {
           </div>
         )}
       </div>
-      {isAdmin && <CreateWorkspaceDialog open={creating} onOpenChange={setCreating} />}
+      {isAdmin && <CreateWorkspaceDialog open={creating} onOpenChange={setCreating} returnFocusTo={opener} />}
     </>
   );
 }

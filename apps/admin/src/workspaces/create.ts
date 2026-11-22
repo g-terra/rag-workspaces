@@ -22,9 +22,20 @@ export function validateCreate(form: CreateForm): Validated {
   const errors: Partial<Record<Field, string>> = {};
   for (const issue of result.error.issues) {
     const field = issue.path[0] as Field;
-    errors[field] ??= issue.message;
+    errors[field] ??= plainMessage(issue, form[field].trim() === '' ? field : null);
   }
   return { ok: false, errors };
+}
+
+/** zod's length messages ("Too small: expected string to have >=3 characters") in words a person reads. */
+function plainMessage(
+  issue: { code: string; message: string; minimum?: unknown; maximum?: unknown },
+  emptyField: Field | null,
+): string {
+  if (issue.code === 'too_small' && emptyField) return `Enter a ${emptyField === 'name' ? 'name' : 'slug'}.`;
+  if (issue.code === 'too_small') return `Use at least ${String(issue.minimum)} characters.`;
+  if (issue.code === 'too_big') return `Use at most ${String(issue.maximum)} characters.`;
+  return issue.message;
 }
 
 /** The API's answer to `POST /v1/workspaces`, as a message under a field (`slug`) or on the whole form. */

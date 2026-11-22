@@ -21,4 +21,14 @@ describe('suggestSlug', () => {
     expect(slug).toBe('a'.repeat(39));
     expect(WorkspaceSlug.safeParse(slug).success).toBe(true);
   });
+
+  it('spells out letters that have no accent to drop', () => {
+    expect(suggestSlug('Straße Köln')).toBe('strasse-koln');
+    expect(suggestSlug('Œuvre Ærø')).toBe('oeuvre-aero');
+  });
+
+  it('suggests nothing rather than a slug the API would refuse', () => {
+    expect(suggestSlug('AI')).toBe('');
+    expect(suggestSlug('Учёба')).toBe('');
+  });
 });

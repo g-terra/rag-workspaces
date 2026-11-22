@@ -95,14 +95,25 @@ test('an admin creates workspaces from the list and from the switcher', async ({
   await page.getByRole('button', { name: /Create workspace/ }).click();
   await fillCreateDialog(page, { name: 'Duplicate', slug: c.slug });
   await expect(dialog.getByText(`The slug "${c.slug}" is taken.`)).toBeVisible();
+  await expect(dialog.getByLabel('Slug')).toHaveAccessibleDescription(`The slug "${c.slug}" is taken.`);
   created.push(d.slug);
   await fillCreateDialog(page, d);
   await expect(page).toHaveURL(new RegExp(`/w/${d.slug}$`));
   await expect(page.getByTestId('current-workspace')).toHaveText(d.name);
 
+  // Closing the dialog gives focus back to what opened it.
+  await page.getByRole('button', { name: 'Switch workspace' }).click();
+  await page.getByRole('button', { name: /Create workspace/ }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Switch workspace' })).toBeFocused();
+
   // The list shows the new one without a reload.
   await page.getByRole('link', { name: 'All workspaces' }).first().click();
   await expect(page.getByText(`/v1/workspaces/${d.slug}`)).toBeVisible();
+  const newButton = page.getByRole('button', { name: 'New workspace' }).first();
+  await newButton.click();
+  await page.keyboard.press('Escape');
+  await expect(newButton).toBeFocused();
 });
 
 async function fillCreateDialog(page: Page, ws: { name: string; slug: string }) {

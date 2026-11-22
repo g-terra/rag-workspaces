@@ -23,6 +23,25 @@ describe('validateCreate', () => {
   });
 });
 
+describe('validateCreate messages', () => {
+  const errorsFor = (form: { name: string; slug: string; description: string }) => {
+    const r = validateCreate(form);
+    return r.ok ? {} : r.errors;
+  };
+
+  it('asks for a name in plain words', () => {
+    expect(errorsFor({ name: '', slug: 'notes', description: '' }).name).toBe('Enter a name.');
+  });
+
+  it('gives the length limits in plain words', () => {
+    expect(errorsFor({ name: 'x'.repeat(101), slug: 'notes', description: '' }).name).toBe(
+      'Use at most 100 characters.',
+    );
+    expect(errorsFor({ name: 'AI', slug: 'ai', description: '' }).slug).toBe('Use at least 3 characters.');
+    expect(errorsFor({ name: 'Notes', slug: '', description: '' }).slug).toBe('Enter a slug.');
+  });
+});
+
 describe('createErrorMessage', () => {
   it('shows a taken slug under the slug field', () => {
     expect(createErrorMessage(new ApiError(409, 'The slug "ouc" is taken.'))).toEqual({
