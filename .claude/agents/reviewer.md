@@ -29,6 +29,8 @@ Check, in this order:
 10. **Spec**: the PR adds exactly one `docs/specs/*.md`, it follows `docs/specs/TEMPLATE.md` (every
     heading present, front matter filled), and it matches the diff, especially **Interfaces and
     contracts**. No merged spec was rewritten.
+11. **Superpowers** (rule 8): the change has tests written first where behaviour changed, and the
+    author verified it (commands and output) before asking for review.
 
 Report findings most severe first. For each: file and line, what is wrong, and a concrete fix. Keep
 nitpicks separate and short. If nothing is wrong, say so plainly.

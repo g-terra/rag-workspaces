@@ -41,6 +41,11 @@ documented REST API. Start with the [README](README.md), then:
    `docs/specs/YYYY-MM-DD-<topic>.md`, fill every section, commit it with the change and link it from the
    PR description. Claude Code: use the `write-spec` skill (`.claude/skills/write-spec/`). Other tools:
    follow that file as instructions.
+8. **Work through Superpowers.** Every change follows the Superpowers workflow: `brainstorming` (its
+   design is the rule 7 spec) → `writing-plans` → `test-driven-development` → `requesting-code-review`
+   → `verification-before-completion`. If the Superpowers skills are not loaded in your session, stop and
+   ask the owner to enable the plugin (see below) instead of working without it. Tools other than Claude
+   Code follow the same steps by hand.
 
 ## Agents
 
@@ -57,10 +62,10 @@ A typical change goes architect → coder → tester → reviewer → owner.
 
 ### Superpowers
 
-The repo enables the [Superpowers](https://github.com/obra/superpowers) plugin in `.claude/settings.json`
-(Claude Code offers to install it when you trust the folder). Its workflow fits the rules above:
-`brainstorming` → `writing-plans` → `test-driven-development` → `requesting-code-review`. Project
-preferences for where its documents go:
+[Superpowers](https://github.com/obra/superpowers) is required (rule 8). The repo enables it in
+`.claude/settings.json`, so Claude Code offers to install it when you trust the folder; by hand it is
+`/plugin install superpowers@claude-plugins-official`. On claude.ai (cloud sessions) enable "Superpowers"
+from the Anthropic Directory in your plugin settings. Project preferences for where its documents go:
 
 - The `brainstorming` design document **is the PR's spec**: write it to `docs/specs/YYYY-MM-DD-<topic>.md`
   using `docs/specs/TEMPLATE.md`, not to `docs/superpowers/specs/`.

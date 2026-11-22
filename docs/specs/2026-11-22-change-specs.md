@@ -1,12 +1,12 @@
 ---
-title: One spec per pull request, with a template, a skill and Superpowers
+title: One spec per pull request, with a template, a skill and mandatory Superpowers
 date: 2026-11-22
 pr: '#29'
 status: in review
 areas: [docs]
 ---
 
-# One spec per pull request, with a template, a skill and Superpowers
+# One spec per pull request, with a template, a skill and mandatory Superpowers
 
 ## Summary
 
@@ -28,8 +28,10 @@ for all of them, and a skill so agents write them (2026-11-22).
 - `docs/specs/README.md`: how specs differ from the long-lived docs, how to write and read them.
 - `.claude/skills/write-spec/SKILL.md`: when and how an agent writes the spec. Other tools follow the
   same file as instructions.
-- `AGENTS.md`: rule 7 ("Every PR adds a spec"), `docs/specs/` in the reading list, and a Superpowers
-  section saying where its documents go.
+- `AGENTS.md`: rule 7 ("Every PR adds a spec"), rule 8 ("Work through Superpowers": brainstorming →
+  writing-plans → TDD → code review → verification; stop and ask if the plugin isn't loaded),
+  `docs/specs/` in the reading list, and a Superpowers section with install steps and where its
+  documents go.
 - `.claude/agents/`: the architect names the spec file per planned PR, the coder writes it, the reviewer
   checks it against the template and the diff.
 - `.claude/settings.json`: `enabledPlugins` turns on `superpowers@claude-plugins-official`, so Claude
@@ -47,6 +49,7 @@ for all of them, and a skill so agents write them (2026-11-22).
 | Superpowers' brainstorming design doc is the spec, saved in `docs/specs/` | Keep `docs/superpowers/specs/` beside our specs | One document per change, one place |
 | Superpowers plans stay out of the repo | Commit `docs/superpowers/plans/` | Step-by-step plans go stale the moment code lands; the spec keeps what lasts |
 | Enable the plugin in project settings | Ask each person to install it | Everyone working in the repo gets the same workflow |
+| Superpowers is mandatory (rule 8); agents stop if it isn't loaded | Recommended only | Owner's call (2026-11-22): every change goes through the same design, test and review steps |
 
 ## Interfaces and contracts
 
