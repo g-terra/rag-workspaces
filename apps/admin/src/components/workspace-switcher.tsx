@@ -1,18 +1,22 @@
-import { ChevronsUpDown, LayoutGrid } from 'lucide-react';
+import { ChevronsUpDown, LayoutGrid, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useMatch } from 'react-router';
+import { useAuth } from '@/auth/auth-context';
+import { CreateWorkspaceDialog } from '@/components/create-workspace-dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { WorkspaceAvatar } from '@/components/workspace-avatar';
 import { useWorkspaces } from '@/workspaces/queries';
 
 const row = 'hover:bg-accent flex w-full items-center gap-2.5 rounded-md p-2 text-left text-[13px]';
 
-/** The sidebar button with the current workspace; its popover switches to another. */
+/** The sidebar button with the current workspace; its popover switches to another or creates one. */
 export function WorkspaceSwitcher() {
+  const { me } = useAuth();
   const slug = useMatch('/w/:slug/*')?.params.slug;
   const workspaces = useWorkspaces();
   const current = workspaces.data?.find((w) => w.slug === slug);
   const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -55,7 +59,22 @@ export function WorkspaceSwitcher() {
         <Link to="/workspaces" className={row} onClick={() => setOpen(false)}>
           <LayoutGrid className="size-4" /> All workspaces
         </Link>
+        {me?.isAdmin && (
+          <button
+            type="button"
+            className={row}
+            onClick={() => {
+              setOpen(false);
+              setCreating(true);
+            }}
+          >
+            <Plus className="size-4" /> Create workspace
+            <span className="text-muted-foreground ml-auto text-[11px]">admin</span>
+          </button>
+        )}
       </PopoverContent>
+      {/* The dialog renders in its own portal, so it can sit inside the popover root. */}
+      <CreateWorkspaceDialog open={creating} onOpenChange={setCreating} />
     </Popover>
   );
 }

@@ -1,5 +1,5 @@
-import type { Workspace } from '@rag/shared';
-import { useQuery } from '@tanstack/react-query';
+import type { CreateWorkspace, Workspace } from '@rag/shared';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '@/api/client';
 import { useAuth } from '@/auth/auth-context';
 
@@ -30,5 +30,20 @@ export function useWorkspace(slug: string) {
   return useQuery({
     queryKey: ['workspaces', slug],
     queryFn: () => api<Workspace>(`/v1/workspaces/${encodeURIComponent(slug)}`),
+  });
+}
+
+export function useCreateWorkspace() {
+  const { api } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateWorkspace) =>
+      api<Workspace>('/v1/workspaces', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    // Refreshes the list and any cached workspace, so the switcher shows the new one.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workspaces'] }),
   });
 }
