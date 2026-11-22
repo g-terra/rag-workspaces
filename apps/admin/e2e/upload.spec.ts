@@ -95,3 +95,41 @@ test('uploads files with progress; a second copy is skipped and bad files are re
 
   await expect(page.getByRole('heading', { name: /This session · 2 uploaded, 0 uploading/ })).toBeVisible();
 });
+
+test('sends at most three files at once; the rest wait their turn', async ({ page }) => {
+  await signIn(page, '/workspaces');
+  const created = await page.request.post('/api/v1/workspaces', { headers: await bearer(page), data: ws });
+  expect(created.status()).toBe(201);
+  await page.goto(`/w/${ws.slug}/upload`);
+  await expect(page.getByRole('heading', { name: 'Upload material' })).toBeVisible();
+
+  // A drop beside the zone is cancelled, so the browser doesn't open the file and leave the page.
+  const prevented = await page.evaluate(() => {
+    const drop = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() });
+    document.body.dispatchEvent(drop);
+    return drop.defaultPrevented;
+  });
+  expect(prevented).toBe(true);
+
+  // Hold each upload long enough to see the fourth file wait.
+  await page.route(`**/api/v1/workspaces/${ws.slug}/documents`, async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.continue();
+  });
+  const names = ['one.md', 'two.md', 'three.md', 'four.md'];
+  await page.getByLabel('Choose files to upload').setInputFiles(
+    names.map((name) => ({
+      name,
+      mimeType: 'text/markdown',
+      buffer: Buffer.from(`# ${name}\n\nQueue ${ws.slug}`),
+    })),
+  );
+  const status = (name: string) =>
+    page.getByTestId('upload-row').filter({ hasText: name }).getByTestId('status');
+  await expect(status('four.md')).toHaveText('Waiting');
+  for (const name of names.slice(0, 3)) await expect(status(name)).toHaveText('Uploading');
+  await expect(page.getByText('This session: 0 uploaded, 3 uploading, 1 waiting')).toBeAttached();
+
+  for (const name of names) await expect(status(name)).toHaveText('Queued', { timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: /This session · 4 uploaded, 0 uploading$/ })).toBeVisible();
+});
