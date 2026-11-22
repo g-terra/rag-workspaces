@@ -110,7 +110,7 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
 | POST | `/v1/workspaces/{slug}/documents/{documentId}/reindex` | Delete its vectors and run the ingest flow again |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/file` | Download the original |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/transcript` | The timestamped transcript (video and audio only) |
-| GET | `/v1/workspaces/{slug}/documents/events` | Live status changes (server-sent events); on connect it sends the current state of every unfinished document, so a reconnect misses nothing |
+| GET | `/v1/workspaces/{slug}/documents/events` | Live status changes (server-sent events); see below |
 
 ```json
 { "id": "doc_01J…", "workspace": "ouc", "folderId": "fld_01J…", "title": "Week 3 slides",
@@ -120,6 +120,16 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
 ```
 
 `status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit return `413`, unsupported types `415`.
+
+The events stream (`text/event-stream`, read with `fetch` since `EventSource` can't send `Authorization`) sends:
+
+| Event | Data | When |
+|---|---|---|
+| `snapshot` | `{ "data": [Document, …] }` | Once, on connect: the **unfinished** documents only (`queued`, `transcribing`, `processing`) |
+| `document` | a `Document` | A new upload or a status change in this workspace |
+| `removed` | `{ "id": "doc_01J…" }` | A document was deleted |
+
+A document that finished or was deleted while a client was disconnected is not in the next snapshot, so a client that was following it fetches it with `GET …/documents/{documentId}` (`404` means it was deleted). Comments (`: keep-alive`) arrive every 15 seconds.
 
 ## Usage analytics
 

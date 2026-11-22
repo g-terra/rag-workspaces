@@ -1,7 +1,14 @@
 import type { Document } from '@rag/shared';
 import { describe, expect, it } from 'vitest';
 import { toDocumentEvent } from './events';
-import { initialSession, rowView, sessionReducer, sessionSummary, type SessionState } from './session';
+import {
+  initialSession,
+  missingFromSnapshot,
+  rowView,
+  sessionReducer,
+  sessionSummary,
+  type SessionState,
+} from './session';
 
 function doc(over: Partial<Document> = {}): Document {
   return {
@@ -52,6 +59,12 @@ describe('toDocumentEvent', () => {
   it('skips unknown events and bad JSON', () => {
     expect(toDocumentEvent({ event: 'other', data: '{}' })).toBeNull();
     expect(toDocumentEvent({ event: 'document', data: '{oops' })).toBeNull();
+  });
+
+  it('skips bodies that are not the shape the API sends', () => {
+    expect(toDocumentEvent({ event: 'document', data: '{"id":"doc_1","status":"ready"}' })).toBeNull();
+    expect(toDocumentEvent({ event: 'snapshot', data: JSON.stringify({ items: [doc()] }) })).toBeNull();
+    expect(toDocumentEvent({ event: 'removed', data: '{}' })).toBeNull();
   });
 });
 
@@ -185,6 +198,66 @@ describe('sessionReducer', () => {
     });
   });
 
+  it('keeps the known copy when both have the same updatedAt, unless the new one is further along', () => {
+    let s = sessionReducer(withUpload(), {
+      type: 'uploaded',
+      key: 'k1',
+      document: doc({ status: 'processing', updatedAt: later(1) }),
+      duplicate: false,
+    });
+    s = sessionReducer(s, { type: 'document', document: doc({ status: 'queued', updatedAt: later(1) }) });
+    expect(rowView(s, s.rows[0]!).label).toBe('Processing');
+    s = sessionReducer(s, {
+      type: 'document',
+      document: doc({ status: 'ready', passageCount: 2, updatedAt: later(1) }),
+    });
+    expect(rowView(s, s.rows[0]!).label).toBe('Ready');
+  });
+
+  it('marks Retry pending, then shows the document back in the queue', () => {
+    let s = sessionReducer(withUpload(), {
+      type: 'uploaded',
+      key: 'k1',
+      document: doc({ status: 'failed', attempts: 1, error: 'No text found' }),
+      duplicate: false,
+    });
+    s = sessionReducer(s, { type: 'retry', key: 'k1' });
+    expect(rowView(s, s.rows[0]!)).toMatchObject({ canRetry: true, retryPending: true, retryError: null });
+    s = sessionReducer(s, { type: 'retried', key: 'k1', document: doc({ updatedAt: later(1) }) });
+    expect(rowView(s, s.rows[0]!)).toMatchObject({ label: 'Queued', canRetry: false, retryPending: false });
+  });
+
+  it('keeps a refused Retry with its row, until the next try', () => {
+    let s = sessionReducer(withUpload(), {
+      type: 'uploaded',
+      key: 'k1',
+      document: doc({ status: 'failed', attempts: 1, error: 'No text found' }),
+      duplicate: false,
+    });
+    s = sessionReducer(s, { type: 'added', files: [{ key: 'k2', name: 'b.md', sizeBytes: 1 }] });
+    s = sessionReducer(s, { type: 'retry', key: 'k1' });
+    s = sessionReducer(s, { type: 'retryFailed', key: 'k1', error: "Couldn't retry: Forbidden" });
+    const row = s.rows.find((r) => r.key === 'k1')!;
+    expect(rowView(s, row)).toMatchObject({
+      canRetry: true,
+      retryPending: false,
+      retryError: "Couldn't retry: Forbidden",
+    });
+    expect(
+      rowView(
+        s,
+        s.rows.find((r) => r.key === 'k2')!,
+      ).retryError,
+    ).toBeNull();
+    s = sessionReducer(s, { type: 'retry', key: 'k1' });
+    expect(
+      rowView(
+        s,
+        s.rows.find((r) => r.key === 'k1')!,
+      ),
+    ).toMatchObject({ retryPending: true, retryError: null });
+  });
+
   it('offers Retry on a failed document, with its error', () => {
     let s = sessionReducer(withUpload(), { type: 'uploaded', key: 'k1', document: doc(), duplicate: false });
     s = sessionReducer(s, {
@@ -208,6 +281,22 @@ describe('sessionReducer', () => {
     let s = sessionReducer(withUpload(), { type: 'uploaded', key: 'k1', document: doc(), duplicate: false });
     s = sessionReducer(s, { type: 'event', event: { type: 'removed', id: 'doc_1' } });
     expect(rowView(s, s.rows[0]!)).toMatchObject({ label: 'Deleted', meta: 'Deleted from the library.' });
+  });
+});
+
+describe('missingFromSnapshot', () => {
+  it('lists unfinished uploaded documents the snapshot no longer has', () => {
+    let s = sessionReducer(initialSession, {
+      type: 'added',
+      files: ['a', 'b', 'c', 'd', 'e'].map((key) => ({ key, name: `${key}.md`, sizeBytes: 1 })),
+    });
+    const upload = (key: string, d: Document, duplicate = false) =>
+      (s = sessionReducer(s, { type: 'uploaded', key, document: d, duplicate }));
+    upload('a', doc({ id: 'gone' })); // finished or deleted while disconnected
+    upload('b', doc({ id: 'still', status: 'processing' })); // in the snapshot
+    upload('c', doc({ id: 'done', status: 'ready' })); // already finished
+    upload('d', doc({ id: 'dup', status: 'queued' }), true); // a duplicate shows no status
+    expect(missingFromSnapshot(s, [doc({ id: 'still', status: 'processing' })])).toEqual(['gone']);
   });
 });
 
