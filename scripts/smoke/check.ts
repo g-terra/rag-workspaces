@@ -74,10 +74,13 @@ async function chroma(path: string, body?: unknown): Promise<Response> {
 function allowPasswordLogin() {
   const kcadm = '/opt/keycloak/bin/kcadm.sh';
   const script = [
-    `${kcadm} config credentials --server http://localhost:8080 --realm master --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" >/dev/null`,
+    'set -e',
+    // Keycloak reports ready a moment before its HTTP port stops answering 503, so retry for a minute.
+    `login() { ${kcadm} config credentials --server http://localhost:8080 --realm master --user "$KC_BOOTSTRAP_ADMIN_USERNAME" --password "$KC_BOOTSTRAP_ADMIN_PASSWORD"; }`,
+    'n=0; until login >/dev/null 2>&1; do n=$((n + 1)); if [ $n -ge 30 ]; then login; exit 1; fi; sleep 2; done',
     `id=$(${kcadm} get clients -r rag-workspaces -q clientId=admin-ui --fields id --format csv --noquotes)`,
     `${kcadm} update "clients/$id" -r rag-workspaces -s directAccessGrantsEnabled=true`,
-  ].join(' && ');
+  ].join('\n');
   compose(['exec', '-T', 'keycloak', 'bash', '-c', script]);
 }
 
