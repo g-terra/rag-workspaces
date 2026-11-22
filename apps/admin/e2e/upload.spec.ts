@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import type { UploadResult } from '@rag/shared';
 import { expect, test } from '@playwright/test';
 import { bearer, requireCredentials, signIn } from './sign-in';
 
@@ -125,4 +126,49 @@ test('sends at most three files at once; the rest wait their turn', async ({ pag
   // Then each one is stored and followed live through ingestion.
   for (const name of names)
     await expect(status(name)).toHaveText(/Queued|Processing|Ready/, { timeout: 15_000 });
+});
+
+test('catches up on a document that finished while the stream was down', async ({ page }) => {
+  await signIn(page, '/workspaces');
+  const headers = await bearer(page);
+  const created = await page.request.post('/api/v1/workspaces', { headers, data: ws });
+  expect(created.status()).toBe(201);
+
+  // Keep the status stream down from the start.
+  const events = `**/api/v1/workspaces/${ws.slug}/documents/events`;
+  await page.route(events, (route) => route.abort());
+  await page.goto(`/w/${ws.slug}/upload`);
+
+  const answer = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith(`/workspaces/${ws.slug}/documents`),
+  );
+  await page.getByLabel('Choose files to upload').setInputFiles({
+    name: 'offline.md',
+    mimeType: 'text/markdown',
+    buffer: Buffer.from(`# Offline\n\nIngested while the stream was down (${ws.slug}).`),
+  });
+  const id = ((await (await answer).json()) as UploadResult).data[0]!.document.id;
+  const status = page.getByTestId('upload-row').filter({ hasText: 'offline.md' }).getByTestId('status');
+  await expect(status).toHaveText('Queued');
+
+  // Ingestion finishes unseen.
+  await expect
+    .poll(
+      async () => {
+        const res = await page.request.get(`/api/v1/workspaces/${ws.slug}/documents/${id}`, { headers });
+        return ((await res.json()) as { status: string }).status;
+      },
+      { timeout: 60_000 },
+    )
+    .toBe('ready');
+  await expect(status).toHaveText('Queued');
+
+  // The stream comes back: its snapshot no longer lists the document, so the page fetches it.
+  const fetched = page.waitForRequest(
+    (r) => r.method() === 'GET' && r.url().endsWith(`/workspaces/${ws.slug}/documents/${id}`),
+    { timeout: 45_000 },
+  );
+  await page.unroute(events);
+  await fetched;
+  await expect(status).toHaveText('Ready');
 });
