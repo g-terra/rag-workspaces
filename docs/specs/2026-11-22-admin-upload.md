@@ -1,8 +1,8 @@
 ---
 title: Drag-and-drop upload with progress in the admin UI
 date: 2026-11-22
-pr: pending
-status: proposed
+pr: '#37'
+status: in review
 areas: [admin]
 ---
 
