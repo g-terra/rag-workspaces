@@ -1,8 +1,8 @@
 ---
 title: Workspace switcher, workspace list and workspace pages in the admin UI
 date: 2026-11-22
-pr: pending
-status: proposed
+pr: '#35'
+status: in review
 areas: [admin]
 ---
 
