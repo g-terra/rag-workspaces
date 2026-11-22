@@ -15,7 +15,8 @@
     "test": "turbo run test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "env:init": "node scripts/env-init.ts"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",

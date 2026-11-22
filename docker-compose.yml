@@ -1,0 +1,148 @@
+# rag-workspaces: the whole stack. Start with `pnpm env:init` (once), then `docker compose up -d`.
+# LM Studio runs on the host and is reached at host.docker.internal:1234.
+# Published ports are bound to 127.0.0.1; Postgres and Chroma are not published at all.
+name: rag-workspaces
+
+x-healthcheck: &healthcheck
+  interval: 5s
+  timeout: 5s
+  retries: 60
+  start_period: 10s
+
+services:
+  postgres:
+    image: postgres:16.16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run pnpm env:init}
+      POSTGRES_DB: ${POSTGRES_DB:-rag}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/10-init-databases.sh:ro
+    healthcheck:
+      <<: *healthcheck
+      test: ['CMD-SHELL', 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+
+  chroma:
+    image: chromadb/chroma:1.5.9
+    restart: unless-stopped
+    environment:
+      ANONYMIZED_TELEMETRY: 'FALSE'
+    volumes:
+      - chroma-data:/data
+    healthcheck:
+      <<: *healthcheck
+      test:
+        - CMD
+        - bash
+        - -c
+        - exec 3<>/dev/tcp/127.0.0.1/8000 && printf 'GET /api/v2/heartbeat HTTP/1.0\r\n\r\n' >&3 && grep -q '200 OK' <&3
+
+  langflow:
+    image: langflowai/langflow:1.13.3
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      chroma: { condition: service_healthy }
+    extra_hosts: ['host.docker.internal:host-gateway']
+    ports: ['127.0.0.1:${LANGFLOW_PORT:-7860}:7860']
+    environment:
+      LANGFLOW_DATABASE_URL: postgresql://${POSTGRES_USER:-rag}:${POSTGRES_PASSWORD}@postgres:5432/langflow
+      LANGFLOW_CONFIG_DIR: /app/langflow
+      LANGFLOW_SECRET_KEY: ${LANGFLOW_SECRET_KEY:?run pnpm env:init}
+      LANGFLOW_SUPERUSER: ${LANGFLOW_SUPERUSER:-admin}
+      LANGFLOW_SUPERUSER_PASSWORD: ${LANGFLOW_SUPERUSER_PASSWORD:?run pnpm env:init}
+      # Auto-login off: the editor needs the superuser password, and the run API needs a key.
+      LANGFLOW_AUTO_LOGIN: 'false'
+      LANGFLOW_SKIP_AUTH_AUTO_LOGIN: 'false'
+      LANGFLOW_NEW_USER_IS_ACTIVE: 'false'
+      # Our custom components (Chroma over REST, loader, embeddings, chat model) and flows.
+      LANGFLOW_COMPONENTS_PATH: /app/custom_components
+      # Imported on every start and updated in place by fixed flow id (POC finding F4).
+      LANGFLOW_LOAD_FLOWS_PATH: /app/flows
+      # Langflow 1.13 blocks model URLs on private networks; LM Studio on the host is one (F3).
+      LANGFLOW_SSRF_ALLOWED_HOSTS: host.docker.internal
+      # Never put OPENAI_API_KEY here: Langflow refuses to send env keys to non-OpenAI hosts (F3).
+      DO_NOT_TRACK: 'true'
+    volumes:
+      - langflow-data:/app/langflow
+      - ./langflow/components:/app/custom_components:ro
+      - ./flows:/app/flows:ro
+      - uploads:/data/uploads:ro
+    healthcheck:
+      <<: *healthcheck
+      start_period: 60s
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860/health_check', timeout=4)
+
+  keycloak:
+    image: keycloak/keycloak:26.8.2
+    restart: unless-stopped
+    command: ['start', '--import-realm']
+    depends_on:
+      postgres: { condition: service_healthy }
+    ports: ['127.0.0.1:${KEYCLOAK_PORT:-8081}:8080']
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-rag}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      # Tokens always carry the browser-facing URL as issuer. The API fetches keys from
+      # http://keycloak:8080 inside the network but checks the issuer against this URL.
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
+      KC_HTTP_ENABLED: 'true'
+      KC_HEALTH_ENABLED: 'true'
+      # Keycloak's own admin console account (master realm). Used to create people.
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?run pnpm env:init}
+      # Placeholders in realm.json, filled in on import (first start only).
+      RW_ADMIN_USERNAME: ${RW_ADMIN_USERNAME:-admin}
+      RW_ADMIN_EMAIL: ${RW_ADMIN_EMAIL:-admin@example.com}
+      RW_ADMIN_PASSWORD: ${RW_ADMIN_PASSWORD:?run pnpm env:init}
+      RW_ADMIN_UI_URL: ${ADMIN_UI_URL:-http://localhost:8080}
+    volumes:
+      - ./docker/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    healthcheck:
+      <<: *healthcheck
+      start_period: 60s
+      test:
+        - CMD
+        - bash
+        - -c
+        - exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\r\n\r\n' >&3 && grep -q '"UP"' <&3
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      chroma: { condition: service_healthy }
+      langflow: { condition: service_healthy }
+      keycloak: { condition: service_healthy }
+    extra_hosts: ['host.docker.internal:host-gateway']
+    ports: ['127.0.0.1:${API_PORT:-3000}:3000']
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:3000}
+    volumes:
+      - uploads:/data/uploads
+    healthcheck:
+      <<: *healthcheck
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+
+volumes:
+  postgres-data:
+  chroma-data:
+  langflow-data:
+  uploads:
