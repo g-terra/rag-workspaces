@@ -14,6 +14,8 @@ export interface AuthContextValue {
   meError: string | null;
   /** `fetch` for the API, with the bearer token. */
   api: ApiFetch;
+  /** The current access token, renewed first if it has expired; for requests `api` can't make (uploads, streams). */
+  getToken(): Promise<string | null>;
   signIn(returnTo: string): Promise<void>;
   signOut(): Promise<void>;
 }

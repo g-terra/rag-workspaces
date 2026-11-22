@@ -48,7 +48,9 @@ docker compose ps        # every service should say (healthy)
 | rag-workspaces sign-in (realm `rag-workspaces`) | http://localhost:8081/realms/rag-workspaces/account | `RW_ADMIN_USERNAME` / `RW_ADMIN_PASSWORD` |
 
 After signing in, the admin UI opens the workspace you used last (or your first one); the workspace
-switcher in the sidebar changes it. Admins create workspaces from "All workspaces" or the switcher. The API docs are linked from the top bar of every page.
+switcher in the sidebar changes it. Admins create workspaces from "All workspaces" or the switcher. Editors
+and admins upload files from "Upload" in the sidebar. The API docs are linked from the top bar of every
+page.
 
 `docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
 

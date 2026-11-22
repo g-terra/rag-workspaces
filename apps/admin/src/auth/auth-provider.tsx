@@ -6,8 +6,9 @@ import { AuthContext, type AuthContextValue, type MeUser } from './auth-context'
 import { userManager, type SignInState } from './oidc';
 import { isSessionRefused } from './renew-error';
 
+const getToken = async () => (await currentUser())?.access_token ?? null;
 const api = createApiClient({
-  getToken: async () => (await currentUser())?.access_token ?? null,
+  getToken,
   // The token was refused, so the session is over: drop it and RequireAuth sends them to sign in.
   onUnauthorized: () => void userManager.removeUser(),
 });
@@ -66,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       me,
       meError,
       api,
+      getToken,
       signIn: (returnTo) => userManager.signinRedirect({ state: { returnTo } satisfies SignInState }),
       signOut: () => userManager.signoutRedirect(),
     }),
