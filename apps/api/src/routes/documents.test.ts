@@ -10,6 +10,7 @@ import { apiKeyAuthenticator } from '../auth/api-keys.js';
 import { keycloakAuthenticator } from '../auth/keycloak.js';
 import { loadConfig } from '../config.js';
 import { ChromaService } from '../services/chroma.js';
+import { DocumentEvents } from '../services/document-events.js';
 import { UploadStorage } from '../services/storage.js';
 import { testKeycloak } from '../test/tokens.js';
 
@@ -29,6 +30,7 @@ describe.skipIf(!url)('documents (against TEST_DATABASE_URL)', () => {
   let app: App;
   let root: string;
   const queued: string[] = [];
+  const events = new DocumentEvents();
   const chromaCalls: string[] = [];
   const auth = { admin: '', reader: '', editor: '', stranger: '' };
   let chromaDown = false;
@@ -54,6 +56,7 @@ describe.skipIf(!url)('documents (against TEST_DATABASE_URL)', () => {
       chroma: new ChromaService({ CHROMA_URL: 'http://chroma:8000' }, chromaFetch),
       storage: new UploadStorage(root, 200_000),
       queue: { enqueue: async (id) => void queued.push(id) },
+      events,
       logger: false,
       authenticators: [apiKeyAuthenticator(t.db), keycloakAuthenticator(kc.options)],
     });
@@ -234,6 +237,72 @@ describe.skipIf(!url)('documents (against TEST_DATABASE_URL)', () => {
     } finally {
       await t.db.update(documents).set({ status: 'queued' }).where(eq(documents.id, pdf.id));
     }
+  });
+
+  it('the status stream needs access to the workspace', async () => {
+    const url = '/v1/workspaces/ouc/documents/events';
+    expect((await app.inject({ url })).statusCode).toBe(401);
+    expect((await get(url, 'stranger')).statusCode).toBe(404);
+  });
+
+  it('upload, reindex and delete each announce the change', async () => {
+    const seen: string[] = [];
+    const stop = events.subscribe((e) => seen.push(e.removed ? 'removed' : e.document.status));
+    try {
+      const id = (await upload([{ name: 'announce.md', content: '# announce' }])).json().data[0].document.id;
+      await app.inject({
+        method: 'POST',
+        url: `/v1/workspaces/ouc/documents/${id}/reindex`,
+        headers: { authorization: auth.admin },
+      });
+      await del(`/v1/workspaces/ouc/documents/${id}`);
+    } finally {
+      stop();
+    }
+    expect(seen).toEqual(['queued', 'queued', 'removed']);
+  });
+
+  it('streams a snapshot of unfinished documents, then status changes for this workspace only', async () => {
+    const { payload, contentType } = await multipart([{ name: 'other.md', content: '# other workspace' }]);
+    const other = await app.inject({
+      method: 'POST',
+      url: '/v1/workspaces/personal/documents',
+      headers: { authorization: auth.admin, 'content-type': contentType },
+      payload,
+    });
+    const otherId = other.json().data[0].document.id;
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const ctrl = new AbortController();
+    const res = await fetch(`${address}/v1/workspaces/ouc/documents/events`, {
+      headers: { authorization: auth.reader },
+      signal: ctrl.signal,
+    });
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    const nextEvent = async () => {
+      while (!buffer.includes('\n\n')) buffer += (await reader.read()).value ?? '';
+      const [block, ...rest] = buffer.split('\n\n');
+      buffer = rest.join('\n\n');
+      const event = /^event: (.+)$/m.exec(block!)![1];
+      return { event, data: JSON.parse(/^data: (.+)$/m.exec(block!)![1]!) };
+    };
+
+    const snapshot = await nextEvent();
+    expect(snapshot.event).toBe('snapshot');
+    expect(snapshot.data.data.every((d: { status: string }) => d.status === 'queued')).toBe(true);
+    expect(snapshot.data.data.length).toBeGreaterThan(0);
+    expect(snapshot.data.data.map((d: { id: string }) => d.id)).not.toContain(otherId);
+
+    const [row] = await t.db.select().from(documents).limit(1);
+    events.emit({ workspaceId: 'ws_other', document: { ...row!, status: 'ready' } });
+    events.emit({ workspaceId: row!.workspaceId, document: { ...row!, status: 'processing' } });
+    const change = await nextEvent();
+    expect(change).toMatchObject({
+      event: 'document',
+      data: { id: row!.id, status: 'processing', workspace: 'ouc' },
+    });
+    ctrl.abort();
   });
 
   it('deleting removes vectors, row and file', async () => {

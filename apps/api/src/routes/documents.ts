@@ -1,15 +1,17 @@
 import { createReadStream } from 'node:fs';
+import type { ServerResponse } from 'node:http';
 import path from 'node:path';
 import multipart from '@fastify/multipart';
 import { documents, newId, type Database, type Document as DocumentRow } from '@rag/db';
 import { Document, DocumentQuery, UploadResult, WorkspaceSlug, page } from '@rag/shared';
-import { and, desc, eq, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
 import { ChromaService } from '../services/chroma.js';
+import type { DocumentEvents } from '../services/document-events.js';
 import type { IngestQueue } from '../services/ingest-queue.js';
 import type { UploadStorage } from '../services/storage.js';
 import { FileTooLarge, detectType } from '../services/storage.js';
@@ -19,8 +21,12 @@ export type DocumentRoutesOptions = {
   storage: UploadStorage;
   chroma: ChromaService;
   queue: IngestQueue;
+  events: DocumentEvents;
   config: Pick<Config, 'MAX_UPLOAD_BYTES' | 'MAX_UPLOAD_FILES'>;
 };
+
+/** How often an idle status stream gets a comment line, to keep it open through proxies. */
+const HEARTBEAT_MS = 15_000;
 
 const SlugParams = z.object({ slug: WorkspaceSlug });
 const DocParams = SlugParams.extend({ documentId: z.string() });
@@ -33,9 +39,15 @@ const MIME: Record<DocumentRow['type'], string> = {
 };
 
 export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = async (app, opts) => {
-  const { db, storage, chroma, queue, config } = opts;
+  const { db, storage, chroma, queue, events, config } = opts;
   await app.register(multipart, {
     limits: { fileSize: config.MAX_UPLOAD_BYTES, files: config.MAX_UPLOAD_FILES, fields: 20 },
+  });
+
+  // Open status streams, ended when the server shuts down so `close()` doesn't wait on them.
+  const streams = new Set<ServerResponse>();
+  app.addHook('onClose', async () => {
+    for (const res of streams) res.end();
   });
 
   const toApi = (d: DocumentRow, slug: string): Document => ({
@@ -169,6 +181,7 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
           results.push({ document: toApi(winner!, workspace.slug), duplicate: true });
           continue;
         }
+        events.emit({ workspaceId: workspace.id, document: inserted[0] });
         await queue.enqueue(id);
         results.push({ document: toApi(inserted[0], workspace.slug), duplicate: false });
       }
@@ -199,6 +212,70 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
         .where(and(...where))
         .orderBy(desc(documents.id));
       return { data: rows.map((r) => toApi(r, workspace.slug)), nextCursor: null };
+    },
+  );
+
+  app.get(
+    '/v1/workspaces/:slug/documents/events',
+    {
+      schema: {
+        ...common,
+        summary: 'Live document status (server-sent events)',
+        description:
+          'A `text/event-stream`. On connect it sends one `snapshot` event with every unfinished document ' +
+          '(queued, transcribing, processing), so a reconnect misses nothing; then a `document` event for each ' +
+          'new upload or status change in this workspace, and a `removed` event (`{ id }`) when one is deleted. Browsers should read it with `fetch` (EventSource cannot send the ' +
+          '`Authorization` header).',
+        params: SlugParams,
+      },
+    },
+    async (req, reply) => {
+      const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'reader');
+      reply.hijack();
+      const res = reply.raw;
+      res.writeHead(200, {
+        'content-type': 'text/event-stream; charset=utf-8',
+        'cache-control': 'no-cache, no-transform',
+        connection: 'keep-alive',
+        'x-request-id': req.id,
+        // Tell nginx not to buffer the stream.
+        'x-accel-buffering': 'no',
+      });
+      const send = (event: string, data: unknown) =>
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+
+      // Subscribe before reading the snapshot, so a change in between is not lost (it may arrive twice).
+      const unsubscribe = events.subscribe((e) => {
+        if (e.workspaceId !== workspace.id) return;
+        if (e.removed) send('removed', { id: e.document.id });
+        else send('document', toApi(e.document, workspace.slug));
+      });
+      const heartbeat = setInterval(() => res.write(': keep-alive\n\n'), HEARTBEAT_MS);
+      streams.add(res);
+      req.raw.on('close', () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+        streams.delete(res);
+      });
+
+      try {
+        const unfinished = await db
+          .select()
+          .from(documents)
+          .where(
+            and(
+              eq(documents.workspaceId, workspace.id),
+              inArray(documents.status, ['queued', 'transcribing', 'processing']),
+            ),
+          )
+          .orderBy(desc(documents.id));
+        send('snapshot', { data: unfinished.map((d) => toApi(d, workspace.slug)) });
+      } catch (err) {
+        // The response is hijacked, so Fastify's error handler can't answer; end the stream
+        // and the client reconnects.
+        req.log.error({ err }, 'document status snapshot failed');
+        res.end();
+      }
     },
   );
 
@@ -250,6 +327,7 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
         .set({ status: 'queued', attempts: 0, error: null })
         .where(eq(documents.id, doc.id))
         .returning();
+      events.emit({ workspaceId: workspace.id, document: row! });
       await queue.enqueue(doc.id);
       return reply.status(202).send(toApi(row!, workspace.slug));
     },
@@ -275,6 +353,7 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
       await chroma.deleteDocumentVectors(ChromaService.collectionName(workspace.slug), doc.id);
       await db.delete(documents).where(eq(documents.id, doc.id));
       await storage.remove(doc.storagePath);
+      events.emit({ workspaceId: workspace.id, document: doc, removed: true });
       return reply.status(204).send(null);
     },
   );

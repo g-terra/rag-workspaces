@@ -12,6 +12,7 @@ import { PgBoss } from 'pg-boss';
 import type { Config } from '../config.js';
 import { FLOWS } from '../flows.js';
 import { ChromaService } from './chroma.js';
+import type { DocumentEvents } from './document-events.js';
 import type { IngestQueue } from './ingest-queue.js';
 import { embeddingEndpoint } from './providers.js';
 
@@ -31,6 +32,7 @@ export type IngestDeps = {
   db: Database;
   langflow: LangflowClient;
   chroma: ChromaService;
+  events: DocumentEvents;
   config: IngestConfig;
   log: FastifyBaseLogger;
 };
@@ -132,7 +134,8 @@ export class IngestProcessor {
       .update(documents)
       .set({ status: 'queued' })
       .where(inArray(documents.status, ['processing', 'transcribing']))
-      .returning({ id: documents.id });
+      .returning();
+    for (const doc of stuck) this.deps.events.emit({ workspaceId: doc.workspaceId, document: doc });
     if (stuck.length) this.deps.log.warn({ count: stuck.length }, 'requeued documents left mid-run');
     const queued = await db
       .select({ id: documents.id })
@@ -144,6 +147,7 @@ export class IngestProcessor {
   /** Returns the updated row, or undefined when the document was deleted meanwhile. */
   private async update(id: string, set: Partial<Document>) {
     const [doc] = await this.deps.db.update(documents).set(set).where(eq(documents.id, id)).returning();
+    if (doc) this.deps.events.emit({ workspaceId: doc.workspaceId, document: doc });
     return doc;
   }
 }
