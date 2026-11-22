@@ -1,3 +1,4 @@
+import type { Document } from '@rag/shared';
 import { Upload as UploadIcon } from 'lucide-react';
 import { Fragment, useReducer, useRef, useState, type DragEvent } from 'react';
 import { useAuth } from '@/auth/auth-context';
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ACCEPT, checkFile, uploadErrorMessage } from '@/documents/files';
 import { initialSession, rowView, sessionReducer, sessionSummary } from '@/documents/session';
 import { uploadFile } from '@/documents/upload';
+import { useDocumentEvents } from '@/documents/use-document-events';
 import { cn } from '@/lib/utils';
 import { useCurrentWorkspace } from '@/workspaces/current';
 
@@ -27,8 +29,8 @@ export function Upload() {
         <div>
           <h1 className="mb-1.5 text-2xl font-semibold tracking-tight">Upload material</h1>
           <p className="text-muted-foreground text-sm">
-            Files are stored, checked for duplicates, then queued for the Langflow ingest flow, which runs
-            them one at a time.
+            Files are stored, checked for duplicates, then run through the Langflow ingest flow one at a time.
+            Status updates live.
           </p>
         </div>
         {w.access === 'reader' ? (
@@ -45,11 +47,14 @@ export function Upload() {
 }
 
 function Uploader({ slug }: { slug: string }) {
-  const { getToken } = useAuth();
+  const { api, getToken } = useAuth();
   const [session, dispatch] = useReducer(sessionReducer, initialSession);
   const [dragging, setDragging] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const nextKey = useRef(0);
   const input = useRef<HTMLInputElement>(null);
+
+  useDocumentEvents(slug, (event) => dispatch({ type: 'event', event }));
 
   function addFiles(list: FileList | null) {
     const files = [...(list ?? [])].map((file) => ({
@@ -80,6 +85,19 @@ function Uploader({ slug }: { slug: string }) {
         else
           dispatch({ type: 'failed', key: f.key, error: uploadErrorMessage(outcome.status, outcome.detail) });
       })();
+    }
+  }
+
+  async function retry(id: string) {
+    setRetryError(null);
+    try {
+      const document = await api<Document>(
+        `/v1/workspaces/${encodeURIComponent(slug)}/documents/${encodeURIComponent(id)}/reindex`,
+        { method: 'POST' },
+      );
+      dispatch({ type: 'document', document });
+    } catch (e) {
+      setRetryError(`Couldn't retry: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -147,6 +165,11 @@ function Uploader({ slug }: { slug: string }) {
           <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3.5">
             <h2 className="text-sm font-semibold">This session · {sessionSummary(session)}</h2>
           </div>
+          {retryError && (
+            <p role="alert" className="text-destructive border-b px-5 py-2 text-sm">
+              {retryError}
+            </p>
+          )}
           <ul>
             {session.rows.map((row) => {
               const v = rowView(session, row);
@@ -182,6 +205,13 @@ function Uploader({ slug }: { slug: string }) {
                     )}
                   </div>
                   <StatusBadge tone={v.tone} label={v.label} />
+                  <div className="flex w-21 justify-end">
+                    {v.canRetry && v.document && (
+                      <Button variant="outline" size="sm" onClick={() => void retry(v.document!.id)}>
+                        Retry
+                      </Button>
+                    )}
+                  </div>
                 </li>
               );
             })}
