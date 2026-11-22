@@ -1,7 +1,9 @@
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { documents } from '@rag/db';
 import { createTestDatabase } from '@rag/db/testing';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp, type App } from '../app.js';
 import { apiKeyAuthenticator } from '../auth/api-keys.js';
@@ -186,6 +188,52 @@ describe.skipIf(!url)('documents (against TEST_DATABASE_URL)', () => {
       headers: { authorization: auth.reader },
     });
     expect(del.statusCode).toBe(403);
+  });
+
+  it('reindex puts a document back in the queue with a fresh attempt count', async () => {
+    const list = await app.inject({
+      url: '/v1/workspaces/ouc/documents?type=pdf',
+      headers: { authorization: auth.admin },
+    });
+    const doc = list.json().data[0];
+    const before = queued.length;
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/workspaces/ouc/documents/${doc.id}/reindex`,
+      headers: { authorization: auth.admin },
+    });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toMatchObject({ status: 'queued', attempts: 0, error: null });
+    expect(queued.slice(before)).toEqual([doc.id]);
+  });
+
+  it('reindex needs an editor of that workspace', async () => {
+    const pdf = (await get('/v1/workspaces/ouc/documents?type=pdf')).json().data[0];
+    const reindex = (slug: string, who: keyof typeof auth) =>
+      app.inject({
+        method: 'POST',
+        url: `/v1/workspaces/${slug}/documents/${pdf.id}/reindex`,
+        headers: { authorization: auth[who] },
+      });
+    expect((await reindex('ouc', 'reader')).statusCode).toBe(403);
+    expect((await reindex('ouc', 'stranger')).statusCode).toBe(404);
+    expect((await reindex('personal', 'admin')).statusCode).toBe(404);
+  });
+
+  it('409 for reindex or delete while a document is being ingested', async () => {
+    const pdf = (await get('/v1/workspaces/ouc/documents?type=pdf')).json().data[0];
+    await t.db.update(documents).set({ status: 'processing' }).where(eq(documents.id, pdf.id));
+    try {
+      const reindex = await app.inject({
+        method: 'POST',
+        url: `/v1/workspaces/ouc/documents/${pdf.id}/reindex`,
+        headers: { authorization: auth.admin },
+      });
+      expect(reindex.statusCode).toBe(409);
+      expect((await del(`/v1/workspaces/ouc/documents/${pdf.id}`)).statusCode).toBe(409);
+    } finally {
+      await t.db.update(documents).set({ status: 'queued' }).where(eq(documents.id, pdf.id));
+    }
   });
 
   it('deleting removes vectors, row and file', async () => {

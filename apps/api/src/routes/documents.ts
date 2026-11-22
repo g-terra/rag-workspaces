@@ -226,6 +226,35 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
     },
   );
 
+  app.post(
+    '/v1/workspaces/:slug/documents/:documentId/reindex',
+    {
+      schema: {
+        ...common,
+        summary: 'Ingest a document again',
+        description:
+          'Deletes its vectors and runs the ingest flow again with the current settings. Also the way to retry a ' +
+          '`failed` document. Returns 202 with the document back in `queued`.',
+        params: DocParams,
+        response: { 202: Document },
+      },
+    },
+    async (req, reply) => {
+      const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'editor');
+      const doc = await loadDocument(workspace.id, req.params.documentId);
+      if (doc.status === 'processing' || doc.status === 'transcribing') {
+        throw new HttpProblem(409, 'This document is being ingested right now. Try again when it finishes.');
+      }
+      const [row] = await db
+        .update(documents)
+        .set({ status: 'queued', attempts: 0, error: null })
+        .where(eq(documents.id, doc.id))
+        .returning();
+      await queue.enqueue(doc.id);
+      return reply.status(202).send(toApi(row!, workspace.slug));
+    },
+  );
+
   app.delete(
     '/v1/workspaces/:slug/documents/:documentId',
     {
@@ -239,6 +268,9 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
     async (req, reply) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'editor');
       const doc = await loadDocument(workspace.id, req.params.documentId);
+      if (doc.status === 'processing' || doc.status === 'transcribing') {
+        throw new HttpProblem(409, 'This document is being ingested right now. Try again when it finishes.');
+      }
       // Vectors first: if Chroma is down, nothing is deleted and the caller can retry.
       await chroma.deleteDocumentVectors(ChromaService.collectionName(workspace.slug), doc.id);
       await db.delete(documents).where(eq(documents.id, doc.id));

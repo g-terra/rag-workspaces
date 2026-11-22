@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { provisionApiKey } from './bootstrap.js';
 import { LangflowClient } from './client.js';
 import { LangflowError } from './errors.js';
+import { messageText, outputsByComponent, parseJsonMessage } from './output.js';
 
 type Call = { method: string; path: string; headers: Headers; body: string };
 
@@ -26,6 +27,25 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 describe('LangflowClient', () => {
+  it('sends the API key and the run body, defaulting to chat input and output', async () => {
+    const { fn, calls } = fakeFetch(() => json({ session_id: 's1', outputs: [] }));
+    const client = new LangflowClient({ baseUrl: 'http://lf:7860/', apiKey: 'sk-1', fetch: fn });
+    await client.run('rw-answer', {
+      input_value: 'hi',
+      session_id: 's1',
+      tweaks: { LLM: { model_name: 'x' } },
+    });
+    expect(calls[0]!.path).toBe('/api/v1/run/rw-answer?stream=false');
+    expect(calls[0]!.headers.get('x-api-key')).toBe('sk-1');
+    expect(JSON.parse(calls[0]!.body)).toEqual({
+      input_type: 'chat',
+      output_type: 'chat',
+      input_value: 'hi',
+      session_id: 's1',
+      tweaks: { LLM: { model_name: 'x' } },
+    });
+  });
+
   it('refuses keyed calls before it has a key', async () => {
     const client = new LangflowClient({ baseUrl: 'http://lf', fetch: fakeFetch(() => json({})).fn });
     await expect(client.listFlows()).rejects.toThrow(/no Langflow API key/);
@@ -34,7 +54,7 @@ describe('LangflowClient', () => {
   it("turns errors into LangflowError with Langflow's own message", async () => {
     const { fn } = fakeFetch(() => json({ detail: { message: 'File not found: /data/uploads/x.pdf' } }, 500));
     const client = new LangflowClient({ baseUrl: 'http://lf', apiKey: 'k', fetch: fn });
-    const err = await client.listFlows().catch((e: unknown) => e);
+    const err = await client.run('rw-ingest', { session_id: 's' }).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(LangflowError);
     expect(err).toMatchObject({ status: 500, detail: 'File not found: /data/uploads/x.pdf' });
   });
@@ -55,7 +75,7 @@ describe('LangflowClient', () => {
   });
 
   it('lists flows with their endpoint names', async () => {
-    const { fn, calls } = fakeFetch(() =>
+    const { fn } = fakeFetch(() =>
       json([
         { id: '1', name: 'rw-answer', endpoint_name: 'rw-answer', data: null },
         { id: '2', name: 'Scratch' },
@@ -66,7 +86,6 @@ describe('LangflowClient', () => {
       { id: '1', name: 'rw-answer', endpoint_name: 'rw-answer' },
       { id: '2', name: 'Scratch', endpoint_name: null },
     ]);
-    expect(calls[0]!.headers.get('x-api-key')).toBe('k');
   });
 
   it('healthy() is false when Langflow cannot be reached', async () => {
@@ -109,5 +128,28 @@ describe('provisionApiKey', () => {
     );
     expect(calls.filter((c) => c.method === 'DELETE').map((c) => c.path)).toEqual(['/api/v1/api_key/a']);
     expect(calls[1]!.headers.get('authorization')).toBe('Bearer jwt');
+  });
+});
+
+describe('output helpers', () => {
+  it('parses passages sent as fenced JSON inside a chat message', () => {
+    const run = {
+      outputs: [
+        {
+          outputs: [
+            {
+              component_id: 'ChatOutput-passages',
+              results: { message: { text: '```json\n[{"document_id":"d1","score":0.8}]\n```' } },
+            },
+          ],
+        },
+      ],
+    };
+    const text = messageText(outputsByComponent(run)['ChatOutput-passages']);
+    expect(parseJsonMessage(text)).toEqual([{ document_id: 'd1', score: 0.8 }]);
+  });
+
+  it('parses unfenced JSON too', () => {
+    expect(parseJsonMessage('{"a":1}')).toEqual({ a: 1 });
   });
 });

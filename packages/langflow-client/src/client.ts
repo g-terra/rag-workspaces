@@ -1,4 +1,15 @@
 import { LangflowError, errorDetail } from './errors.js';
+import type { RunResponse } from './output.js';
+
+/** Per-request inputs for named nodes: `{ [nodeId]: { [field]: value } }`. Node ids are the contract (POC F5). */
+export type Tweaks = Record<string, Record<string, unknown>>;
+
+export type RunRequest = {
+  input_value?: string;
+  /** Always set one (the conversation id, or a fresh id); without it every run shares a session (POC F8). */
+  session_id: string;
+  tweaks?: Tweaks;
+};
 
 export type FlowSummary = { id: string; name: string; endpoint_name: string | null };
 
@@ -124,5 +135,15 @@ export class LangflowClient {
     });
     const flows = (await res.json()) as FlowSummary[];
     return flows.map(({ id, name, endpoint_name }) => ({ id, name, endpoint_name: endpoint_name ?? null }));
+  }
+
+  /** Run a flow by endpoint name and wait for the whole result. */
+  async run(flow: string, req: RunRequest, signal?: AbortSignal): Promise<RunResponse> {
+    const res = await this.request(`run ${flow}`, `/api/v1/run/${encodeURIComponent(flow)}?stream=false`, {
+      method: 'POST',
+      signal: signal ?? null,
+      ...this.json({ input_type: 'chat', output_type: 'chat', ...req }),
+    });
+    return (await res.json()) as RunResponse;
   }
 }
