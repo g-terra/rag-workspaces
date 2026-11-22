@@ -8,15 +8,20 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import { auth } from './auth/plugin.js';
+import type { Authenticator } from './auth/principal.js';
 import type { Config } from './config.js';
 import { errorHandler, notFoundHandler } from './errors.js';
 import type { ReadinessCheck } from './readiness.js';
 import { healthRoutes } from './routes/health.js';
+import { meRoutes } from './routes/me.js';
 
 export type AppDeps = {
   config: Config;
-  /** Dependency checks for `/ready`. Later PRs add Postgres, Chroma, Langflow and Keycloak. */
+  /** Dependency checks for `/ready`. */
   checks?: ReadinessCheck[];
+  /** Turn bearer credentials into a principal: Keycloak tokens now, API keys next. */
+  authenticators?: Authenticator[];
   /** Logger options, or a ready pino instance shared with services started outside Fastify. */
   logger?: FastifyServerOptions['logger'];
   loggerInstance?: FastifyServerOptions['loggerInstance'];
@@ -24,7 +29,13 @@ export type AppDeps = {
 
 const REQUEST_ID_HEADER = 'x-request-id';
 
-export async function buildApp({ config, checks = [], logger, loggerInstance }: AppDeps) {
+export async function buildApp({
+  config,
+  checks = [],
+  authenticators = [],
+  logger,
+  loggerInstance,
+}: AppDeps) {
   const app = Fastify({
     ...(loggerInstance ? { loggerInstance } : { logger: logger ?? { level: config.LOG_LEVEL } }),
     // Keep a caller's request id (useful when a proxy sets one), otherwise make one.
@@ -52,14 +63,28 @@ export async function buildApp({ config, checks = [], logger, loggerInstance }: 
           'Authenticate with `Authorization: Bearer <Keycloak token or rw_ API key>`.',
       },
       servers: [{ url: config.PUBLIC_API_URL }],
-      tags: [{ name: 'system', description: 'Health and readiness' }],
+      tags: [
+        { name: 'system', description: 'Health and readiness' },
+        { name: 'me', description: 'The caller' },
+      ],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            description: 'A Keycloak access token (people) or an `rw_` API key (agents and scripts).',
+          },
+        },
+      },
     },
     transform: jsonSchemaTransform,
   });
   await app.register(swaggerUi, { routePrefix: '/docs' });
   app.get('/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 
+  await app.register(auth, { authenticators });
   await app.register(healthRoutes, { checks, timeoutMs: config.READY_TIMEOUT_MS });
+  await app.register(meRoutes);
 
   return app;
 }
