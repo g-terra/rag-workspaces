@@ -2,9 +2,9 @@ import type { Document } from '@rag/shared';
 import { describe, expect, it } from 'vitest';
 import {
   applyDocumentEvent,
-  filenameFromDisposition,
   filterDocuments,
   formatUpdated,
+  isIngesting,
   librarySummary,
   shortSha,
 } from './library';
@@ -120,16 +120,12 @@ describe('shortSha', () => {
   });
 });
 
-describe('filenameFromDisposition', () => {
-  it("reads the API's RFC 5987 form", () => {
-    expect(filenameFromDisposition("attachment; filename*=UTF-8''Week%207%20notes%20%C3%A9.md")).toBe(
-      'Week 7 notes é.md',
-    );
-  });
-
-  it('reads a plain quoted filename, and gives null without one', () => {
-    expect(filenameFromDisposition('attachment; filename="a b.pdf"')).toBe('a b.pdf');
-    expect(filenameFromDisposition('attachment')).toBeNull();
-    expect(filenameFromDisposition(null)).toBeNull();
+describe('isIngesting', () => {
+  it('is true while the ingest flow works on the document', () => {
+    expect(
+      ['queued', 'transcribing', 'processing', 'ready', 'failed'].map((status) =>
+        isIngesting(doc('d', { status: status as Document['status'] })),
+      ),
+    ).toEqual([false, true, true, false, false]);
   });
 });

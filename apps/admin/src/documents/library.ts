@@ -63,10 +63,7 @@ export function shortSha(sha: string): string {
   return `${sha.slice(0, 4)}…${sha.slice(-4)}`;
 }
 
-/** The file name in a `content-disposition` header (`filename*=UTF-8''…` or `filename="…"`). */
-export function filenameFromDisposition(header: string | null): string | null {
-  if (!header) return null;
-  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1];
-  if (encoded) return decodeURIComponent(encoded);
-  return /filename="([^"]+)"/i.exec(header)?.[1] ?? null;
+/** Whether the ingest flow is working on it now; the API refuses Reindex and Delete (`409`) meanwhile. */
+export function isIngesting(doc: Document): boolean {
+  return doc.status === 'processing' || doc.status === 'transcribing';
 }

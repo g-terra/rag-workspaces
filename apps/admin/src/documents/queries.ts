@@ -1,26 +1,32 @@
 import type { Document } from '@rag/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/auth/auth-context';
-import { applyDocumentEvent, filenameFromDisposition } from './library';
+import type { DocumentEvent } from './events';
+import { applyDocumentEvent } from './library';
 import { useDocumentEvents } from './use-document-events';
 
-const documentsKey = (slug: string) => ['workspaces', slug, 'documents'];
+export const documentsKey = (slug: string) => ['workspaces', slug, 'documents'];
 const documentsPath = (slug: string) => `/v1/workspaces/${encodeURIComponent(slug)}/documents`;
 
 /** The workspace's documents, newest first, kept current by the status stream while mounted. */
 export function useLiveDocuments(slug: string) {
   const { api } = useAuth();
   const queryClient = useQueryClient();
-  useDocumentEvents(slug, (event) =>
-    queryClient.setQueryData<Document[]>(
-      documentsKey(slug),
-      (list) => list && applyDocumentEvent(list, event),
-    ),
-  );
+  useDocumentEvents(slug, (event) => void applyToLibrary(queryClient, slug, event));
   return useQuery({
     queryKey: documentsKey(slug),
     queryFn: async () => (await api<{ data: Document[] }>(documentsPath(slug))).data,
   });
+}
+
+/**
+ * Applies one stream event to the cached list. A snapshot also reloads the list: it holds only unfinished
+ * documents, so it can't show what finished or was deleted while the stream was down, and it covers
+ * events that arrived while the first load was still pending (the cache was empty then).
+ */
+export function applyToLibrary(queryClient: QueryClient, slug: string, event: DocumentEvent) {
+  queryClient.setQueryData<Document[]>(documentsKey(slug), (list) => list && applyDocumentEvent(list, event));
+  if (event.type === 'snapshot') return queryClient.invalidateQueries({ queryKey: documentsKey(slug) });
 }
 
 export function useReindexDocument(slug: string) {
@@ -53,7 +59,7 @@ export function useDeleteDocument(slug: string) {
 
 /**
  * Downloads the original file. A plain link can't send the bearer token, so this fetches it, then saves
- * the blob under the name from `content-disposition`.
+ * the blob under the document's `fileName`.
  */
 export function useDownloadDocument(slug: string) {
   const { getToken } = useAuth();
@@ -70,7 +76,7 @@ export function useDownloadDocument(slug: string) {
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement('a');
       a.href = url;
-      a.download = filenameFromDisposition(res.headers.get('content-disposition')) ?? doc.fileName;
+      a.download = doc.fileName;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     },

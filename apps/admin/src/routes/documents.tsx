@@ -1,6 +1,6 @@
 import type { Document } from '@rag/shared';
 import { Search, Upload } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router';
 import { ErrorState, Loading, Notice } from '@/components/states';
 import { StatusBadge } from '@/components/status-badge';
@@ -12,6 +12,7 @@ import { formatBytes, statusLabel } from '@/documents/files';
 import {
   filterDocuments,
   formatUpdated,
+  isIngesting,
   librarySummary,
   shortSha,
   TABS,
@@ -29,6 +30,12 @@ import { useCurrentWorkspace } from '@/workspaces/current';
 /** `/w/:slug/documents`: every document in the workspace, live, with download, reindex and delete. */
 export function Documents() {
   const w = useCurrentWorkspace();
+  // A fresh page per workspace, so the selection, filters and search don't carry over.
+  return <Library key={w.slug} />;
+}
+
+function Library() {
+  const w = useCurrentWorkspace();
   const canEdit = w.access !== 'reader';
   const documents = useLiveDocuments(w.slug);
   const [tab, setTab] = useState<StatusTab>('all');
@@ -37,6 +44,10 @@ export function Documents() {
   const list = documents.data ?? [];
   const shown = filterDocuments(list, tab, search);
   const selected = list.find((d) => d.id === selectedId) ?? null;
+  const table = useRef<HTMLTableElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  // After a delete the panel's buttons are gone; keep focus in the list (or on the heading once empty).
+  const focusList = () => (table.current ?? heading.current)?.focus();
 
   return (
     <>
@@ -52,7 +63,13 @@ export function Documents() {
       <div className="flex w-full max-w-290 flex-col gap-6 px-6 pt-7 pb-12">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="mb-1.5 text-2xl font-semibold tracking-tight">Document library</h1>
+            <h1
+              ref={heading}
+              tabIndex={-1}
+              className="mb-1.5 text-2xl font-semibold tracking-tight outline-none"
+            >
+              Document library
+            </h1>
             <p className="text-muted-foreground text-sm">{documents.data && librarySummary(list)}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -66,12 +83,12 @@ export function Documents() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <div role="tablist" aria-label="Status" className="bg-muted flex rounded-lg p-0.5">
+            <div role="group" aria-label="Status" className="bg-muted flex rounded-lg p-0.5">
               {TABS.map(([key, label]) => (
                 <button
                   key={key}
-                  role="tab"
-                  aria-selected={tab === key}
+                  type="button"
+                  aria-pressed={tab === key}
                   onClick={() => setTab(key)}
                   className={cn(
                     'h-8 rounded-md px-3 text-sm',
@@ -108,7 +125,7 @@ export function Documents() {
         {list.length > 0 && (
           <div className="flex flex-wrap items-start gap-4">
             <div className="bg-card min-w-0 flex-[999_1_520px] overflow-x-auto rounded-xl border">
-              <table className="w-full text-sm">
+              <table ref={table} tabIndex={-1} aria-label="Documents" className="w-full text-sm outline-none">
                 <thead>
                   <tr className="text-muted-foreground border-b text-left text-xs">
                     {['Title', 'Type', 'Passages', 'Status', 'Updated'].map((h) => (
@@ -130,7 +147,11 @@ export function Documents() {
                       )}
                     >
                       <td className="px-4 py-2.5">
-                        <button type="button" className="text-left font-medium">
+                        <button
+                          type="button"
+                          aria-current={d.id === selectedId ? 'true' : undefined}
+                          className="text-left font-medium"
+                        >
                           {d.title}
                         </button>
                       </td>
@@ -139,7 +160,13 @@ export function Documents() {
                       <td className="px-4 py-2.5">
                         <StatusBadge tone={d.status} label={statusLabel(d.status)} />
                       </td>
-                      <td className="text-muted-foreground px-4 py-2.5 whitespace-nowrap">
+                      <td
+                        className="text-muted-foreground px-4 py-2.5 whitespace-nowrap"
+                        title={new Date(d.updatedAt).toLocaleString('en-GB', {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        })}
+                      >
                         {formatUpdated(d.updatedAt)}
                       </td>
                     </tr>
@@ -159,7 +186,13 @@ export function Documents() {
               className="bg-card flex max-w-85 flex-[1_1_280px] flex-col gap-3.5 rounded-xl border p-4.5"
             >
               {selected ? (
-                <DocumentDetail key={selected.id} slug={w.slug} doc={selected} canEdit={canEdit} />
+                <DocumentDetail
+                  key={selected.id}
+                  slug={w.slug}
+                  doc={selected}
+                  canEdit={canEdit}
+                  onDeleted={focusList}
+                />
               ) : (
                 <p className="text-muted-foreground text-sm">Select a document to see its details.</p>
               )}
@@ -171,7 +204,18 @@ export function Documents() {
   );
 }
 
-function DocumentDetail({ slug, doc, canEdit }: { slug: string; doc: Document; canEdit: boolean }) {
+function DocumentDetail({
+  slug,
+  doc,
+  canEdit,
+  onDeleted,
+}: {
+  slug: string;
+  doc: Document;
+  canEdit: boolean;
+  onDeleted(): void;
+}) {
+  const ingesting = isIngesting(doc);
   const reindex = useReindexDocument(slug);
   const download = useDownloadDocument(slug);
   const [confirming, setConfirming] = useState(false);
@@ -217,7 +261,7 @@ function DocumentDetail({ slug, doc, canEdit }: { slug: string; doc: Document; c
           <Button
             variant="outline"
             size="sm"
-            disabled={reindex.isPending}
+            disabled={reindex.isPending || ingesting}
             onClick={() => {
               download.reset();
               reindex.mutate(doc.id);
@@ -242,6 +286,7 @@ function DocumentDetail({ slug, doc, canEdit }: { slug: string; doc: Document; c
             variant="outline"
             size="sm"
             className="text-destructive"
+            disabled={ingesting}
             onClick={() => setConfirming(true)}
           >
             Delete
@@ -250,11 +295,20 @@ function DocumentDetail({ slug, doc, canEdit }: { slug: string; doc: Document; c
       </div>
       {canEdit && (
         <p className="text-muted-foreground text-xs leading-normal">
-          Reindex deletes this document's vectors and runs the ingest flow again. Delete removes the file and
-          its vectors.
+          {ingesting
+            ? 'Reindex and Delete are available once ingestion finishes.'
+            : "Reindex deletes this document's vectors and runs the ingest flow again. Delete removes the file and its vectors."}
         </p>
       )}
-      {canEdit && <DeleteDialog slug={slug} doc={doc} open={confirming} onOpenChange={setConfirming} />}
+      {canEdit && (
+        <DeleteDialog
+          slug={slug}
+          doc={doc}
+          open={confirming}
+          onOpenChange={setConfirming}
+          onDeleted={onDeleted}
+        />
+      )}
     </>
   );
 }
@@ -264,8 +318,10 @@ function DeleteDialog(props: {
   doc: Document;
   open: boolean;
   onOpenChange(open: boolean): void;
+  onDeleted(): void;
 }) {
   const remove = useDeleteDocument(props.slug);
+  const deleted = useRef(false);
   return (
     <Dialog
       open={props.open}
@@ -274,7 +330,14 @@ function DeleteDialog(props: {
         props.onOpenChange(open);
       }}
     >
-      <DialogContent>
+      <DialogContent
+        onCloseAutoFocus={(e) => {
+          // The Delete button that opened the dialog is gone with the document.
+          if (!deleted.current) return;
+          e.preventDefault();
+          props.onDeleted();
+        }}
+      >
         <DialogTitle>Delete this document?</DialogTitle>
         <DialogDescription>
           "{props.doc.title}" and its passages are removed from the workspace. This can't be undone.
@@ -291,7 +354,14 @@ function DeleteDialog(props: {
           <Button
             variant="destructive"
             disabled={remove.isPending}
-            onClick={() => remove.mutate(props.doc.id, { onSuccess: () => props.onOpenChange(false) })}
+            onClick={() => {
+              // Set before the answer: on success the panel, and this dialog with it, can unmount at once.
+              deleted.current = true;
+              remove.mutate(props.doc.id, {
+                onSuccess: () => props.onOpenChange(false),
+                onError: () => (deleted.current = false),
+              });
+            }}
           >
             {remove.isPending ? 'Deleting…' : 'Delete'}
           </Button>
