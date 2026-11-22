@@ -8,19 +8,23 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import type { Database } from '@rag/db';
 import { auth } from './auth/plugin.js';
 import type { Authenticator } from './auth/principal.js';
 import type { Config } from './config.js';
 import { errorHandler, notFoundHandler } from './errors.js';
 import type { ReadinessCheck } from './readiness.js';
+import { apiKeyRoutes } from './routes/api-keys.js';
 import { healthRoutes } from './routes/health.js';
 import { meRoutes } from './routes/me.js';
 
 export type AppDeps = {
   config: Config;
+  /** The app database. Routes that need it are only registered when it is given (tests can leave it out). */
+  db?: Database;
   /** Dependency checks for `/ready`. */
   checks?: ReadinessCheck[];
-  /** Turn bearer credentials into a principal: Keycloak tokens now, API keys next. */
+  /** Turn bearer credentials into a principal: API keys and Keycloak tokens. */
   authenticators?: Authenticator[];
   /** Logger options, or a ready pino instance shared with services started outside Fastify. */
   logger?: FastifyServerOptions['logger'];
@@ -31,6 +35,7 @@ const REQUEST_ID_HEADER = 'x-request-id';
 
 export async function buildApp({
   config,
+  db,
   checks = [],
   authenticators = [],
   logger,
@@ -66,6 +71,7 @@ export async function buildApp({
       tags: [
         { name: 'system', description: 'Health and readiness' },
         { name: 'me', description: 'The caller' },
+        { name: 'api-keys', description: 'API keys for agents and scripts (admins only)' },
       ],
       components: {
         securitySchemes: {
@@ -85,6 +91,7 @@ export async function buildApp({
   await app.register(auth, { authenticators });
   await app.register(healthRoutes, { checks, timeoutMs: config.READY_TIMEOUT_MS });
   await app.register(meRoutes);
+  if (db) await app.register(apiKeyRoutes, { db });
 
   return app;
 }

@@ -4,6 +4,7 @@ import { buildApp, type App } from '../app.js';
 import { loadConfig } from '../config.js';
 import { testKeycloak } from '../test/tokens.js';
 import { keycloakAuthenticator, keycloakOptionsFromConfig } from './keycloak.js';
+import { requireAdmin } from './plugin.js';
 
 const config = loadConfig({ NODE_ENV: 'test' });
 let kc: Awaited<ReturnType<typeof testKeycloak>>;
@@ -20,6 +21,8 @@ afterEach(async () => {
 
 async function start() {
   app = await buildApp({ config, logger: false, authenticators: [keycloakAuthenticator(kc.options)] });
+  // An admin-only route, just for these tests.
+  app.get('/test/admin', { preHandler: requireAdmin }, async () => ({ ok: true }));
   return app;
 }
 
@@ -145,5 +148,21 @@ describe('keycloakOptionsFromConfig', () => {
     });
     expect(opts.issuer).toBe('http://localhost:8081/realms/rag-workspaces');
     expect(opts.audience).toBe('api');
+  });
+});
+
+describe('requireAdmin', () => {
+  it('403 for a signed-in non-admin, 200 for an admin', async () => {
+    const a = await start();
+    const user = await a.inject({
+      url: '/test/admin',
+      headers: { authorization: `Bearer ${await kc.token()}` },
+    });
+    expect(user.statusCode).toBe(403);
+    const admin = await a.inject({
+      url: '/test/admin',
+      headers: { authorization: `Bearer ${await kc.token({ realm_access: { roles: ['admin'] } })}` },
+    });
+    expect(admin.statusCode).toBe(200);
   });
 });

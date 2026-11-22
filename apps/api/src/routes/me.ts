@@ -11,13 +11,23 @@ export const meRoutes: FastifyPluginAsyncZod = async (app) => {
         tags: ['me'],
         summary: 'Who am I',
         description:
-          'The signed-in person. Later this also lists the workspaces they can see and their role in each.',
+          'The caller: a signed-in person, or an API key with its role and workspaces. ' +
+          'Later this also lists the workspaces a person can see and their role in each.',
         security: [{ bearerAuth: [] }],
         response: { 200: Me },
       },
     },
     async (req) => {
       const p = req.principal!;
+      if (p.kind === 'key') {
+        return {
+          kind: p.kind,
+          id: p.id,
+          name: p.name,
+          role: p.role,
+          workspaces: p.workspaces.map((w) => w.slug),
+        };
+      }
       return {
         kind: p.kind,
         id: p.id,
