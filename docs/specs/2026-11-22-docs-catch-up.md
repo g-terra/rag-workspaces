@@ -1,7 +1,7 @@
 ---
 title: Bring the architecture, API schema and decisions up to date with the built stack
 date: 2026-11-22
-pr: pending
+pr: '#30'
 status: in review
 areas: [docs]
 ---
