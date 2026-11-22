@@ -2,7 +2,7 @@
 title: Document upload with type check, size limit and dedupe; list, download, delete
 date: 2026-11-20
 pr: '#15'
-status: in review
+status: merged
 areas: [api, db, infra]
 ---
 
