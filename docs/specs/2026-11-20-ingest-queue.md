@@ -2,7 +2,7 @@
 title: Ingestion queue on pg-boss running the Langflow ingest flow
 date: 2026-11-20
 pr: '#16'
-status: in review
+status: merged
 areas: [api, langflow-client, flows]
 ---
 
