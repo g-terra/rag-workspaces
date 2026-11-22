@@ -47,6 +47,9 @@ docker compose ps        # every service should say (healthy)
 | Keycloak admin console (create people here) | http://localhost:8081/admin | `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` |
 | rag-workspaces sign-in (realm `rag-workspaces`) | http://localhost:8081/realms/rag-workspaces/account | `RW_ADMIN_USERNAME` / `RW_ADMIN_PASSWORD` |
 
+After signing in, the admin UI opens the workspace you used last (or your first one); the workspace
+switcher in the sidebar changes it. The API docs are linked from the top bar of every page.
+
 `docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
 
 ## Development
