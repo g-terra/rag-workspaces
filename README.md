@@ -60,6 +60,7 @@ pnpm test        # Vitest in every package (database tests run when TEST_DATABAS
 pnpm lint        # ESLint
 pnpm typecheck   # tsc --noEmit
 pnpm format      # Prettier
+pnpm smoke       # end to end on a throwaway compose stack with a stand-in model (needs Docker)
 ```
 
 | Path | What it is |
@@ -68,6 +69,7 @@ pnpm format      # Prettier
 | `apps/api` | Fastify API: `pnpm --filter @rag/api dev`, then Swagger UI at http://localhost:3000/docs |
 | `packages/config` | Shared TypeScript, ESLint and Vitest settings |
 | `packages/db` | Drizzle schema, SQL migrations (`drizzle/`) and the Postgres connection. Migrations run when the API starts |
+| `scripts/smoke` | The compose smoke test: `stack.ts up` and `down` run the stack as project `rag-workspaces-smoke` with `docker-compose.smoke.yml`, `check.ts` the checks |
 | `packages/langflow-client` | Typed client for Langflow's login, API key, flow and run/stream endpoints |
 | `packages/shared` | zod schemas shared by the API and the admin UI (the API contract) |
 | `docker-compose.yml`, `docker/` | The stack, the API image, the Postgres init script and the Keycloak realm |

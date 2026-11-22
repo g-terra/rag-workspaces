@@ -1,0 +1,38 @@
+name: Smoke
+
+# The whole compose stack with the stand-in model server, signed in through the real Keycloak
+# (scripts/smoke/, docs/specs/2026-11-22-compose-smoke-test.md). Slow (images and Langflow start),
+# so it runs only on pull requests that touch the stack, nightly on main, and on demand.
+on:
+  pull_request:
+    paths:
+      - 'apps/api/**'
+      - 'packages/**'
+      - 'flows/**'
+      - 'langflow/**'
+      - 'docker/**'
+      - 'docker-compose*.yml'
+      - 'poc/standin/**'
+      - 'scripts/smoke/**'
+      - '.env.example'
+      - '.github/workflows/smoke.yml'
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Compose smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      # Zero-dependency scripts: no pnpm install needed.
+      - run: node scripts/smoke/run.ts

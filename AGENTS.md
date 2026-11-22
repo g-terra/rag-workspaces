@@ -84,10 +84,14 @@ pnpm lint             # ESLint
 pnpm typecheck        # tsc --noEmit
 pnpm test             # Vitest
 pnpm build
+pnpm smoke            # whole compose stack + stand-in model, end to end (Docker, ~5 min)
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same five checks on every pull request. Run them before you
-push.
+push. The smoke test (`.github/workflows/smoke.yml`) runs on pull requests that touch the stack
+(`apps/api`, `packages`, `flows`, `langflow`, `docker`, the compose files) and nightly on `main`; run
+it locally before pushing such a change. `pnpm smoke --keep` leaves its stack running on ports 13000
+(API), 18080 (admin UI) and 18081 (Keycloak); the login is in `.env.smoke`.
 
 ## Langflow
 
