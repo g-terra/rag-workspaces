@@ -26,6 +26,9 @@ Check, in this order:
 8. **PR description**: has **What to understand before approving** and **How to review**, and both are
    accurate for this diff.
 9. **Docs**: anything whose behaviour changed is updated in the same PR.
+10. **Spec**: the PR adds exactly one `docs/specs/*.md`, it follows `docs/specs/TEMPLATE.md` (every
+    heading present, front matter filled), and it matches the diff, especially **Interfaces and
+    contracts**. No merged spec was rewritten.
 
 Report findings most severe first. For each: file and line, what is wrong, and a concrete fix. Keep
 nitpicks separate and short. If nothing is wrong, say so plainly.

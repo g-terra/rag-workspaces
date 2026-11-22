@@ -13,6 +13,8 @@ Read `AGENTS.md` first and follow every rule in it. In particular:
   stacked PRs.
 - **Match the code around you.** Read neighbouring files first and copy their patterns, naming and error
   handling instead of introducing new ones.
+- **A spec comes with the code.** Write `docs/specs/YYYY-MM-DD-<topic>.md` from the template with the
+  `write-spec` skill before you start, and keep it true until the PR is ready.
 - **Tests come with the code.** Behaviour you add or change gets a test in the same PR.
 - **Commits**: Conventional Commits (`type(scope): summary`). Stage files by name; never `git add -A`,
   never commit `.env`.
@@ -22,5 +24,7 @@ Write the PR description with the two sections the owner reviews from:
 
 - **What to understand before approving**: concepts, decisions, trade-offs, anything hard to undo.
 - **How to review**: files in reading order, and how to run or check it locally.
+
+Link the spec at the top of the description.
 
 Don't merge. Open the PR, get CI green, and leave it for the owner.

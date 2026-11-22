@@ -14,6 +14,8 @@ documented REST API. Start with the [README](README.md), then:
   raise it with the owner instead
 - [docs/work-breakdown.md](docs/work-breakdown.md): milestones
 - [poc/RESULTS.md](poc/RESULTS.md): what the Langflow spike proved, and the workarounds it needed
+- [docs/specs/](docs/specs/README.md): one spec per PR, the history of how the system got here. Read the
+  recent specs for the area you are about to change
 
 ## Rules
 
@@ -35,6 +37,10 @@ documented REST API. Start with the [README](README.md), then:
    commit. Provider API keys never go in Langflow's environment (see `poc/RESULTS.md`, F3).
 5. **Don't merge without the owner's approval.** Open the PR, make CI green, and wait.
 6. **Keep docs true.** When behaviour changes, update the doc that describes it in the same PR.
+7. **Every PR adds a spec.** Copy [docs/specs/TEMPLATE.md](docs/specs/TEMPLATE.md) to
+   `docs/specs/YYYY-MM-DD-<topic>.md`, fill every section, commit it with the change and link it from the
+   PR description. Claude Code: use the `write-spec` skill (`.claude/skills/write-spec/`). Other tools:
+   follow that file as instructions.
 
 ## Agents
 
@@ -48,6 +54,18 @@ Role agents live in `.claude/agents/` (Claude Code subagents; other tools can re
 | `reviewer` | review a PR against these rules before the owner does (runs on Fable 5.2) | no |
 
 A typical change goes architect → coder → tester → reviewer → owner.
+
+### Superpowers
+
+The repo enables the [Superpowers](https://github.com/obra/superpowers) plugin in `.claude/settings.json`
+(Claude Code offers to install it when you trust the folder). Its workflow fits the rules above:
+`brainstorming` → `writing-plans` → `test-driven-development` → `requesting-code-review`. Project
+preferences for where its documents go:
+
+- The `brainstorming` design document **is the PR's spec**: write it to `docs/specs/YYYY-MM-DD-<topic>.md`
+  using `docs/specs/TEMPLATE.md`, not to `docs/superpowers/specs/`.
+- `writing-plans` plans are working notes: keep them out of the repo (your scratch space), unless the
+  owner asks for one to be committed.
 
 ## Commands
 
