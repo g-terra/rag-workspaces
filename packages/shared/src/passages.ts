@@ -25,6 +25,8 @@ export const PassageSearch = z.object({
   limit: z.coerce.number().int().min(1).max(50).optional(),
   /** Defaults to the workspace's `minScore`, then `DEFAULT_MIN_SCORE`. */
   minScore: z.coerce.number().min(0).max(1).optional(),
+  /** Only passages from documents in this folder. */
+  folderId: z.string().min(1).optional(),
 });
 export type PassageSearch = z.infer<typeof PassageSearch>;
 

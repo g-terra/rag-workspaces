@@ -11,7 +11,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': {
+      // A regex, so only real API calls are forwarded: a plain '/api' prefix would also catch the
+      // app's own /api-keys page, which nginx leaves to the router (`location /api/`).
+      '^/api/': {
         target: process.env.API_URL ?? 'http://localhost:3000',
         rewrite: (path) => path.replace(/^\/api/, ''),
       },

@@ -3,8 +3,8 @@ import type { ServerResponse } from 'node:http';
 import path from 'node:path';
 import multipart from '@fastify/multipart';
 import { documents, newId, type Database, type Document as DocumentRow } from '@rag/db';
-import { Document, DocumentQuery, UploadResult, WorkspaceSlug, page } from '@rag/shared';
-import { and, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { Document, DocumentQuery, UpdateDocument, UploadResult, WorkspaceSlug, page } from '@rag/shared';
+import { and, desc, eq, inArray, isNull, notInArray, type SQL } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
@@ -14,6 +14,8 @@ import { HttpProblem } from '../errors.js';
 import { ChromaService } from '../services/chroma.js';
 import type { DocumentEvents } from '../services/document-events.js';
 import type { IngestQueue } from '../services/ingest-queue.js';
+import { requireFolder } from '../services/folders.js';
+import { finishReindexIfDone } from '../services/reindex.js';
 import type { UploadStorage } from '../services/storage.js';
 import { FileTooLarge, detectType } from '../services/storage.js';
 
@@ -31,6 +33,8 @@ const HEARTBEAT_MS = 15_000;
 
 const SlugParams = z.object({ slug: WorkspaceSlug });
 const DocParams = SlugParams.extend({ documentId: z.string() });
+const UploadQuery = z.object({ folderId: z.string().min(1).optional() });
+const BUSY = ['processing', 'transcribing'] as const;
 const common = { tags: ['documents'], security: [{ bearerAuth: [] }] };
 const MIME: Record<DocumentRow['type'], string> = {
   pdf: 'application/pdf',
@@ -54,6 +58,7 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
   const toApi = (d: DocumentRow, slug: string): Document => ({
     id: d.id,
     workspace: slug,
+    folderId: d.folderId,
     title: d.title,
     fileName: d.fileName,
     type: d.type,
@@ -87,14 +92,17 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
           'Multipart form with one or more `files` parts. Accepts PDF, DOCX, TXT and MD, checked by content. ' +
           'Each new file is stored and queued for ingestion; a file already in the workspace (same SHA-256) ' +
           'returns the existing document with `duplicate: true`. Oversized files get 413, unsupported ones 415, ' +
-          'and nothing from that request is kept. Empty files get 400.',
+          'and nothing from that request is kept. Empty files get 400. `?folderId=` puts the new documents ' +
+          'in that folder (a duplicate stays where it is).',
         consumes: ['multipart/form-data'],
         params: SlugParams,
+        querystring: UploadQuery,
         response: { 201: UploadResult },
       },
     },
     async (req, reply) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'editor');
+      const folderId = req.query.folderId ? await requireFolder(db, workspace.id, req.query.folderId) : null;
       if (!req.isMultipart())
         throw new HttpProblem(415, 'Send multipart/form-data with one or more "files" parts.');
 
@@ -158,6 +166,7 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
           .values({
             id,
             workspaceId: workspace.id,
+            folderId,
             title: path.parse(s.fileName).name,
             fileName: s.fileName,
             type: s.type,
@@ -197,6 +206,7 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
       schema: {
         ...common,
         summary: 'List documents, newest first',
+        description: '`folderId` limits it to one folder; `folderId=none` to the documents at the top level.',
         params: SlugParams,
         querystring: DocumentQuery,
         response: { 200: page(Document) },
@@ -207,6 +217,8 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
       const where: SQL[] = [eq(documents.workspaceId, workspace.id)];
       if (req.query.status) where.push(eq(documents.status, req.query.status));
       if (req.query.type) where.push(eq(documents.type, req.query.type));
+      if (req.query.folderId === 'none') where.push(isNull(documents.folderId));
+      else if (req.query.folderId) where.push(eq(documents.folderId, req.query.folderId));
       const rows = await db
         .select()
         .from(documents)
@@ -279,6 +291,52 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
     },
   );
 
+  app.patch(
+    '/v1/workspaces/:slug/documents/:documentId',
+    {
+      schema: {
+        ...common,
+        summary: 'Move, rename or retag a document',
+        description:
+          '`folderId` moves it (null: to the top level); its passages follow at once, so folder filters stay ' +
+          'right. `title` and `tags` change only the record. `409` while it is being ingested.',
+        params: DocParams,
+        body: UpdateDocument,
+        response: { 200: Document },
+      },
+    },
+    async (req) => {
+      const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'editor');
+      const doc = await loadDocument(workspace.id, req.params.documentId);
+      const { folderId, ...rest } = req.body;
+      const set: Partial<DocumentRow> = { ...rest };
+      const moving = folderId !== undefined && folderId !== doc.folderId;
+      if (moving) set.folderId = folderId === null ? null : await requireFolder(db, workspace.id, folderId);
+      if (!Object.keys(set).length) return toApi(doc, workspace.slug);
+      // Not while a run is writing its vectors: they would keep the old folder.
+      const [row] = await db
+        .update(documents)
+        .set(set)
+        .where(and(eq(documents.id, doc.id), notInArray(documents.status, [...BUSY])))
+        .returning();
+      if (!row) {
+        throw new HttpProblem(409, 'This document is being ingested right now. Try again when it finishes.');
+      }
+      if (moving) {
+        try {
+          await chroma.setDocumentFolder(ChromaService.collectionName(workspace.slug), doc.id, row.folderId);
+        } catch (err) {
+          // Put the row back, so the record and the passages agree; the caller can retry.
+          await db.update(documents).set({ folderId: doc.folderId }).where(eq(documents.id, doc.id));
+          req.log.error({ err, documentId: doc.id }, 'moving passages to the new folder failed');
+          throw new HttpProblem(503, 'The vector store could not be updated, so the document was not moved.');
+        }
+      }
+      events.emit({ workspaceId: workspace.id, document: row });
+      return toApi(row, workspace.slug);
+    },
+  );
+
   app.get(
     '/v1/workspaces/:slug/documents/:documentId/file',
     { schema: { ...common, summary: 'Download the original file', params: DocParams } },
@@ -345,6 +403,8 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
       await db.delete(documents).where(eq(documents.id, doc.id));
       await storage.remove(doc.storagePath);
       events.emit({ workspaceId: workspace.id, document: doc, removed: true });
+      // Deleting the last document a reindex was waiting for finishes the reindex.
+      await finishReindexIfDone(db, workspace.id);
       return reply.status(204).send(null);
     },
   );

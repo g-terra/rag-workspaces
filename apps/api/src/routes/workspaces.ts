@@ -11,6 +11,7 @@ import type { WorkspaceSettings } from '@rag/shared';
 import {
   CreateWorkspace,
   GrantMember,
+  ReindexWorkspace,
   UpdateWorkspace,
   Workspace,
   WorkspaceMember,
@@ -25,13 +26,25 @@ import { currentUser, requireAdmin, requireUser } from '../auth/plugin.js';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
 import { ChromaService } from '../services/chroma.js';
+import type { DocumentEvents } from '../services/document-events.js';
+import type { IngestQueue } from '../services/ingest-queue.js';
+import { startReindex } from '../services/reindex.js';
 import type { UploadStorage } from '../services/storage.js';
 
 export type WorkspaceRoutesOptions = {
   db: Database;
   chroma: ChromaService;
   storage: UploadStorage;
-  config: Pick<Config, 'DEFAULT_EMBEDDING_PROVIDER' | 'DEFAULT_EMBEDDING_MODEL'>;
+  queue: IngestQueue;
+  events: DocumentEvents;
+  config: Pick<
+    Config,
+    | 'DEFAULT_EMBEDDING_PROVIDER'
+    | 'DEFAULT_EMBEDDING_MODEL'
+    | 'LMSTUDIO_BASE_URL'
+    | 'OPENAI_API_KEY'
+    | 'GEMINI_API_KEY'
+  >;
 };
 
 const SlugParams = z.object({ slug: WorkspaceSlug });
@@ -50,7 +63,7 @@ const UNSET: Omit<WorkspaceSettings, 'embeddingProvider' | 'embeddingModel'> = {
 
 export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = async (
   app,
-  { db, chroma, storage, config },
+  { db, chroma, storage, queue, events, config },
 ) => {
   const toApi = (w: WorkspaceRow, access: Access): Workspace => ({
     id: w.id,
@@ -161,6 +174,35 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
         ? await db.update(workspaces).set(set).where(eq(workspaces.id, workspace.id)).returning()
         : [workspace];
       return toApi(row!, 'admin');
+    },
+  );
+
+  app.post(
+    '/v1/workspaces/:slug/reindex',
+    {
+      schema: {
+        ...common,
+        summary: 'Ingest every document again, optionally with a new embedding model',
+        description:
+          'Empties the Chroma collection and queues every document. The workspace is `reindexing` until the ' +
+          'last document is `ready` or `failed`; meanwhile passages, answers and chat messages answer 503 with ' +
+          '`Retry-After`. Send `embeddingProvider` and `embeddingModel` to switch the workspace to another ' +
+          'model (the only way to change it); an empty body reindexes with the current settings, for example ' +
+          'after changing chunking. `409` while a reindex is running, `422` for a provider whose key is not set.',
+        params: SlugParams,
+        // No body at all reaches the schema as null.
+        body: ReindexWorkspace.nullish(),
+        response: { 202: Workspace },
+      },
+    },
+    async (req, reply) => {
+      const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'admin');
+      const row = await startReindex({ db, chroma, queue, events, config }, workspace, req.body ?? {});
+      req.log.info(
+        { workspace: workspace.slug, by: req.principal?.id, embeddingModel: row.settings.embeddingModel },
+        'workspace reindex started',
+      );
+      return reply.status(202).send(toApi(row, 'admin'));
     },
   );
 

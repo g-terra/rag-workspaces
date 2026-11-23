@@ -11,6 +11,9 @@ import { Documents } from '@/routes/documents';
 import { Playground } from '@/routes/playground';
 import { Upload } from '@/routes/upload';
 import { Workspaces } from '@/routes/workspaces';
+import { ApiKeys } from '@/routes/api-keys';
+import { Usage } from '@/routes/usage';
+import { WorkspaceSettings } from '@/routes/workspace-settings';
 
 export const router = createBrowserRouter([
   { path: '/sign-in', element: <SignIn /> },
@@ -23,6 +26,8 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <RootRedirect /> },
           { path: 'workspaces', element: <Workspaces /> },
+          { path: 'api-keys', element: <ApiKeys /> },
+          { path: 'usage', element: <Usage /> },
           {
             path: 'w/:slug',
             element: <WorkspaceLayout />,
@@ -31,6 +36,8 @@ export const router = createBrowserRouter([
               { path: 'upload', element: <Upload /> },
               { path: 'documents', element: <Documents /> },
               { path: 'playground', element: <Playground /> },
+              { path: 'usage', element: <Usage /> },
+              { path: 'settings', element: <WorkspaceSettings /> },
             ],
           },
           { path: '*', element: <NotFound /> },

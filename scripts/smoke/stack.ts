@@ -17,6 +17,7 @@ const PROJECT = 'rag-workspaces-smoke';
 // Host ports and the browser-facing URLs that go with them. Keycloak only reads ADMIN_UI_URL on the
 // first start (realm import), which is fine: `down` removes the volumes every time.
 const SMOKE_SETTINGS = {
+  PROXY_PORT: '18088',
   API_PORT: '13000',
   WEB_PORT: '18080',
   KEYCLOAK_PORT: '18081',
