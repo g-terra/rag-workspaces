@@ -1,7 +1,7 @@
 ---
 title: guide the create-workspace wizard step by step
 date: 2026-11-23
-pr: pending
+pr: "#100"
 status: in review
 areas: [admin]
 ---
