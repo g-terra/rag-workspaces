@@ -13,6 +13,7 @@ import { and, eq } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
+import { assertSearchable } from '../services/reindex.js';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
 import { ChromaService, type StoredChunk } from '../services/chroma.js';
@@ -78,6 +79,7 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
     },
     async (req) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'reader');
+      assertSearchable(workspace);
       const { query, limit, minScore } = req.query;
       req.usage = { question: query };
       let hits;
@@ -106,6 +108,7 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
     },
     async (req) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'reader');
+      assertSearchable(workspace);
       const parsed = parsePassageId(req.params.passageId);
       const document = parsed && (await loadDocument(workspace, parsed.documentId));
       if (!parsed || !document || document.status !== 'ready')
@@ -136,6 +139,7 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
     },
     async (req) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'reader');
+      assertSearchable(workspace);
       const document = await loadDocument(workspace, req.params.documentId);
       if (!document) throw new HttpProblem(404, `No document ${req.params.documentId}`);
 

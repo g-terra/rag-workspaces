@@ -213,6 +213,34 @@ async function main() {
     });
   }
 
+  await step('reindexed the workspace: search waits, then every passage is back', async () => {
+    const started = await call(token, 'POST', `/v1/workspaces/${slug}/reindex`);
+    expect(started.status === 'reindexing', `expected reindexing, got ${started.status}`);
+    const blocked = await fetch(`${API}/v1/workspaces/${slug}/passages?query=notes`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    // The stand-in model is quick, so the reindex may already be over.
+    expect([200, 503].includes(blocked.status), `passages during reindex: ${blocked.status}`);
+    const again = await waitUntilReady(
+      token,
+      slug,
+      docs.map((d) => d.id),
+    );
+    const deadline = Date.now() + READY_TIMEOUT_MS;
+    while ((await call(token, 'GET', `/v1/workspaces/${slug}`)).status !== 'active') {
+      expect(Date.now() < deadline, 'workspace still reindexing with every document ready');
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    for (const doc of again) {
+      const passages = await passagesOf(collection, doc.id);
+      expect(
+        passages.length === doc.passageCount,
+        `${doc.fileName} after reindex: API says ${doc.passageCount}, Chroma has ${passages.length}`,
+      );
+    }
+  });
+
   await step('deleted the workspace, its Chroma collection is gone', async () => {
     await call(token, 'DELETE', `/v1/workspaces/${slug}`);
     const res = await chroma(`/collections/${collection}`);
