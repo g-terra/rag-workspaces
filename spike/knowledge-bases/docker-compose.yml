@@ -1,0 +1,45 @@
+# Spike stack: Langflow 1.13.3 with its native Knowledge bases on Postgres + pgvector.
+# One Postgres holds both Langflow's own tables and the knowledge-base vectors.
+# The model server (LM Studio, or poc/standin/server.ts) runs on the host.
+name: kb-spike
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment: { POSTGRES_USER: langflow, POSTGRES_PASSWORD: langflow, POSTGRES_DB: langflow }
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "langflow"]
+      interval: 2s
+      retries: 30
+
+  # Langflow does not run CREATE EXTENSION itself (F2 in RESULTS.md).
+  init-vector:
+    image: pgvector/pgvector:pg17
+    depends_on: { postgres: { condition: service_healthy } }
+    environment: { PGPASSWORD: langflow }
+    command: ["psql", "-h", "postgres", "-U", "langflow", "-d", "langflow", "-c", "CREATE EXTENSION IF NOT EXISTS vector"]
+
+  langflow:
+    # langflowai/langflow:1.13.3 plus the pgvector Python package (F1 in RESULTS.md).
+    build: .
+    image: kb-spike-langflow
+    ports: ["7860:7860"]
+    depends_on: { init-vector: { condition: service_completed_successfully } }
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    env_file: .env
+    environment:
+      LANGFLOW_AUTO_LOGIN: "false"
+      LANGFLOW_SKIP_AUTH_AUTO_LOGIN: "false"
+      LANGFLOW_DATABASE_URL: postgresql://langflow:langflow@postgres:5432/langflow
+      # Makes Postgres the default knowledge-base backend.
+      PGVECTOR_CONNECTION_STRING: postgresql://langflow:langflow@postgres:5432/langflow
+      LANGFLOW_SSRF_ALLOWED_HOSTS: host.docker.internal
+      LANGFLOW_COMPONENTS_PATH: /app/custom_components
+      DO_NOT_TRACK: "true"
+    volumes:
+      # The POC's page-aware document loader, plus this spike's delete component. Vectors go to
+      # native knowledge bases; the POC's Chroma components are not mounted.
+      - ../../poc/components/rag_workspaces/document_loader.py:/app/custom_components/rag_workspaces/document_loader.py:ro
+      - ../../poc/components/rag_workspaces/__init__.py:/app/custom_components/rag_workspaces/__init__.py:ro
+      - ./components/kb_spike:/app/custom_components/kb_spike:ro
+      - ../../poc/samples:/data/uploads:ro
