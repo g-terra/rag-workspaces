@@ -136,7 +136,10 @@ test('streams an answer with its sources, takes feedback, says when nothing matc
   // Asking again is a tab away, and the mode survives a reload.
   await page.reload();
   await expect(page.getByRole('tab', { name: 'Search' })).toHaveAttribute('aria-selected', 'true');
+  // Each tab says what it does, and the line follows the tab.
+  await expect(page.getByTestId('mode-help')).toContainText('No model is called');
   await page.getByRole('tab', { name: 'Ask' }).click();
+  await expect(page.getByTestId('mode-help')).toContainText('One question, one answer');
   await expect(page.getByLabel('Question')).toBeVisible();
 
   // Stop aborts the request. The route is held open rather than answered, so there is always a
@@ -171,20 +174,25 @@ test('holds a conversation, answers a follow-up from it and starts a new one', a
   // Chat mode is linkable, like the other modes.
   await page.goto(`/w/${loose.slug}/playground?mode=chat`);
   await expect(page.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('mode-help')).toContainText('follow-up questions');
 
   // The first message creates the conversation and streams the reply, with its sources.
   await send(page, QUESTION);
   await expect(page.getByTestId('reply')).not.toBeEmpty({ timeout: 60_000 });
   await expect(page.getByTestId('reply-meta')).toContainText(/\d+(\.\d+)? (ms|s)/, { timeout: 60_000 });
-  await expect(page.getByTestId('conversation-id')).toHaveText(/^cnv_/);
+  // The conversation is linked by name, never by its id.
+  const link = page.getByTestId('conversation-link');
+  await expect(link).toHaveText('Saved in Conversations');
+  await expect(link).toHaveAttribute('data-conversation-id', /^cnv_/);
+  await expect(page.getByText(/cnv_/)).toHaveCount(0);
   await expect(page.getByRole('complementary', { name: 'Sources' }).getByTestId('source')).toHaveCount(1);
-  const conversationId = (await page.getByTestId('conversation-id').textContent())!;
+  const conversationId = (await link.getAttribute('data-conversation-id'))!;
 
   // A follow-up joins the same conversation: the thread keeps the earlier turn above it.
   await send(page, 'Why does that matter?');
   await expect(page.getByTestId('turn')).toHaveCount(2);
   await expect(page.getByTestId('reply').nth(1)).not.toBeEmpty({ timeout: 60_000 });
-  await expect(page.getByTestId('conversation-id')).toHaveText(conversationId);
+  await expect(link).toHaveAttribute('data-conversation-id', conversationId);
 
   // The API has the whole thread, both sides of both turns, under that one conversation.
   const stored = await page.request.get(`/api/v1/workspaces/${loose.slug}/conversations/${conversationId}`, {
@@ -203,8 +211,8 @@ test('holds a conversation, answers a follow-up from it and starts a new one', a
   // A new conversation starts empty, and the next message gets a different id.
   await page.getByRole('button', { name: 'New conversation' }).click();
   await expect(page.getByTestId('turn')).toHaveCount(0);
-  await expect(page.getByTestId('conversation-id')).toHaveCount(0);
+  await expect(link).toHaveCount(0);
   await send(page, QUESTION);
-  await expect(page.getByTestId('conversation-id')).toHaveText(/^cnv_/, { timeout: 60_000 });
-  expect(await page.getByTestId('conversation-id').textContent()).not.toBe(conversationId);
+  await expect(link).toHaveAttribute('data-conversation-id', /^cnv_/, { timeout: 60_000 });
+  expect(await link.getAttribute('data-conversation-id')).not.toBe(conversationId);
 });
