@@ -30,9 +30,13 @@ class ChromaWorkspaceSearch(Component):
         StrInput(name="tenant", display_name="Tenant", value="default_tenant", advanced=True),
         StrInput(name="database", display_name="Database", value="default_database", advanced=True),
     ]
+    # group_outputs=True gives each output its own handle. Without it the editor shows one
+    # dropdown handle, pins it to the first output on load and drops every edge wired from the
+    # other one ("Some connections were removed because they were invalid"). Both outputs are
+    # used at once: context feeds the prompt, passages feed the citations output.
     outputs = [
-        Output(display_name="Passages", name="passages", method="get_passages"),
-        Output(display_name="Context", name="context", method="get_context"),
+        Output(display_name="Passages", name="passages", method="get_passages", group_outputs=True),
+        Output(display_name="Context", name="context", method="get_context", group_outputs=True),
     ]
 
     def _base(self) -> str:

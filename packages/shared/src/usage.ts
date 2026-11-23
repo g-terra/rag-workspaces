@@ -95,3 +95,11 @@ export const RequestLogEntry = z.object({
   completionTokens: z.number().int().nullable(),
   timeToFirstTokenMs: z.number().int().nullable(),
 });
+
+// The shapes the admin UI reads these routes into.
+export type UsageSummary = z.infer<typeof UsageSummary>;
+export type TimeseriesPoint = z.infer<typeof TimeseriesPoint>;
+export type Timeseries = z.infer<typeof Timeseries>;
+export type TopQuestions = z.infer<typeof TopQuestions>;
+export type TopDocuments = z.infer<typeof TopDocuments>;
+export type RequestLogEntry = z.infer<typeof RequestLogEntry>;

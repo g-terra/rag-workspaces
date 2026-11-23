@@ -53,6 +53,29 @@ export class ChromaService {
   }
 
   /**
+   * Set the `folder` metadata on every vector of one document (null removes it: top level).
+   * Chroma merges metadata on update, so the rest of each vector's metadata stays.
+   */
+  async setDocumentFolder(collection: string, documentId: string, folderId: string | null): Promise<void> {
+    const id = await this.collectionId(collection);
+    if (!id) return;
+    const found = await this.fetchFn(`${this.base}/collections/${id}/get`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ where: { document_id: documentId }, include: [] }),
+    });
+    if (!found.ok) throw new Error(`Chroma: find vectors of ${documentId} failed: HTTP ${found.status}`);
+    const { ids } = (await found.json()) as { ids: string[] };
+    if (!ids.length) return;
+    const res = await this.fetchFn(`${this.base}/collections/${id}/update`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ids, metadatas: ids.map(() => ({ folder: folderId })) }),
+    });
+    if (!res.ok) throw new Error(`Chroma: move vectors of ${documentId} failed: HTTP ${res.status}`);
+  }
+
+  /**
    * Read stored chunks by vector id (`<document id>:<chunk index>`), no similarity search.
    * Missing ids are left out; a missing collection gives an empty list.
    */

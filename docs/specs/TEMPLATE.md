@@ -3,7 +3,7 @@ title: <Same as the PR title, without the Conventional Commit type>
 date: <YYYY-MM-DD the spec was written>
 pr: <#number, or "pending" until the PR is open>
 status: <proposed | in review | merged | superseded by YYYY-MM-DD-topic.md>
-areas: [<api | db | flows | langflow-client | admin | infra | ci | docs>]
+areas: [<api | db | flows | langflow-client | admin | mcp | infra | ci | docs>]
 ---
 
 # <Title>

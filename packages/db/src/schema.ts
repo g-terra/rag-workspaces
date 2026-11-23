@@ -137,6 +137,26 @@ export const documentStatus = pgEnum('document_status', [
 ]);
 
 /**
+ * Optional groupings inside a workspace (a course code, a project), usable as a filter when
+ * searching and asking. Flat, and they isolate nothing. Passages carry the folder id in their
+ * Chroma metadata (`folder`), so a rename changes nothing there and a move updates it.
+ */
+export const folders = pgTable(
+  'folders',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    name: text().notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex('folders_workspace_name_key').on(t.workspaceId, sql`lower(${t.name})`)],
+);
+
+export type Folder = typeof folders.$inferSelect;
+
+/**
  * One uploaded file. Postgres is the source of truth: a document is searchable only when
  * its row is `ready`. The file lives on the uploads volume at `storagePath`.
  */
@@ -147,6 +167,8 @@ export const documents = pgTable(
     workspaceId: text()
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** Null: at the workspace's top level. Deleting the folder moves its documents there. */
+    folderId: text().references(() => folders.id, { onDelete: 'set null' }),
     title: text().notNull(),
     /** The name the file was uploaded with. */
     fileName: text().notNull(),
@@ -166,6 +188,7 @@ export const documents = pgTable(
   (t) => [
     uniqueIndex('documents_workspace_sha256_key').on(t.workspaceId, t.sha256),
     index('documents_workspace_status_idx').on(t.workspaceId, t.status),
+    index('documents_folder_idx').on(t.folderId),
   ],
 );
 

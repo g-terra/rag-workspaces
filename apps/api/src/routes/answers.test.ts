@@ -1,4 +1,4 @@
-import { answers, documents, newId, workspaces } from '@rag/db';
+import { answers, documents, folders, newId, workspaces } from '@rag/db';
 import { createTestDatabase } from '@rag/db/testing';
 import { LangflowClient } from '@rag/langflow-client';
 import { eq } from 'drizzle-orm';
@@ -218,6 +218,21 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
       provider: null,
     });
     expect(runs.map((r) => r.flow)).toEqual(['rw-retrieve']);
+  });
+
+  /** A folder in `ouc`, made straight in the database. */
+  async function oucFolder() {
+    const [ws] = await t.db.select().from(workspaces).where(eq(workspaces.slug, 'ouc'));
+    const id = newId('folder');
+    await t.db.insert(folders).values({ id, workspaceId: ws!.id, name: id });
+    return id;
+  }
+
+  it('folderId limits both searches to that folder; a folder from elsewhere is 404', async () => {
+    const folderId = await oucFolder();
+    expect((await ask({ question: 'x', folderId })).statusCode).toBe(201);
+    expect(runs.map((r) => r.body.tweaks.Search!.folder)).toEqual([folderId, folderId]);
+    expect((await ask({ question: 'x', folderId: 'fld_nope' })).statusCode).toBe(404);
   });
 
   it('maxPassages sets how many passages the model gets', async () => {
