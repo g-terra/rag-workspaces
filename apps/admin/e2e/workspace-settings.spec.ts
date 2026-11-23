@@ -52,6 +52,9 @@ test('an admin changes a workspace’s name and retrieval settings, and they sti
   await page.getByLabel('Name').fill(`E2E renamed ${run}`);
   await page.getByLabel('Top-k passages').fill('7');
   await page.getByLabel('Relevance threshold').fill('0.4');
+  // The smoke stack sets no DEFAULT_REASONING_EFFORT, so the note says nothing is sent.
+  await expect(page.getByText(/Default: not sent, so the model decides\./)).toBeVisible();
+  await page.getByLabel('Reasoning effort').selectOption('none');
   await expect(saveButton).toBeEnabled();
   await saveButton.click();
   await expect(page.getByText('Settings saved.')).toBeVisible();
@@ -64,6 +67,7 @@ test('an admin changes a workspace’s name and retrieval settings, and they sti
   await page.reload();
   await expect(page.getByLabel('Top-k passages')).toHaveValue('7');
   await expect(page.getByLabel('Relevance threshold')).toHaveValue('0.4');
+  await expect(page.getByLabel('Reasoning effort')).toHaveValue('none');
 
   // Emptying a number sends null, and the field goes back to showing the API's own default.
   await page.getByLabel('Top-k passages').fill('');
