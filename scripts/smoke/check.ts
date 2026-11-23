@@ -414,6 +414,34 @@ async function main() {
     );
   });
 
+  await step('a numbered list stays in one passage with the sentence that introduces it', async () => {
+    // About 1,000 characters at the default chunk size of 800: a paragraph, then a list that fits in one
+    // chunk. Cutting at any space put the cut in the middle of an item.
+    const intro = 'Resolution needs every formula in clausal form before it can start. '.repeat(9);
+    const items = Array.from(
+      { length: 6 },
+      (_, i) => `${i + 1}. Step ${i + 1} of the conversion, written out in a full sentence.`,
+    );
+    const text = `${intro.trim()}\n\nThe conversion has six steps:\n${items.join('\n')}\n`;
+    const form = new FormData();
+    form.append('files', new Blob([text]), 'clausal-form.md');
+    const { data } = (await call(token, 'POST', `/v1/workspaces/${slug}/documents`, form)) as {
+      data: { document: Doc }[];
+    };
+    const [doc] = await waitUntilReady(token, slug, [data[0]!.document.id]);
+    const { data: passages } = (await call(
+      token,
+      'GET',
+      `/v1/workspaces/${slug}/documents/${doc!.id}/passages`,
+    )) as { data: { text: string }[] };
+    expect(
+      passages.some(
+        (p) => p.text.includes('The conversion has six steps:') && items.every((i) => p.text.includes(i)),
+      ),
+      `no passage holds the whole list: ${JSON.stringify(passages.map((p) => p.text))}`,
+    );
+  });
+
   await step('deleted the workspace, its Chroma collection is gone', async () => {
     await call(token, 'DELETE', `/v1/workspaces/${slug}`);
     const res = await chroma(`/collections/${collection}`);
