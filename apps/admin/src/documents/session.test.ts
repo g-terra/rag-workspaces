@@ -14,6 +14,7 @@ function doc(over: Partial<Document> = {}): Document {
   return {
     id: 'doc_1',
     workspace: 'ouc',
+    folderId: null,
     title: 'notes',
     fileName: 'notes.md',
     type: 'md',

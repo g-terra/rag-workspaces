@@ -5,7 +5,7 @@ RUN corepack enable
 WORKDIR /repo
 COPY . .
 # Keycloak as the browser sees it; Vite bakes it into the bundle (apps/admin/src/auth/oidc.ts).
-ARG KEYCLOAK_PUBLIC_URL=http://localhost:8081
+ARG KEYCLOAK_PUBLIC_URL=http://auth.rag.localhost
 ENV VITE_KEYCLOAK_URL=$KEYCLOAK_PUBLIC_URL
 RUN pnpm install --frozen-lockfile
 RUN pnpm turbo run build --filter=@rag/admin...

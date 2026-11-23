@@ -2,7 +2,7 @@
   "id": "5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e05",
   "name": "rw-chat",
   "endpoint_name": "rw-chat",
-  "description": "Answer the latest message of a conversation from the workspace collection, streaming tokens. The API sends the history. Tweak Question, History, Search, Embeddings, LLM, Prompt.",
+  "description": "Answer the latest message of a conversation from the workspace collection, streaming tokens. The API sends the history. Tweak Search, Embeddings, LLM, Prompt (question and history).",
   "data": {
     "nodes": [
       {
@@ -303,292 +303,6 @@
         }
       },
       {
-        "id": "Question",
-        "type": "genericNode",
-        "position": {
-          "x": 0,
-          "y": 150
-        },
-        "data": {
-          "id": "Question",
-          "type": "TextInput",
-          "node": {
-            "base_classes": [
-              "Message"
-            ],
-            "beta": false,
-            "conditional_paths": [],
-            "custom_fields": {},
-            "description": "Get user text inputs.",
-            "display_name": "Text Input",
-            "documentation": "https://docs.langflow.org/text-input-and-output",
-            "edited": false,
-            "field_order": [
-              "input_value",
-              "use_global_variable"
-            ],
-            "frozen": false,
-            "icon": "type",
-            "legacy": true,
-            "metadata": {
-              "code_hash": "2811c0e0496f",
-              "component_class_name": "TextInputComponent",
-              "dependencies": {
-                "dependencies": [
-                  {
-                    "name": "lfx",
-                    "version": null
-                  }
-                ],
-                "total_dependencies": 1
-              },
-              "module": "lfx.components.input_output.text.TextInputComponent"
-            },
-            "minimized": false,
-            "output_types": [],
-            "outputs": [
-              {
-                "allows_loop": false,
-                "cache": true,
-                "display_name": "Output Text",
-                "group_outputs": false,
-                "method": "text_response",
-                "name": "text",
-                "selected": "Message",
-                "tool_mode": true,
-                "types": [
-                  "Message"
-                ],
-                "value": "__UNDEFINED__"
-              }
-            ],
-            "pinned": false,
-            "replacement": [
-              "input_output.ChatInput"
-            ],
-            "template": {
-              "_type": "Component",
-              "code": {
-                "advanced": true,
-                "api_editable": false,
-                "dynamic": true,
-                "fileTypes": [],
-                "file_path": "",
-                "info": "",
-                "list": false,
-                "load_from_db": false,
-                "multiline": true,
-                "name": "code",
-                "password": false,
-                "placeholder": "",
-                "required": true,
-                "show": true,
-                "title_case": false,
-                "type": "code",
-                "value": "from typing import Any\n\nfrom lfx.base.io.text import TextComponent\nfrom lfx.io import BoolInput, MultilineInput, Output\nfrom lfx.schema.message import Message\n\n\nclass TextInputComponent(TextComponent):\n    display_name = \"Text Input\"\n    description = \"Get user text inputs.\"\n    documentation: str = \"https://docs.langflow.org/text-input-and-output\"\n    icon = \"type\"\n    name = \"TextInput\"\n    legacy = True\n    replacement = [\"input_output.ChatInput\"]\n\n    inputs = [\n        MultilineInput(\n            name=\"input_value\",\n            display_name=\"Text\",\n            info=\"Text to be passed as input.\",\n        ),\n        BoolInput(\n            name=\"use_global_variable\",\n            display_name=\"Use Global Variable\",\n            info=\"Enable to select from global variables (shows globe icon). Disables multiline editing.\",\n            value=False,\n            advanced=True,\n            real_time_refresh=True,\n        ),\n    ]\n    outputs = [\n        Output(display_name=\"Output Text\", name=\"text\", method=\"text_response\"),\n    ]\n\n    def update_build_config(self, build_config: dict, field_value: Any, field_name: str | None = None) -> dict:\n        if field_name == \"use_global_variable\":\n            if field_value:\n                # Enable global variable mode: single-line with password masking and globe dropdown\n                build_config[\"input_value\"][\"multiline\"] = False\n                build_config[\"input_value\"][\"password\"] = True\n            else:\n                # Default mode: multiline text editing\n                build_config[\"input_value\"][\"multiline\"] = True\n                build_config[\"input_value\"][\"password\"] = False\n        return build_config\n\n    def text_response(self) -> Message:\n        return Message(\n            text=self.input_value,\n        )\n"
-              },
-              "input_value": {
-                "_input_type": "MultilineInput",
-                "advanced": false,
-                "ai_enabled": false,
-                "api_editable": false,
-                "copy_field": false,
-                "display_name": "Text",
-                "dynamic": false,
-                "info": "Text to be passed as input.",
-                "input_types": [
-                  "Message"
-                ],
-                "list": false,
-                "list_add_label": "Add More",
-                "load_from_db": false,
-                "multiline": true,
-                "name": "input_value",
-                "override_skip": false,
-                "password": false,
-                "placeholder": "",
-                "required": false,
-                "show": true,
-                "title_case": false,
-                "tool_mode": false,
-                "trace_as_input": true,
-                "trace_as_metadata": true,
-                "track_in_telemetry": false,
-                "type": "str",
-                "value": ""
-              },
-              "use_global_variable": {
-                "_input_type": "BoolInput",
-                "advanced": true,
-                "api_editable": false,
-                "display_name": "Use Global Variable",
-                "dynamic": false,
-                "info": "Enable to select from global variables (shows globe icon). Disables multiline editing.",
-                "list": false,
-                "list_add_label": "Add More",
-                "name": "use_global_variable",
-                "override_skip": false,
-                "placeholder": "",
-                "real_time_refresh": true,
-                "required": false,
-                "show": true,
-                "title_case": false,
-                "tool_mode": false,
-                "trace_as_metadata": true,
-                "track_in_telemetry": true,
-                "type": "bool",
-                "value": false
-              }
-            },
-            "tool_mode": false
-          },
-          "showNode": true
-        }
-      },
-      {
-        "id": "History",
-        "type": "genericNode",
-        "position": {
-          "x": 0,
-          "y": 450
-        },
-        "data": {
-          "id": "History",
-          "type": "TextInput",
-          "node": {
-            "base_classes": [
-              "Message"
-            ],
-            "beta": false,
-            "conditional_paths": [],
-            "custom_fields": {},
-            "description": "Get user text inputs.",
-            "display_name": "Text Input",
-            "documentation": "https://docs.langflow.org/text-input-and-output",
-            "edited": false,
-            "field_order": [
-              "input_value",
-              "use_global_variable"
-            ],
-            "frozen": false,
-            "icon": "type",
-            "legacy": true,
-            "metadata": {
-              "code_hash": "2811c0e0496f",
-              "component_class_name": "TextInputComponent",
-              "dependencies": {
-                "dependencies": [
-                  {
-                    "name": "lfx",
-                    "version": null
-                  }
-                ],
-                "total_dependencies": 1
-              },
-              "module": "lfx.components.input_output.text.TextInputComponent"
-            },
-            "minimized": false,
-            "output_types": [],
-            "outputs": [
-              {
-                "allows_loop": false,
-                "cache": true,
-                "display_name": "Output Text",
-                "group_outputs": false,
-                "method": "text_response",
-                "name": "text",
-                "selected": "Message",
-                "tool_mode": true,
-                "types": [
-                  "Message"
-                ],
-                "value": "__UNDEFINED__"
-              }
-            ],
-            "pinned": false,
-            "replacement": [
-              "input_output.ChatInput"
-            ],
-            "template": {
-              "_type": "Component",
-              "code": {
-                "advanced": true,
-                "api_editable": false,
-                "dynamic": true,
-                "fileTypes": [],
-                "file_path": "",
-                "info": "",
-                "list": false,
-                "load_from_db": false,
-                "multiline": true,
-                "name": "code",
-                "password": false,
-                "placeholder": "",
-                "required": true,
-                "show": true,
-                "title_case": false,
-                "type": "code",
-                "value": "from typing import Any\n\nfrom lfx.base.io.text import TextComponent\nfrom lfx.io import BoolInput, MultilineInput, Output\nfrom lfx.schema.message import Message\n\n\nclass TextInputComponent(TextComponent):\n    display_name = \"Text Input\"\n    description = \"Get user text inputs.\"\n    documentation: str = \"https://docs.langflow.org/text-input-and-output\"\n    icon = \"type\"\n    name = \"TextInput\"\n    legacy = True\n    replacement = [\"input_output.ChatInput\"]\n\n    inputs = [\n        MultilineInput(\n            name=\"input_value\",\n            display_name=\"Text\",\n            info=\"Text to be passed as input.\",\n        ),\n        BoolInput(\n            name=\"use_global_variable\",\n            display_name=\"Use Global Variable\",\n            info=\"Enable to select from global variables (shows globe icon). Disables multiline editing.\",\n            value=False,\n            advanced=True,\n            real_time_refresh=True,\n        ),\n    ]\n    outputs = [\n        Output(display_name=\"Output Text\", name=\"text\", method=\"text_response\"),\n    ]\n\n    def update_build_config(self, build_config: dict, field_value: Any, field_name: str | None = None) -> dict:\n        if field_name == \"use_global_variable\":\n            if field_value:\n                # Enable global variable mode: single-line with password masking and globe dropdown\n                build_config[\"input_value\"][\"multiline\"] = False\n                build_config[\"input_value\"][\"password\"] = True\n            else:\n                # Default mode: multiline text editing\n                build_config[\"input_value\"][\"multiline\"] = True\n                build_config[\"input_value\"][\"password\"] = False\n        return build_config\n\n    def text_response(self) -> Message:\n        return Message(\n            text=self.input_value,\n        )\n"
-              },
-              "input_value": {
-                "_input_type": "MultilineInput",
-                "advanced": false,
-                "ai_enabled": false,
-                "api_editable": false,
-                "copy_field": false,
-                "display_name": "Text",
-                "dynamic": false,
-                "info": "Text to be passed as input.",
-                "input_types": [
-                  "Message"
-                ],
-                "list": false,
-                "list_add_label": "Add More",
-                "load_from_db": false,
-                "multiline": true,
-                "name": "input_value",
-                "override_skip": false,
-                "password": false,
-                "placeholder": "",
-                "required": false,
-                "show": true,
-                "title_case": false,
-                "tool_mode": false,
-                "trace_as_input": true,
-                "trace_as_metadata": true,
-                "track_in_telemetry": false,
-                "type": "str",
-                "value": ""
-              },
-              "use_global_variable": {
-                "_input_type": "BoolInput",
-                "advanced": true,
-                "api_editable": false,
-                "display_name": "Use Global Variable",
-                "dynamic": false,
-                "info": "Enable to select from global variables (shows globe icon). Disables multiline editing.",
-                "list": false,
-                "list_add_label": "Add More",
-                "name": "use_global_variable",
-                "override_skip": false,
-                "placeholder": "",
-                "real_time_refresh": true,
-                "required": false,
-                "show": true,
-                "title_case": false,
-                "tool_mode": false,
-                "trace_as_metadata": true,
-                "track_in_telemetry": true,
-                "type": "bool",
-                "value": false
-              }
-            },
-            "tool_mode": false
-          },
-          "showNode": true
-        }
-      },
-      {
         "id": "Embeddings",
         "type": "genericNode",
         "position": {
@@ -850,7 +564,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Search a workspace's Chroma collection and return structured passages.\n\nTwo outputs: `passages` (a JSON object with text, score, document_id, page,\nfilename, chunk_index per hit) and `context` (the same passages formatted for a\nprompt, each tagged [n] so the model can cite them).\n\"\"\"\n\nimport httpx\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import FloatInput, HandleInput, IntInput, MessageTextInput, Output, StrInput\nfrom lfx.schema.data import Data\nfrom lfx.schema.message import Message\n\n\nclass ChromaWorkspaceSearch(Component):\n    display_name = \"Chroma Workspace Search\"\n    description = \"Similarity search in a workspace collection, returning passages with score, document id and page.\"\n    icon = \"search\"\n    name = \"ChromaWorkspaceSearch\"\n\n    inputs = [\n        MessageTextInput(name=\"search_query\", display_name=\"Search Query\", required=True),\n        HandleInput(name=\"embedding\", display_name=\"Embedding\", input_types=[\"Embeddings\"], required=True),\n        StrInput(name=\"collection_name\", display_name=\"Collection Name\", value=\"ws_default\", required=True),\n        IntInput(name=\"top_k\", display_name=\"Top K\", value=4),\n        MessageTextInput(name=\"folder\", display_name=\"Folder Filter\", info=\"Only search this folder, if set.\"),\n        FloatInput(name=\"min_score\", display_name=\"Min Score\", value=0.0, advanced=True),\n        StrInput(name=\"chroma_url\", display_name=\"Chroma URL\", value=\"http://chroma:8000\", advanced=True),\n        StrInput(name=\"tenant\", display_name=\"Tenant\", value=\"default_tenant\", advanced=True),\n        StrInput(name=\"database\", display_name=\"Database\", value=\"default_database\", advanced=True),\n    ]\n    outputs = [\n        Output(display_name=\"Passages\", name=\"passages\", method=\"get_passages\"),\n        Output(display_name=\"Context\", name=\"context\", method=\"get_context\"),\n    ]\n\n    def _base(self) -> str:\n        return f\"{self.chroma_url.rstrip('/')}/api/v2/tenants/{self.tenant}/databases/{self.database}\"\n\n    def _search(self) -> list[dict]:\n        if hasattr(self, \"_cached\"):\n            return self._cached\n        with httpx.Client(timeout=60) as client:\n            r = client.get(f\"{self._base()}/collections/{self.collection_name}\")\n            if r.status_code == 404:\n                self._cached = []\n                return self._cached\n            r.raise_for_status()\n            cid = r.json()[\"id\"]\n            body = {\n                \"query_embeddings\": [self.embedding.embed_query(self.search_query)],\n                \"n_results\": self.top_k,\n                \"include\": [\"documents\", \"metadatas\", \"distances\"],\n            }\n            if self.folder:\n                body[\"where\"] = {\"folder\": self.folder}\n            r = client.post(f\"{self._base()}/collections/{cid}/query\", json=body)\n            r.raise_for_status()\n            res = r.json()\n        passages = []\n        for rank, (pid, doc, meta, dist) in enumerate(\n            zip(res[\"ids\"][0], res[\"documents\"][0], res[\"metadatas\"][0], res[\"distances\"][0], strict=True), start=1\n        ):\n            meta = meta or {}\n            score = round(1.0 - float(dist), 4)  # cosine similarity\n            if score < self.min_score:\n                continue\n            passages.append({\n                \"rank\": rank,\n                \"id\": pid,\n                \"text\": doc,\n                \"score\": score,\n                \"document_id\": meta.get(\"document_id\"),\n                \"filename\": meta.get(\"filename\"),\n                \"folder\": meta.get(\"folder\"),\n                \"page\": meta.get(\"page\"),\n                \"chunk_index\": meta.get(\"chunk_index\"),\n            })\n        self._cached = passages\n        return passages\n\n    def get_passages(self) -> Data:\n        passages = self._search()\n        self.status = f\"{len(passages)} passage(s)\"\n        return Data(data={\"collection\": self.collection_name, \"query\": self.search_query, \"passages\": passages})\n\n    def get_context(self) -> Message:\n        passages = self._search()\n        blocks = []\n        for p in passages:\n            where = p[\"filename\"] or p[\"document_id\"]\n            if p.get(\"page\"):\n                where += f\", page {p['page']}\"\n            blocks.append(f\"[{p['rank']}] ({where})\\n{p['text']}\")\n        return Message(text=\"\\n\\n\".join(blocks) if blocks else \"No relevant passages found.\")\n\n\n",
+                "value": "\"\"\"Search a workspace's Chroma collection and return structured passages.\n\nTwo outputs: `passages` (a JSON object with text, score, document_id, page,\nfilename, chunk_index per hit) and `context` (the same passages formatted for a\nprompt, each tagged [n] so the model can cite them).\n\"\"\"\n\nimport httpx\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import FloatInput, HandleInput, IntInput, MessageTextInput, Output, StrInput\nfrom lfx.schema.data import Data\nfrom lfx.schema.message import Message\n\n\nclass ChromaWorkspaceSearch(Component):\n    display_name = \"Chroma Workspace Search\"\n    description = \"Similarity search in a workspace collection, returning passages with score, document id and page.\"\n    icon = \"search\"\n    name = \"ChromaWorkspaceSearch\"\n\n    inputs = [\n        MessageTextInput(name=\"search_query\", display_name=\"Search Query\", required=True),\n        HandleInput(name=\"embedding\", display_name=\"Embedding\", input_types=[\"Embeddings\"], required=True),\n        StrInput(name=\"collection_name\", display_name=\"Collection Name\", value=\"ws_default\", required=True),\n        IntInput(name=\"top_k\", display_name=\"Top K\", value=4),\n        MessageTextInput(name=\"folder\", display_name=\"Folder Filter\", info=\"Only search this folder, if set.\"),\n        FloatInput(name=\"min_score\", display_name=\"Min Score\", value=0.0, advanced=True),\n        StrInput(name=\"chroma_url\", display_name=\"Chroma URL\", value=\"http://chroma:8000\", advanced=True),\n        StrInput(name=\"tenant\", display_name=\"Tenant\", value=\"default_tenant\", advanced=True),\n        StrInput(name=\"database\", display_name=\"Database\", value=\"default_database\", advanced=True),\n    ]\n    # group_outputs=True gives each output its own handle. Without it the editor shows one\n    # dropdown handle, pins it to the first output on load and drops every edge wired from the\n    # other one (\"Some connections were removed because they were invalid\"). Both outputs are\n    # used at once: context feeds the prompt, passages feed the citations output.\n    outputs = [\n        Output(display_name=\"Passages\", name=\"passages\", method=\"get_passages\", group_outputs=True),\n        Output(display_name=\"Context\", name=\"context\", method=\"get_context\", group_outputs=True),\n    ]\n\n    def _base(self) -> str:\n        return f\"{self.chroma_url.rstrip('/')}/api/v2/tenants/{self.tenant}/databases/{self.database}\"\n\n    def _search(self) -> list[dict]:\n        if hasattr(self, \"_cached\"):\n            return self._cached\n        with httpx.Client(timeout=60) as client:\n            r = client.get(f\"{self._base()}/collections/{self.collection_name}\")\n            if r.status_code == 404:\n                self._cached = []\n                return self._cached\n            r.raise_for_status()\n            cid = r.json()[\"id\"]\n            body = {\n                \"query_embeddings\": [self.embedding.embed_query(self.search_query)],\n                \"n_results\": self.top_k,\n                \"include\": [\"documents\", \"metadatas\", \"distances\"],\n            }\n            if self.folder:\n                body[\"where\"] = {\"folder\": self.folder}\n            r = client.post(f\"{self._base()}/collections/{cid}/query\", json=body)\n            r.raise_for_status()\n            res = r.json()\n        passages = []\n        for rank, (pid, doc, meta, dist) in enumerate(\n            zip(res[\"ids\"][0], res[\"documents\"][0], res[\"metadatas\"][0], res[\"distances\"][0], strict=True), start=1\n        ):\n            meta = meta or {}\n            score = round(1.0 - float(dist), 4)  # cosine similarity\n            if score < self.min_score:\n                continue\n            passages.append({\n                \"rank\": rank,\n                \"id\": pid,\n                \"text\": doc,\n                \"score\": score,\n                \"document_id\": meta.get(\"document_id\"),\n                \"filename\": meta.get(\"filename\"),\n                \"folder\": meta.get(\"folder\"),\n                \"page\": meta.get(\"page\"),\n                \"chunk_index\": meta.get(\"chunk_index\"),\n            })\n        self._cached = passages\n        return passages\n\n    def get_passages(self) -> Data:\n        passages = self._search()\n        self.status = f\"{len(passages)} passage(s)\"\n        return Data(data={\"collection\": self.collection_name, \"query\": self.search_query, \"passages\": passages})\n\n    def get_context(self) -> Message:\n        passages = self._search()\n        blocks = []\n        for p in passages:\n            where = p[\"filename\"] or p[\"document_id\"]\n            if p.get(\"page\"):\n                where += f\", page {p['page']}\"\n            blocks.append(f\"[{p['rank']}] ({where})\\n{p['text']}\")\n        return Message(text=\"\\n\\n\".join(blocks) if blocks else \"No relevant passages found.\")\n\n\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -1049,7 +763,7 @@
                 "value": "__UNDEFINED__",
                 "cache": true,
                 "allows_loop": false,
-                "group_outputs": false,
+                "group_outputs": true,
                 "tool_mode": true
               },
               {
@@ -1063,7 +777,7 @@
                 "value": "__UNDEFINED__",
                 "cache": true,
                 "allows_loop": false,
-                "group_outputs": false,
+                "group_outputs": true,
                 "tool_mode": true
               }
             ],
@@ -1084,7 +798,7 @@
             "metadata": {
               "component_class_name": "ChromaWorkspaceSearch",
               "module": "_lfx_ext.extra.rag_workspaces.chroma_search",
-              "code_hash": "bd8cb89eb333",
+              "code_hash": "a3614626af0c",
               "dependencies": {
                 "total_dependencies": 2,
                 "dependencies": [
@@ -2310,60 +2024,6 @@
           "targetHandle": {
             "fieldName": "search_query",
             "id": "Search",
-            "inputTypes": [
-              "Message"
-            ],
-            "type": "str"
-          }
-        },
-        "animated": false,
-        "className": ""
-      },
-      {
-        "id": "reactflow__edge-Question{œdataTypeœ:œTextInputœ,œidœ:œQuestionœ,œnameœ:œtextœ,œoutput_typesœ:[œMessageœ]}-Prompt{œfieldNameœ:œquestionœ,œidœ:œPromptœ,œinputTypesœ:[œMessageœ],œtypeœ:œstrœ}",
-        "source": "Question",
-        "target": "Prompt",
-        "sourceHandle": "{œdataTypeœ:œTextInputœ,œidœ:œQuestionœ,œnameœ:œtextœ,œoutput_typesœ:[œMessageœ]}",
-        "targetHandle": "{œfieldNameœ:œquestionœ,œidœ:œPromptœ,œinputTypesœ:[œMessageœ],œtypeœ:œstrœ}",
-        "data": {
-          "sourceHandle": {
-            "dataType": "TextInput",
-            "id": "Question",
-            "name": "text",
-            "output_types": [
-              "Message"
-            ]
-          },
-          "targetHandle": {
-            "fieldName": "question",
-            "id": "Prompt",
-            "inputTypes": [
-              "Message"
-            ],
-            "type": "str"
-          }
-        },
-        "animated": false,
-        "className": ""
-      },
-      {
-        "id": "reactflow__edge-History{œdataTypeœ:œTextInputœ,œidœ:œHistoryœ,œnameœ:œtextœ,œoutput_typesœ:[œMessageœ]}-Prompt{œfieldNameœ:œhistoryœ,œidœ:œPromptœ,œinputTypesœ:[œMessageœ],œtypeœ:œstrœ}",
-        "source": "History",
-        "target": "Prompt",
-        "sourceHandle": "{œdataTypeœ:œTextInputœ,œidœ:œHistoryœ,œnameœ:œtextœ,œoutput_typesœ:[œMessageœ]}",
-        "targetHandle": "{œfieldNameœ:œhistoryœ,œidœ:œPromptœ,œinputTypesœ:[œMessageœ],œtypeœ:œstrœ}",
-        "data": {
-          "sourceHandle": {
-            "dataType": "TextInput",
-            "id": "History",
-            "name": "text",
-            "output_types": [
-              "Message"
-            ]
-          },
-          "targetHandle": {
-            "fieldName": "history",
-            "id": "Prompt",
             "inputTypes": [
               "Message"
             ],

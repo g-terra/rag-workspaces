@@ -1,0 +1,29 @@
+# Local names for the stack, over plain HTTP. Browsers resolve *.localhost to this machine by
+# themselves, so there is nothing to add to /etc/hosts. The direct ports (8080, 3000, 8081, 7860)
+# keep working next to these names.
+{
+	auto_https off
+	admin off
+}
+
+http://rag.localhost {
+	reverse_proxy web:8080
+}
+
+http://api.rag.localhost {
+	reverse_proxy api:3000
+}
+
+http://auth.rag.localhost {
+	reverse_proxy keycloak:8080
+}
+
+http://langflow.rag.localhost {
+	reverse_proxy langflow:7860
+}
+
+# Any other name, and the healthcheck.
+:80 {
+	respond /healthz 200
+	respond "Open http://rag.localhost (admin UI), api.rag.localhost, auth.rag.localhost or langflow.rag.localhost." 404
+}

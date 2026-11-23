@@ -1,0 +1,54 @@
+name: E2E
+
+# The admin UI's Playwright tests in a real browser against the whole compose stack: the smoke stack
+# (scripts/smoke/stack.ts, docker-compose.smoke.yml) with the stand-in model, signed in through the
+# real Keycloak (docs/specs/2026-11-23-admin-e2e-ci.md). Slow, so it runs only on pull requests that
+# touch the admin UI or the stack under it, nightly on main, and on demand.
+on:
+  pull_request:
+    paths:
+      - 'apps/admin/**'
+      - 'apps/api/**'
+      - 'packages/**'
+      - 'flows/**'
+      - 'langflow/**'
+      - 'docker/**'
+      - 'docker-compose*.yml'
+      - 'poc/standin/**'
+      - 'scripts/smoke/**'
+      - '.env.example'
+      - '.dockerignore'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/e2e.yml'
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: Admin UI Playwright
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @rag/admin exec playwright install --with-deps chromium
+      - run: pnpm e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            apps/admin/playwright-report/
+            apps/admin/test-results/
+          retention-days: 7

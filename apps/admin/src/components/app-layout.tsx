@@ -1,4 +1,4 @@
-import { Layers, LogOut } from 'lucide-react';
+import { BarChart3, KeyRound, Layers, LogOut } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '@/auth/auth-context';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,12 @@ export function AppLayout() {
             <p className="text-muted-foreground mb-1 px-2.5 text-xs font-medium">Admin</p>
             <NavLink to="/workspaces" className={navItemClass}>
               <Layers className="size-4" /> All workspaces
+            </NavLink>
+            <NavLink to="/api-keys" className={navItemClass}>
+              <KeyRound className="size-4" /> API keys
+            </NavLink>
+            <NavLink to="/usage" className={navItemClass}>
+              <BarChart3 className="size-4" /> Usage
             </NavLink>
           </nav>
         )}

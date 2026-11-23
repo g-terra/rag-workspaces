@@ -1,0 +1,32 @@
+{
+  "name": "@rag/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP server that lets agents search and ask a rag-workspaces workspace through the REST API.",
+  "type": "module",
+  "bin": {
+    "rag-workspaces-mcp": "dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@rag/shared": "workspace:*",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@rag/config": "workspace:*",
+    "@types/node": "22.20.5",
+    "eslint": "9.39.5",
+    "typescript": "5.9.3",
+    "vitest": "5.1.1"
+  }
+}

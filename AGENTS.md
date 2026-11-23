@@ -3,6 +3,10 @@
 Guidance for AI coding agents (Claude Code, Codex, Cursor and others). People are welcome to read it too.
 `CLAUDE.md` only imports this file, so keep everything here.
 
+> **Handover (2026-11-23):** the work moved from Claude Code to another agent mid-build. Read
+> [docs/HANDOVER.md](docs/HANDOVER.md) first: the branches in flight, what is left in priority order and
+> the owner's open questions.
+
 ## What this is
 
 A self-hosted RAG platform built on Langflow: isolated **workspaces** of material, each with its own
@@ -79,19 +83,24 @@ package and caches the results.
 
 ```sh
 pnpm install          # dependencies, plus the commit-message hook
+pnpm run setup        # guided setup: .env, models, start the stack (`--yes` for no questions)
 pnpm format:check     # Prettier (pnpm format to fix)
 pnpm lint             # ESLint
 pnpm typecheck        # tsc --noEmit
 pnpm test             # Vitest
+pnpm test:scripts     # node:test for scripts/ (no package of their own)
 pnpm build
 pnpm smoke            # whole compose stack + stand-in model, end to end (Docker, ~5 min)
+pnpm e2e              # admin UI Playwright tests on that same stack (Docker + Chromium)
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same five checks on every pull request. Run them before you
+CI (`.github/workflows/ci.yml`) runs the same six checks on every pull request. Run them before you
 push. The smoke test (`.github/workflows/smoke.yml`) runs on pull requests that touch the stack
 (`apps/api`, `packages`, `flows`, `langflow`, `docker`, the compose files) and nightly on `main`; run
 it locally before pushing such a change. `pnpm smoke --keep` leaves its stack running on ports 13000
 (API), 18080 (admin UI) and 18081 (Keycloak); the login is in `.env.smoke`.
+The admin UI's Playwright tests (`.github/workflows/e2e.yml`, `pnpm e2e`) run on that same stack, on
+pull requests that touch `apps/admin` or the stack, and nightly on `main`.
 
 ## Langflow
 
