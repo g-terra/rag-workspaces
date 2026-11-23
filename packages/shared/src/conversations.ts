@@ -36,7 +36,11 @@ export type ConversationWithMessages = z.infer<typeof ConversationWithMessages>;
 
 export const CreateConversation = z.object({ title: z.string().trim().min(1).max(200).optional() });
 
-export const SendMessage = z.object({ content: z.string().trim().min(1).max(4000) });
+export const SendMessage = z.object({
+  content: z.string().trim().min(1).max(4000),
+  /** Only use passages from documents in this folder, for this message. */
+  folderId: z.string().min(1).optional(),
+});
 export type SendMessage = z.infer<typeof SendMessage>;
 
 export const ConversationQuery = z.object({

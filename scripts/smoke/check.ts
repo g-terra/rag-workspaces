@@ -297,7 +297,7 @@ async function main() {
   });
 
   await step(
-    'folders: a moved document takes its passages along, and back out when the folder goes',
+    'folders: a moved document takes its passages along, search can stay inside one, and deleting it moves them out',
     async () => {
       const doc = docs[0]!;
       const folder = await call(token, 'POST', `/v1/workspaces/${slug}/folders`, { name: 'Week 1' });
@@ -307,6 +307,23 @@ async function main() {
         inside.length > 0 && inside.every((p) => p.folder === folder.id),
         `after the move: ${JSON.stringify(inside.map((p) => p.folder))}`,
       );
+      // Search through the real flow: only the moved document's passages, and nothing from an empty folder.
+      const hits = await call(
+        token,
+        'GET',
+        `/v1/workspaces/${slug}/passages?query=notes&minScore=0&limit=20&folderId=${folder.id}`,
+      );
+      expect(
+        hits.data.length > 0 && hits.data.every((h: { documentId: string }) => h.documentId === doc.id),
+        `search in the folder: ${JSON.stringify(hits.data.map((h: { documentId: string }) => h.documentId))}`,
+      );
+      const empty = await call(token, 'POST', `/v1/workspaces/${slug}/folders`, { name: 'Empty' });
+      const none = await call(
+        token,
+        'GET',
+        `/v1/workspaces/${slug}/passages?query=notes&minScore=0&folderId=${empty.id}`,
+      );
+      expect(none.data.length === 0, `search in an empty folder found ${none.data.length}`);
       await call(token, 'DELETE', `/v1/workspaces/${slug}/folders/${folder.id}`);
       const out = await passagesOf(collection, doc.id);
       expect(

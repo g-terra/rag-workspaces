@@ -2,7 +2,7 @@ import { createReadStream } from 'node:fs';
 import type { ServerResponse } from 'node:http';
 import path from 'node:path';
 import multipart from '@fastify/multipart';
-import { documents, folders, newId, type Database, type Document as DocumentRow } from '@rag/db';
+import { documents, newId, type Database, type Document as DocumentRow } from '@rag/db';
 import { Document, DocumentQuery, UpdateDocument, UploadResult, WorkspaceSlug, page } from '@rag/shared';
 import { and, desc, eq, inArray, isNull, notInArray, type SQL } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
@@ -14,6 +14,7 @@ import { HttpProblem } from '../errors.js';
 import { ChromaService } from '../services/chroma.js';
 import type { DocumentEvents } from '../services/document-events.js';
 import type { IngestQueue } from '../services/ingest-queue.js';
+import { requireFolder } from '../services/folders.js';
 import { finishReindexIfDone } from '../services/reindex.js';
 import type { UploadStorage } from '../services/storage.js';
 import { FileTooLarge, detectType } from '../services/storage.js';
@@ -81,16 +82,6 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
     return row;
   }
 
-  /** A folder of this workspace, or 404. */
-  async function requireFolder(workspaceId: string, folderId: string) {
-    const [row] = await db
-      .select({ id: folders.id })
-      .from(folders)
-      .where(and(eq(folders.workspaceId, workspaceId), eq(folders.id, folderId)));
-    if (!row) throw new HttpProblem(404, `No folder ${folderId} in this workspace`);
-    return row.id;
-  }
-
   app.post(
     '/v1/workspaces/:slug/documents',
     {
@@ -111,7 +102,7 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
     },
     async (req, reply) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'editor');
-      const folderId = req.query.folderId ? await requireFolder(workspace.id, req.query.folderId) : null;
+      const folderId = req.query.folderId ? await requireFolder(db, workspace.id, req.query.folderId) : null;
       if (!req.isMultipart())
         throw new HttpProblem(415, 'Send multipart/form-data with one or more "files" parts.');
 
@@ -320,7 +311,7 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
       const { folderId, ...rest } = req.body;
       const set: Partial<DocumentRow> = { ...rest };
       const moving = folderId !== undefined && folderId !== doc.folderId;
-      if (moving) set.folderId = folderId === null ? null : await requireFolder(workspace.id, folderId);
+      if (moving) set.folderId = folderId === null ? null : await requireFolder(db, workspace.id, folderId);
       if (!Object.keys(set).length) return toApi(doc, workspace.slug);
       // Not while a run is writing its vectors: they would keep the old folder.
       const [row] = await db
