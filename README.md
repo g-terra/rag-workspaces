@@ -87,6 +87,10 @@ If port 80 is taken, set `PROXY_PORT` in `.env` (for example `8088`) and add the
 `ADMIN_UI_URL` and `PUBLIC_API_URL` (`http://rag.localhost:8088`), then `docker compose up -d --build`. The
 "Also at" ports keep working either way; Keycloak's pages always show at `KEYCLOAK_PUBLIC_URL`.
 
+The first time you sign in (in each browser), a short walkthrough points out the workspace switcher and
+each page in the sidebar; the `?` Help button at the bottom of the sidebar replays it and links to the API
+docs.
+
 After signing in, the admin UI opens the workspace you used last (or your first one); the workspace
 switcher in the sidebar changes it. Admins create workspaces from "All workspaces" or the switcher. Editors
 and admins upload files from "Upload" in the sidebar and watch each one through ingestion live.
