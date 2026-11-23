@@ -41,12 +41,12 @@ describe('axisTicks', () => {
 });
 
 describe('linePoints', () => {
-  it('spreads the values across the width, zero at the bottom', () => {
-    expect(linePoints([0, 50, 100], 100)).toBe('0,100 50,50 100,0');
+  it('puts each value over the middle of its bucket, the way a column sits, zero at the bottom', () => {
+    expect(linePoints([0, 50, 100], 100)).toBe('17,100 50,50 83,0');
   });
 
   it('is a flat line at the bottom when every value is zero', () => {
-    expect(linePoints([0, 0], 1)).toBe('0,100 100,100');
+    expect(linePoints([0, 0], 1)).toBe('25,100 75,100');
   });
 
   it('draws no line for one measurement or none: one point is a dot, not a week-long level', () => {
@@ -57,14 +57,14 @@ describe('linePoints', () => {
 
   it('skips a bucket with no measurement instead of drawing it as zero', () => {
     // A quiet hour has no p95 at all; a 0 there would read as "instant answers".
-    expect(linePoints([null, 50, null, 100], 100)).toBe('33,50 100,0');
+    expect(linePoints([null, 50, null, 100], 100)).toBe('38,50 88,0');
   });
 });
 
 describe('soleMarker', () => {
-  it('places a dot when exactly one bucket was measured, as a share of the box', () => {
+  it('places a dot over the middle of its bucket when only one was measured', () => {
     expect(soleMarker([null, 42, null], 100)).toEqual({ x: 50, y: 42 });
-    expect(soleMarker([25, null, null, null, null], 100)).toEqual({ x: 0, y: 25 });
+    expect(soleMarker([25, null, null, null, null], 100)).toEqual({ x: 10, y: 25 });
   });
 
   it('is nothing when a line can be drawn, or when there is nothing at all', () => {

@@ -15,6 +15,7 @@ import {
   formatDuration,
   formatPercent,
   formatTokens,
+  logTime,
   RANGES,
   statusTone,
   type RangeKey,
@@ -83,13 +84,12 @@ function UsagePage({ slug, trail, lead }: { slug?: string; trail: string[]; lead
   // doesn't move the window under them. Picking a range anchors a new "now".
   const [{ range, now }, setSlice] = useState({ range: '7d' as RangeKey, now: new Date() });
   const base = usageBase(slug);
-  const { summary, timeseries, byRoute, questions, documents, interval, from, to } = useUsage(
-    base,
-    range,
-    now,
-  );
-  // The API sends only the buckets that saw traffic; the charts want one column per bucket in the range.
-  const points = timeseries.data ? fillBuckets(timeseries.data.data, from, to, interval) : [];
+  const { summary, timeseries, byRoute, questions, documents } = useUsage(base, range, now);
+  // The API sends only the buckets that saw traffic; the charts want one column per bucket. The slice
+  // comes with the series, so a held chart's axis still matches the points drawn on it.
+  const series = timeseries.data;
+  const points = series ? fillBuckets(series.points, series.from, series.to, series.interval) : [];
+  const quiet = summary.data?.requests === 0;
 
   return (
     <>
@@ -126,7 +126,7 @@ function UsagePage({ slug, trail, lead }: { slug?: string; trail: string[]; lead
             onRetry={() => void summary.refetch()}
           />
         )}
-        {summary.data && <Tiles summary={summary.data} />}
+        {summary.data && <Tiles summary={summary.data} stale={summary.isPlaceholderData} />}
 
         {timeseries.isError && (
           <ErrorState
@@ -135,22 +135,21 @@ function UsagePage({ slug, trail, lead }: { slug?: string; trail: string[]; lead
             onRetry={() => void timeseries.refetch()}
           />
         )}
-        {timeseries.data && points.length > 0 && (
+        {series && !quiet && (
           <div className="grid gap-4 lg:grid-cols-2">
-            <RequestsChart points={points} interval={interval} stale={timeseries.isFetching} />
-            <LatencyChart points={points} interval={interval} stale={timeseries.isFetching} />
+            <RequestsChart points={points} interval={series.interval} stale={timeseries.isPlaceholderData} />
+            <LatencyChart points={points} interval={series.interval} stale={timeseries.isPlaceholderData} />
           </div>
         )}
-        {timeseries.data && points.length === 0 && (
+        {quiet && (
           <Notice title="Nothing in this range" body="No request reached the API in the range you picked." />
         )}
 
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card title="Requests by route" note="over the whole range">
+          <Card title="Requests by route" note="over the whole range" query={byRoute} empty="requests">
             {byRoute.data && <RouteBars totals={topGroups(totalsByGroup(byRoute.data.data), 7)} />}
-            {byRoute.data?.data.length === 0 && <Empty what="requests" />}
           </Card>
-          <Card title="Top questions" note="grouped ignoring case">
+          <Card title="Top questions" note="grouped ignoring case" query={questions} empty="questions">
             {questions.data?.data.map((q, i) => (
               <div key={q.question} className="flex items-start gap-3 text-sm">
                 <span className="text-muted-foreground w-4 text-xs">{i + 1}</span>
@@ -158,11 +157,15 @@ function UsagePage({ slug, trail, lead }: { slug?: string; trail: string[]; lead
                 <span className="text-[13px] font-medium">{formatCount(q.count)}</span>
               </div>
             ))}
-            {questions.data?.data.length === 0 && <Empty what="questions" />}
           </Card>
         </div>
 
-        <Card title="Most cited documents" note="how often a document was given to the model">
+        <Card
+          title="Most cited documents"
+          note="how often a document was given to the model"
+          query={documents}
+          empty="citations"
+        >
           {documents.data?.data.map((d, i) => (
             <div key={d.documentId} className="flex items-start gap-3 text-sm">
               <span className="text-muted-foreground w-4 text-xs">{i + 1}</span>
@@ -173,16 +176,22 @@ function UsagePage({ slug, trail, lead }: { slug?: string; trail: string[]; lead
               <span className="text-[13px] font-medium">{formatCount(d.citations)}</span>
             </div>
           ))}
-          {documents.data?.data.length === 0 && <Empty what="citations" />}
         </Card>
 
-        <RequestLog base={base} range={range} now={now} routes={routePaths(byRoute.data?.data ?? [])} />
+        {/* Keyed by the slice: a cursor and a route from the old range mean nothing in the new one. */}
+        <RequestLog
+          key={`${range}-${now.getTime()}`}
+          base={base}
+          range={range}
+          now={now}
+          routes={routePaths(byRoute.data?.data ?? [])}
+        />
       </div>
     </>
   );
 }
 
-function Tiles({ summary }: { summary: UsageSummary }) {
+function Tiles({ summary, stale }: { summary: UsageSummary; stale: boolean }) {
   const tiles: [string, string, string][] = [
     ['Requests', formatCount(summary.requests), `${formatCount(summary.clientErrors)} refused by the API`],
     [
@@ -207,7 +216,12 @@ function Tiles({ summary }: { summary: UsageSummary }) {
     ],
   ];
   return (
-    <div className="bg-card grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] rounded-xl border">
+    <div
+      className={cn(
+        'bg-card grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] rounded-xl border',
+        stale && 'opacity-60',
+      )}
+    >
       {tiles.map(([label, value, note], i) => (
         <div key={label} className={cn('px-4.5 py-4', i < tiles.length - 1 && 'border-r')}>
           <p className="text-muted-foreground mb-1.5 text-[13px]">{label}</p>
@@ -343,18 +357,16 @@ function RequestLog({
 }
 
 const TONES = {
-  ok: 'bg-green-100 text-green-800',
-  client: 'bg-amber-100 text-amber-800',
-  server: 'bg-red-100 text-red-800',
+  ok: 'bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200',
+  client: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200',
+  server: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200',
 };
 
 function LogRow({ entry }: { entry: RequestLogEntry }) {
   const tokens = (entry.promptTokens ?? 0) + (entry.completionTokens ?? 0);
   return (
     <tr data-testid="request-row" className="border-b last:border-b-0">
-      <td className="text-muted-foreground px-3.5 py-2 whitespace-nowrap">
-        {new Date(entry.createdAt).toLocaleTimeString('en-GB', { timeStyle: 'medium' })}
-      </td>
+      <td className="text-muted-foreground px-3.5 py-2 whitespace-nowrap">{logTime(entry.createdAt)}</td>
       <td className="px-3.5 py-2 font-mono text-xs">
         {entry.method} {entry.route}
       </td>
@@ -381,18 +393,50 @@ function LogRow({ entry }: { entry: RequestLogEntry }) {
   );
 }
 
-function Card({ title, note, children }: { title: string; note: string; children: ReactNode }) {
+/** What a card needs from its query: enough to say "loading", "that failed" or "nothing here". */
+interface CardQuery {
+  data?: { data: unknown[] };
+  isPending: boolean;
+  isPlaceholderData: boolean;
+  isError: boolean;
+  error: Error | null;
+  refetch(): unknown;
+}
+
+function Card({
+  title,
+  note,
+  query,
+  empty,
+  children,
+}: {
+  title: string;
+  note: string;
+  query: CardQuery;
+  /** What this card counts, for "No <empty> in this range yet." */
+  empty: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="bg-card rounded-xl border">
+    <div className={cn('bg-card rounded-xl border', query.isPlaceholderData && 'opacity-60')}>
       <div className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4">
         <h2 className="text-[15px] font-semibold">{title}</h2>
         <span className="text-muted-foreground text-xs">{note}</span>
       </div>
-      <div className="flex flex-col gap-2.5 px-5 py-4">{children}</div>
+      <div className="flex flex-col gap-2.5 px-5 py-4">
+        {query.isPending && <p className="text-muted-foreground text-sm">Loading…</p>}
+        {query.isError && query.error && (
+          <ErrorState
+            title={`Couldn't load ${title.toLowerCase()}`}
+            error={query.error}
+            onRetry={query.refetch}
+          />
+        )}
+        {query.data?.data.length === 0 && (
+          <p className="text-muted-foreground text-sm">No {empty} in this range yet.</p>
+        )}
+        {children}
+      </div>
     </div>
   );
-}
-
-function Empty({ what }: { what: string }) {
-  return <p className="text-muted-foreground text-sm">No {what} in this range yet.</p>;
 }

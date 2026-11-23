@@ -47,6 +47,22 @@ export function formatTokens(n: number): string {
   return formatCount(n);
 }
 
+/**
+ * A status code as the API will take it, or `undefined` while it is still being typed. `?status=` is
+ * `min(100).max(599)`, so sending "4" on the way to "418" would answer 400 and blank the log.
+ */
+export function statusFilter(typed: string): string | undefined {
+  const code = Number(typed);
+  return /^\d{3}$/.test(typed) && code >= 100 && code <= 599 ? typed : undefined;
+}
+
+/** A logged request's moment: the day as well as the time, in UTC like every other label here. */
+export function logTime(iso: string): string {
+  const at = new Date(iso);
+  const day = at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  return `${day} ${at.toLocaleTimeString('en-GB', { timeStyle: 'medium', timeZone: 'UTC', hour12: false })}`;
+}
+
 /** Which colour a status code wears: ours, theirs, or fine. */
 export function statusTone(code: number): 'ok' | 'client' | 'server' {
   if (code >= 500) return 'server';

@@ -36,14 +36,24 @@ follow the approved "Usage analytics" mock. Charts follow the `dataviz` skill.
    `from`/`to`; `intervalFor()` buckets a day by the hour and anything longer by the day. The page holds
    `range` **and** `now` in one piece of state, so every card asks about exactly the same slice and a
    re-render never moves the window; picking a range anchors a new "now". `range.ts` also holds the
-   formatters (counts, "84 ms"/"1.8 s", percentages, "2.1 M", the status tone, UTC bucket labels).
+   formatters (counts, "84 ms"/"1.8 s", percentages, "2.1 M", the status tone, UTC bucket labels, and a
+   logged request's day and time) and `statusFilter()`, which withholds a status code until it is a whole
+   one: `?status=` is `min(100).max(599)`, so sending "4" on the way to "418" would answer 400 and blank
+   the log mid-keystroke.
 3. **Requests** (`src/usage/queries.ts`). `useUsage()` runs the five card queries (summary, timeseries,
    timeseries grouped by route, top questions, top documents) under keys starting
    `['usage', base, …, from, to]`, where `base` is `/v1/usage` or `/v1/workspaces/<slug>/usage`.
    `useRequestLog()` is separate, because its filters and cursor change without touching the cards.
+   Every query keeps the data it is showing while the next slice loads (`placeholderData:
+   keepPreviousData`) and the card fades on `isPlaceholderData`, so nothing collapses and jumps back.
+   The timeseries query returns its own `from`/`to`/`interval` with the points, so a held chart's axis
+   always describes the points drawn on it.
 4. **Chart data** (`src/usage/chart.ts`, no React, unit-tested).
    - `fillBuckets()` adds the buckets the API leaves out (it only returns buckets that saw traffic), so
-     a week with one busy day draws seven columns, not one, and the axis labels span the real range.
+     a week with one busy day draws seven columns, not one, and the axis labels span the real range. A
+     rolling window over calendar buckets makes the first and last bucket partial (a "7 days" range at
+     10:30 starts mid-day and ends mid-day); both are kept, because dropping either would hide requests
+     the range and the tiles do count.
    - `niceMax()` puts the axis top at 1, 2 or 5 times a power of ten (at least 1, so an all-zero series
      doesn't divide by zero); `axisTicks()` gives top/middle/zero; `barHeights()` gives each column its
      height as a percentage.
@@ -65,8 +75,15 @@ follow the approved "Usage analytics" mock. Charts follow the `dataviz` skill.
    skill's palette validator against the light and dark card surfaces.
 6. **The request log** (`src/routes/usage.tsx`). Newest first, 25 a page, with a Route select (the
    patterns seen in the range) and a status box. Paging keeps a stack of the cursors already used, so
-   "Newer" goes back without asking the API for a cursor it never gives. A status code gets its own
-   tone from `statusTone()`, and the caller id is truncated with the full id in its `title`.
+   "Newer" goes back without asking the API for a cursor it never gives. The whole log is keyed by the
+   slice, so changing the range starts again at page 1 with no filter: a cursor is a row id from the
+   old window and a route may not exist in the new one. Each row carries its day **and** time in UTC
+   (a 7-day log of bare clock times tells you nothing), its status in the tone `statusTone()` gives it,
+   and the caller id truncated with the full id in its `title`.
+   Each of the five cards shows its own loading, failure (with a retry) and "nothing in this range"
+   state, so a card that failed can never be mistaken for a card with nothing in it. When the summary
+   says the range holds no requests at all, the charts give way to one notice instead of drawing two
+   empty boxes with a meaningless axis.
 
 ## Decisions and trade-offs
 
@@ -82,6 +99,10 @@ follow the approved "Usage analytics" mock. Charts follow the `dataviz` skill.
 | Route filter as a select of seen patterns | A free-text box | `?route=` matches a whole pattern (`eq`), so a typed substring silently returns nothing |
 | Cursor stack for paging | Infinite scroll, append-on-"Load more" | The log is for looking something up, not for reading through; a stack makes "Newer" exact and keeps one page in memory |
 | Inferred types exported from `@rag/shared` | `z.infer<typeof …>` in the admin app | The package is the API contract; the API keys and workspace schemas already export their types |
+| Keep both partial end buckets | Drop the partial first bucket | A dropped bucket hides requests the summary tiles still count; a short first column is honest about a rolling window |
+| Hold the previous slice, faded | Let cards unmount while the next slice loads | The page would collapse and jump back on every range change; the series carries its own slice, so a held chart is never mislabelled |
+| Withhold a half-typed status code | Debounce; validate on blur | `?status=4` is a 400, and the log would flash its error state twice on the way to "418" |
+| The log restarts on a range change | Keep the page and filter | A cursor is a row id from the old window, and a route pattern may not exist in the new one; keeping either shows an arbitrary slice under a confident "Page 3" |
 
 ## Interfaces and contracts
 
@@ -104,12 +125,14 @@ its own.
 
 ## Testing
 
-- `apps/admin/src/usage/range.test.ts` (13 cases): the four ranges' boundaries, hour vs day buckets, the
-  formatters (including `null` latency and a zero error rate), the status tones, and UTC bucket labels.
+- `apps/admin/src/usage/range.test.ts` (11 cases): the four ranges' boundaries, hour vs day buckets, the
+  formatters (including `null` latency and a zero error rate), the log's day-and-time, which typed
+  status codes are sent, the status tones, and UTC bucket labels.
 - `apps/admin/src/usage/chart.test.ts` (20 cases): `niceMax` (including an empty and an all-zero series),
-  bar heights without dividing by zero, axis ticks, polyline points with gaps and the no-line cases,
-  `soleMarker`, bucket filling for days and hours and for a range with no traffic at all, route paths
-  (methods collapsed, groupless points skipped), and grouped totals with the "Other" fold.
+  bar heights without dividing by zero, axis ticks, polyline points over bucket centres, with gaps and
+  in the no-line cases, `soleMarker`, bucket filling for days and hours and for a range with no traffic
+  at all, route paths (methods collapsed, groupless points skipped), and grouped totals with the
+  "Other" fold.
 - `apps/admin/e2e/usage.spec.ts` (real stack): a throwaway workspace is asked one question through the
   API, then its Usage page is opened from the workspace nav and shows the tiles, both charts (by their
   `role="img"` labels), the question among the top questions, the answers route, and the request in the

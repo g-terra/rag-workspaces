@@ -6,7 +6,9 @@ import {
   formatPercent,
   formatTokens,
   intervalFor,
+  logTime,
   rangeFor,
+  statusFilter,
   statusTone,
 } from './range';
 
@@ -73,6 +75,23 @@ describe('statusTone', () => {
     expect(statusTone(304)).toBe('ok');
     expect(statusTone(404)).toBe('client');
     expect(statusTone(503)).toBe('server');
+  });
+});
+
+describe('logTime', () => {
+  it('carries the day as well as the time, in UTC like the rest of the page', () => {
+    expect(logTime('2026-11-23T09:05:07.000Z')).toBe('23 Nov 09:05:07');
+  });
+});
+
+describe('statusFilter', () => {
+  it('is only sent once it is a whole status code the API accepts', () => {
+    expect(statusFilter('')).toBeUndefined();
+    expect(statusFilter('4')).toBeUndefined();
+    expect(statusFilter('41')).toBeUndefined();
+    expect(statusFilter('418')).toBe('418');
+    expect(statusFilter('099')).toBeUndefined();
+    expect(statusFilter('600')).toBeUndefined();
   });
 });
 

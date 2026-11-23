@@ -33,9 +33,19 @@ export function axisTicks(max: number): number[] {
  */
 export function linePoints(values: (number | null)[], max: number): string {
   const y = (v: number) => (100 - (max > 0 ? (v / max) * 100 : 0)).toFixed(0);
-  const span = Math.max(1, values.length - 1);
-  const drawn = values.flatMap((v, i) => (v === null ? [] : [`${((i * 100) / span).toFixed(0)},${y(v)}`]));
+  const drawn = values.flatMap((v, i) =>
+    v === null ? [] : [`${bucketCentre(i, values.length).toFixed(0)},${y(v)}`],
+  );
   return drawn.length > 1 ? drawn.join(' ') : '';
+}
+
+/**
+ * Where a bucket's middle sits, as a percentage of the box. The hover columns and the bar chart give
+ * each bucket an equal slice, so a vertex belongs over the middle of its own slice; spreading
+ * vertices edge to edge would leave the line half a bucket away from the column it reads from.
+ */
+function bucketCentre(at: number, count: number): number {
+  return ((at + 0.5) * 100) / Math.max(1, count);
 }
 
 /**
@@ -47,7 +57,7 @@ export function soleMarker(values: (number | null)[], max: number): { x: number;
   if (only.length !== 1) return null;
   const at = only[0]!;
   return {
-    x: (at * 100) / Math.max(1, values.length - 1),
+    x: bucketCentre(at, values.length),
     y: max > 0 ? (values[at]! / max) * 100 : 0,
   };
 }

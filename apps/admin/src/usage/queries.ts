@@ -1,7 +1,7 @@
 import type { RequestLogEntry, Timeseries, TopDocuments, TopQuestions, UsageSummary } from '@rag/shared';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/auth/auth-context';
-import { intervalFor, rangeFor, type RangeKey } from './range';
+import { intervalFor, rangeFor, statusFilter, type RangeKey } from './range';
 
 /** `/v1/usage` for admins, `/v1/workspaces/<slug>/usage` for a workspace's editors and admins. */
 export function usageBase(slug?: string): string {
@@ -31,28 +31,43 @@ export function useUsage(base: string, range: RangeKey, now: Date) {
   const interval = intervalFor(range);
   const key = (part: string, extra: Record<string, string> = {}) => ['usage', base, part, from, to, extra];
 
+  // Every card holds what it is showing while the next slice loads, so the page never collapses and
+  // jumps back. `isPlaceholderData` is what the cards fade on.
+  const held = { placeholderData: keepPreviousData };
+
   const summary = useQuery({
+    ...held,
     queryKey: key('summary'),
     queryFn: () => api<UsageSummary>(`${base}/summary?${query({ from, to })}`),
   });
+  // The series carries the slice it belongs to, so a held chart's axis and its points always agree.
   const timeseries = useQuery({
+    ...held,
     queryKey: key('timeseries', { interval }),
-    queryFn: () => api<Timeseries>(`${base}/timeseries?${query({ from, to, interval })}`),
+    queryFn: async () => ({
+      from,
+      to,
+      interval,
+      points: (await api<Timeseries>(`${base}/timeseries?${query({ from, to, interval })}`)).data,
+    }),
   });
   const byRoute = useQuery({
+    ...held,
     queryKey: key('timeseries', { interval, groupBy: 'route' }),
     queryFn: () => api<Timeseries>(`${base}/timeseries?${query({ from, to, interval, groupBy: 'route' })}`),
   });
   const questions = useQuery({
+    ...held,
     queryKey: key('top-questions'),
     queryFn: () => api<TopQuestions>(`${base}/top-questions?${query({ from, to, limit: 5 })}`),
   });
   const documents = useQuery({
+    ...held,
     queryKey: key('top-documents'),
     queryFn: () => api<TopDocuments>(`${base}/top-documents?${query({ from, to, limit: 5 })}`),
   });
 
-  return { summary, timeseries, byRoute, questions, documents, interval, from, to };
+  return { summary, timeseries, byRoute, questions, documents };
 }
 
 /** The request log, newest first. `cursor` comes from the previous page's `nextCursor`. */
@@ -73,10 +88,13 @@ export function useRequestLog(
           from,
           to,
           route: filters.route,
-          status: filters.status,
+          // Left out while a status code is still being typed: "4" on the way to "418" is a 400.
+          status: statusFilter(filters.status),
           limit: 25,
           cursor: cursor ?? undefined,
         })}`,
       ),
+    // The table holds the page it is showing while the next one loads, instead of blanking.
+    placeholderData: keepPreviousData,
   });
 }
