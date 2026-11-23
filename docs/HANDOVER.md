@@ -127,7 +127,8 @@ Track A, playground:
 | A2 #56 | `claude/project-thread-mr58qn-08b-playground-citations` | `[n]` citations, passage with neighbours, link to the document | done |
 | A3 #57 | `claude/project-thread-mr58qn-08c-answer-feedback` | thumbs up/down with a comment | done |
 | A4 #58 | `claude/project-thread-mr58qn-09-playground-search` | Search mode, passages with scores | done |
-| A5 #59 (draft) | `claude/project-thread-mr58qn-09b-playground-chat` | Chat mode, conversation with streamed replies | pushed just before the stop; **run the checks and `pnpm e2e` first** |
+| A5 #59 | `claude/project-thread-mr58qn-09b-playground-chat` | Chat mode, conversation with streamed replies | done, reviewed, tests green |
+| A6 #64 (draft) | (stacked on #59) | Conversations page `/w/:slug/conversations`: list, open, continue, delete | works and tests pass; **5 reviewer findings still open, listed in the PR description** (main one: deleting a conversation leaves an error pane) |
 
 Track B, admin pages:
 
@@ -138,8 +139,8 @@ Track B, admin pages:
 | B3 #61 | `claude/project-thread-mr58qn-13-settings` | workspace settings, reindex, model pickers from `GET /v1/system` (it merged `main`, so its diff against B2 also shows backend specs) | done |
 | B4 #62 (draft) | `claude/project-thread-mr58qn-13b-members` | members with the `GET /v1/users` picker, delete workspace | pushed just before the stop; **run the checks and `pnpm e2e` first** |
 
-PRs are open: track A is #55 → #56 → #57 → #58 → #59, track B is #54 → #60 → #61 → #62 (#55 and #54
-are based on `main`). #59 and #62 are drafts until their checks pass. The specs on these branches still say
+PRs are open: track A is #55 → #56 → #57 → #58 → #59 → #64, track B is #54 → #60 → #61 → #62 (#55 and #54
+are based on `main`). #64 and #62 are drafts: #64 has open review findings, #62's final checks are not confirmed. The specs on these branches still say
 `pr: pending`; set each one's PR number before merging. The branch `claude/project-thread-mr58qn-05-library` is stale and can be deleted.
 
 ### Backend: M5 video, part 1 (no PR yet)
@@ -183,7 +184,7 @@ Still to do on it:
 The assignment's graded parts already exist on `main` (the M2 cut line in
 [docs/work-breakdown.md](work-breakdown.md)), so the hand-in items come first.
 
-1. **Land the admin UI stacks above**: confirm A5 and B4 pass, open or finish the PRs, merge in order.
+1. **Land the admin UI stacks above**: fix the open findings on #64, confirm B4 (#62) passes, open or finish the PRs, merge in order.
 2. **Report (3 to 5 pages).** Not started. Source material: `docs/architecture.md`, `docs/decisions.md`
    (the "Why TypeScript instead of Flask or FastAPI" section is written for it), the README's table mapping
    the brief's `/ask`, `/chat`, `/retrieve` to our routes, `poc/RESULTS.md`, and the retrieval evaluation
@@ -192,10 +193,9 @@ The assignment's graded parts already exist on `main` (the M2 cut line in
    workspace, upload files, watch ingestion, ask and chat in the playground, search through Swagger with an
    API key, show usage analytics. Record on the owner's machine with LM Studio.
 4. **Admin UI, not started:**
-   1. Conversations page `/w/:slug/conversations`: list, open, continue, delete (Conversations mock).
-   2. Folders UI on the folder routes (#49) and folder filter (#50): folder sidebar in the library, upload
+   1. Folders UI on the folder routes (#49) and folder filter (#50): folder sidebar in the library, upload
       into a folder, move a document, folder picker in the playground.
-   3. Admin-only system status banner from `GET /v1/system` (LM Studio, Langflow or Chroma down) and a
+   2. Admin-only system status banner from `GET /v1/system` (LM Studio, Langflow or Chroma down) and a
       System section (work-breakdown, workstream 2 item 9).
 5. **Backend:**
    1. Finish M5 part 1 (the branch above).
