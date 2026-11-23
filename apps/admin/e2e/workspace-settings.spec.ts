@@ -39,6 +39,12 @@ test('an admin changes a workspace’s name and retrieval settings, and they sti
   await expect(page.getByLabel('Slug')).toHaveValue(slug);
   await expect(page.getByLabel('Embedding model')).toBeDisabled();
 
+  // An empty setting shows the API's own default as its placeholder, not just "Default".
+  await expect(page.getByLabel('Chunk size')).toHaveAttribute('placeholder', /^Default: \d+$/);
+  await expect(page.getByLabel('Top-k passages')).toHaveAttribute('placeholder', /^Default: \d+$/);
+  await expect(page.getByLabel('Relevance threshold')).toHaveAttribute('placeholder', /^Default: 0?\.\d+$/);
+  await expect(page.getByLabel('System prompt')).toHaveAttribute('placeholder', /Cite the passages/);
+
   // Nothing to save until something changes.
   const saveButton = page.getByRole('button', { name: 'Save changes' });
   await expect(saveButton).toBeDisabled();
@@ -65,7 +71,7 @@ test('an admin changes a workspace’s name and retrieval settings, and they sti
   await expect(page.getByText('Settings saved.')).toBeVisible();
   await page.reload();
   await expect(page.getByLabel('Top-k passages')).toHaveValue('');
-  await expect(page.getByLabel('Top-k passages')).toHaveAttribute('placeholder', 'Default');
+  await expect(page.getByLabel('Top-k passages')).toHaveAttribute('placeholder', /^Default: \d+$/);
 });
 
 test('the form refuses what the API would resolve wrongly', async ({ page }) => {

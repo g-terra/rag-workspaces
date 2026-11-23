@@ -267,6 +267,19 @@ export function chatDefaultNote(system?: SystemStatus): string {
   return `Default: ${d.provider} / ${d.model}${d.available ? '' : ' (not available right now)'}`;
 }
 
+/** The settings `GET /v1/system` names a default for. */
+type Defaulted = keyof SystemStatus['defaults']['workspace'];
+
+/** The placeholder of an empty field: the value it falls back to, or just "Default" when unknown. */
+export function defaultPlaceholder(system: SystemStatus | undefined, field: Defaulted): string {
+  return system ? `Default: ${system.defaults.workspace[field]}` : 'Default';
+}
+
+/** The chat model an empty provider uses, for the model field's placeholder; null once a provider is picked. */
+export function chatModelDefault(system: SystemStatus | undefined, provider: string): string | null {
+  return system && provider === '' ? `Default: ${system.defaults.chat.model}` : null;
+}
+
 /** The API's answer to `PATCH /v1/workspaces/{slug}`, in words. */
 export function saveErrorMessage(err: unknown): string {
   if (err instanceof ApiError && err.status === 403) {
