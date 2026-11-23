@@ -90,7 +90,9 @@ switcher in the sidebar changes it. Admins create workspaces from "All workspace
 and admins upload files from "Upload" in the sidebar and watch each one through ingestion live.
 "Documents" lists everything in the workspace, live, with download for everyone and reindex and delete for
 editors and admins. Admins manage API keys for agents and scripts under "API keys": a new key's secret is
-shown once, with a `curl` example to try it. The API docs are linked from the top bar of every page.
+shown once, with a `curl` example to try it. "Usage" charts requests, latency, top questions, cited
+documents and the raw request log — for one workspace (editors and admins) or across all of them
+(admins). The API docs are linked from the top bar of every page.
 
 `docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
 

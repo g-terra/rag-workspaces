@@ -11,6 +11,7 @@ import { Documents } from '@/routes/documents';
 import { Upload } from '@/routes/upload';
 import { Workspaces } from '@/routes/workspaces';
 import { ApiKeys } from '@/routes/api-keys';
+import { Usage } from '@/routes/usage';
 
 export const router = createBrowserRouter([
   { path: '/sign-in', element: <SignIn /> },
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
           { index: true, element: <RootRedirect /> },
           { path: 'workspaces', element: <Workspaces /> },
           { path: 'api-keys', element: <ApiKeys /> },
+          { path: 'usage', element: <Usage /> },
           {
             path: 'w/:slug',
             element: <WorkspaceLayout />,
@@ -31,6 +33,7 @@ export const router = createBrowserRouter([
               { index: true, element: <WorkspaceHome /> },
               { path: 'upload', element: <Upload /> },
               { path: 'documents', element: <Documents /> },
+              { path: 'usage', element: <Usage /> },
             ],
           },
           { path: '*', element: <NotFound /> },
