@@ -44,7 +44,7 @@ function checkText(form: StyleForm, errors: StyleErrors) {
   }
 }
 
-export type Checked<T> = { ok: true; body: T } | { ok: false; errors: StyleErrors };
+type Checked<T> = { ok: true; body: T } | { ok: false; errors: StyleErrors };
 
 /** `POST /v1/styles`. `taken` are the slugs already listed, built-ins included, so a clash shows here. */
 export function validateNewStyle(form: StyleForm, taken: readonly string[] = []): Checked<CreateStyle> {

@@ -65,10 +65,11 @@ test('an admin creates, edits and deletes a custom style; one in use as a defaul
   await expect(dialog.getByRole('alert')).toContainText(workspace);
   await dialog.getByRole('button', { name: 'Cancel' }).click();
 
-  await page.request.patch(`/api/v1/workspaces/${workspace}`, {
+  const cleared = await page.request.patch(`/api/v1/workspaces/${workspace}`, {
     headers,
     data: { settings: { style: null } },
   });
+  expect(cleared.ok()).toBe(true);
   await custom.getByRole('button', { name: `Delete ${name}` }).click();
   await dialog.getByRole('button', { name: 'Delete style' }).click();
   await expect(dialog).toBeHidden();

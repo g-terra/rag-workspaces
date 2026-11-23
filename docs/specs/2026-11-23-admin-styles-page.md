@@ -1,7 +1,7 @@
 ---
 title: Manage custom response styles in the admin UI
 date: 2026-11-23
-pr: pending
+pr: "#114"
 status: in review
 areas: [admin, docs]
 ---
@@ -32,7 +32,8 @@ Guilherme asked for support to create your own styles. The API for it is
    field is disabled when editing.
 4. `apps/admin/src/routes/styles.tsx`: the page, with a Custom section first and a Built-in section after it, each
    style showing its instructions. Non-admins get an "Admins only" notice, like the API keys page.
-5. The route goes in `router.tsx`, and the nav link in `components/app-layout.tsx`.
+5. The route goes in `router.tsx`, and the nav link in `components/app-layout.tsx`. The workspace Settings hint for
+   the default style now points here.
 
 ## Decisions and trade-offs
 
@@ -69,4 +70,4 @@ None.
 
 ## Docs updated
 
-None needed: `docs/api-schema.md` already describes the routes this page uses.
+`README.md` (the admin pages paragraph). `docs/api-schema.md` already describes the routes this page uses.

@@ -81,7 +81,8 @@ there chooses how an answer reads (academic, talkative, concise, tutor or a cust
 refusals apply in every style. "Conversations" lists your
 conversations with the workspace and opens one in full, to read, carry on or delete. Admins manage API
 keys for agents and scripts under "API keys": a new key's secret is shown once, with a `curl` example to
-try it. "Usage" charts requests, latency, top questions, cited documents and the raw request log — for one
+try it. "Response styles" (admins) lists the built-in styles and creates, edits and deletes custom ones,
+which every workspace can use. "Usage" charts requests, latency, top questions, cited documents and the raw request log — for one
 workspace (editors and admins) or across all of them (admins). "Settings" (admins) changes a workspace's
 name, description, chat model, reasoning effort, default response style and retrieval settings, with the providers and models read from
 `GET /v1/system`; it is also where you grant and remove other people's access to the workspace, start a
