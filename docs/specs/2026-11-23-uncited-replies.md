@@ -2,7 +2,7 @@
 title: Count a reply that cites none of its passages as not grounded
 date: 2026-11-23
 pr: "#81"
-status: in review
+status: merged
 areas: [api, admin, mcp, docs]
 ---
 

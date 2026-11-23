@@ -2,7 +2,7 @@
 title: transcribe video and audio with Whisper before ingestion
 date: 2026-11-23
 pr: "#71"
-status: in review
+status: merged
 areas: [api, db, flows, infra, docs]
 ---
 

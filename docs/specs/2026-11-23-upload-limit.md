@@ -2,7 +2,7 @@
 title: raise the upload limit to 2 GB and make it one setting
 date: 2026-11-23
 pr: "#70"
-status: in review
+status: merged
 areas: [api, admin, infra, docs]
 ---
 

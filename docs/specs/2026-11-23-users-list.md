@@ -2,7 +2,7 @@
 title: list the people in Keycloak with GET /v1/users
 date: 2026-11-23
 pr: "#44"
-status: in review
+status: merged
 areas: [api, infra, docs]
 ---
 

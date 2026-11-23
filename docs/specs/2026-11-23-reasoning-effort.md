@@ -2,7 +2,7 @@
 title: Set how long the chat model reasons
 date: 2026-11-23
 pr: "#86"
-status: in review
+status: merged
 areas: [api, flows, langflow, docs]
 ---
 

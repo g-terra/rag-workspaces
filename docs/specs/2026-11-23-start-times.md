@@ -2,7 +2,7 @@
 title: Start times on passages and citations
 date: 2026-11-23
 pr: "#72"
-status: in review
+status: merged
 areas: [api, flows, mcp, docs]
 ---
 

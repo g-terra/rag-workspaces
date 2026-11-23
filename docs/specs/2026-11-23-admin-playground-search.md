@@ -2,7 +2,7 @@
 title: Search mode in the admin playground
 date: 2026-11-23
 pr: "#58"
-status: in review
+status: merged
 areas: [admin]
 ---
 

@@ -2,7 +2,7 @@
 title: Embed documents and queries with each model's task prefixes
 date: 2026-11-23
 pr: "#83"
-status: in review
+status: merged
 areas: [api, flows, langflow, docs]
 ---
 

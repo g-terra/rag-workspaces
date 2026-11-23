@@ -2,7 +2,7 @@
 title: make the tuned settings the workspace defaults
 date: 2026-11-23
 pr: "#93"
-status: in review
+status: merged
 areas: [api, docs]
 ---
 

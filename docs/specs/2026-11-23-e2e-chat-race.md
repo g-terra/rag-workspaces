@@ -2,7 +2,7 @@
 title: Wait for a chat reply to be stored in the e2e tests
 date: 2026-11-23
 pr: "#74"
-status: in review
+status: merged
 areas: [admin]
 ---
 

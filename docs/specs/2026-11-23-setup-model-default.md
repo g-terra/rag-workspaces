@@ -2,7 +2,7 @@
 title: Take the default model id on Enter in the setup wizard
 date: 2026-11-23
 pr: "#78"
-status: in review
+status: merged
 areas: [infra]
 ---
 

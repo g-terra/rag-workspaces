@@ -2,7 +2,7 @@
 title: search the whole question too when it has several parts
 date: 2026-11-23
 pr: "#91"
-status: in review
+status: merged
 areas: [flows, langflow, docs]
 ---
 

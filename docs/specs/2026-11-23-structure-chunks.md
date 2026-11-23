@@ -2,7 +2,7 @@
 title: Split documents at paragraph, line and sentence breaks
 date: 2026-11-23
 pr: "#82"
-status: in review
+status: merged
 areas: [flows, langflow, docs]
 ---
 
