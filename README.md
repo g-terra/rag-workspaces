@@ -6,8 +6,20 @@ Material is loaded locally (PDF, DOCX, TXT, MD, and optionally video via Whisper
 
 The first workspace, `ouc`, is the project for the COS512 Langflow assignment (Option 4: expose AI interactions via an API).
 
-> Status: **building milestone M0** (scaffold). The plan is in `docs/`, the Langflow proof of concept in `poc/`.
+> Status: the backend is built (workspaces, ingestion, search, answers, chat, folders, analytics, API keys,
+> rate limits, an MCP server); the admin UI screens are being built (M4). Video (M5) is not built yet.
 
+The assignment brief's example endpoints map to these routes (no aliases, decision 6):
+
+| Brief | Route |
+|---|---|
+| `/ask` | `POST /v1/workspaces/{slug}/answers` |
+| `/chat` | `POST /v1/workspaces/{slug}/conversations/{id}/messages` |
+| `/retrieve` | `GET /v1/workspaces/{slug}/passages?query=…` |
+| Usage analytics | `GET /v1/usage/…` and `GET /v1/workspaces/{slug}/usage/…` |
+
+- [Setup](docs/setup.md): from a clone to a first answer, models, people, troubleshooting
+- [Using the API](docs/api.md): authentication and examples for scripts and agents
 - [Architecture](docs/architecture.md): components, workspaces, data flow, repo layout
 - [API schema](docs/api-schema.md): resources, routes and shapes
 - [Work breakdown](docs/work-breakdown.md): milestones and the four workstreams
@@ -32,6 +44,10 @@ Versions follow [semantic versioning](https://semver.org) and are picked from th
    `X.Y` and `latest`.
 
 ## Run the stack
+
+The step-by-step guide, with model setup and troubleshooting, is [docs/setup.md](docs/setup.md). Examples
+for scripts and agents calling the API are in [docs/api.md](docs/api.md).
+
 
 Requirements: Docker with Compose, about 6 GB of free RAM for the containers, and LM Studio on the host (from M1).
 
