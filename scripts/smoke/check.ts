@@ -576,6 +576,50 @@ async function main() {
     );
   });
 
+  await step('a part with no subject of its own still finds the passage that answers it', async () => {
+    // "…, and how many targets are there in most versions?" names no test. Searched alone, that part finds the
+    // sales notes (they share more of its words) and the first part finds the vigilance notes. The passage that
+    // answers it shares the most words with the whole question, which takes a turn after the parts.
+    const form = new FormData();
+    for (let i = 0; i < 3; i++) {
+      form.append(
+        'files',
+        new Blob([`Vigilance ${i}: the Mackworth clock test measures vigilance by watching the hand.`]),
+        `vigilance-${i}.md`,
+      );
+      form.append(
+        'files',
+        new Blob([`How many targets are there? Sales ${i} sets targets each quarter.`]),
+        `sales-${i}.md`,
+      );
+    }
+    form.append(
+      'files',
+      new Blob(['Most versions of the Mackworth clock test have 12 targets.']),
+      'mackworth-targets.md',
+    );
+    const { data } = (await call(token, 'POST', `/v1/workspaces/${slug}/documents`, form)) as {
+      data: { document: Doc }[];
+    };
+    await waitUntilReady(
+      token,
+      slug,
+      data.map((d) => d.document.id),
+    );
+    const targets = data.find((d) => d.document.fileName === 'mackworth-targets.md')!.document.id;
+    const question =
+      'How does the Mackworth clock test measure vigilance, and how many targets are there in most versions?';
+    const found = await call(
+      token,
+      'GET',
+      `/v1/workspaces/${slug}/passages?query=${encodeURIComponent(question)}&limit=4&minScore=0`,
+    );
+    expect(
+      found.data.some((p: { documentId: string }) => p.documentId === targets),
+      `the answering passage is not in the top 4: ${JSON.stringify(found.data.map((p: { text: string }) => p.text))}`,
+    );
+  });
+
   await step('deleted the workspace, its Chroma collection is gone', async () => {
     await call(token, 'DELETE', `/v1/workspaces/${slug}`);
     const res = await chroma(`/collections/${collection}`);

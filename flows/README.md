@@ -76,7 +76,8 @@ approximate HNSW search.
 
 A question that asks several things (split at question marks, and at "and" before a question word such as "how" or an
 instruction such as "explain") is searched part by part: each part gets its own fused ranking, and the parts take turns filling
-the `top_k` results. Only the query's last line is split, since a chat search puts the previous question on the line before.
+the `top_k` results. The whole question takes a turn after the parts, for a part that names no subject of its own ("…,
+and how many are there?"). Only the query's last line is split, since a chat search puts the previous question on the line before.
 
 ### `rw-answer`: retrieve, prompt, generate (streams)
 
