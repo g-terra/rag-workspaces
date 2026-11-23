@@ -42,8 +42,23 @@ sources.
 Through the API: `POST /v1/workspaces/{slug}/conversations`, then
 `POST …/conversations/{id}/messages { "content": "…" }`.
 
-> **Coming soon: response styles.** Choosing how answers are written, from four built-in styles (`academic`,
-> `talkative`, `concise` and `tutor`), per question or as a workspace default, is in review ([#105](https://github.com/g-terra/rag-workspaces/pull/105)).
+## Response styles
+
+A response style changes how an answer is written (tone, length and format) without changing what it may
+say: citations, sticking to the material and refusing when it isn't covered all still apply. Four are
+built in:
+
+| Style | Writes |
+|---|---|
+| `academic` | Formal and precise, like a well-written study text |
+| `talkative` | Warm and conversational; explains more and connects ideas |
+| `concise` | The shortest complete answer |
+| `tutor` | Explains step by step, for a beginner |
+
+Pick one per question with `"style": "concise"` on an answer or chat message, or set a workspace default
+with `PATCH /v1/workspaces/{slug} { "settings": { "style": "academic" } }`. A request's style wins over
+the workspace's; `"style": null` asks for none. `GET /v1/styles` lists them with their full instructions.
+Choosing a style in the admin UI isn't there yet, so the playground uses the workspace default.
 
 ## Conversations
 

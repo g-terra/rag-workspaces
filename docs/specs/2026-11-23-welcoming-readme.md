@@ -78,4 +78,7 @@ mermaid block renders on GitHub. `pnpm format:check` passes.
 ## Docs updated
 
 `README.md` (rewritten), `docs/setup.md` (gains the moved sections), `docs/api.md` and
-`docs/guide/configuration.md` (links), `docs/images/playground-answer-dark.png` (new).
+`docs/guide/configuration.md` (links), `docs/images/playground-answer-dark.png` (new). Main gained
+response styles (#105), the Keycloak theme (#104) and the walkthrough (#107) while this was open, so the
+README's lines on the last two went to `docs/setup.md` and `docs/guide/README.md`, and the guide's
+"Coming soon" note on styles in `docs/guide/playground.md` became a real section.

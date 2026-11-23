@@ -21,6 +21,11 @@ The screenshots come from a throwaway test stack (`pnpm smoke --keep`) with samp
 model, so the answers in them are canned replies that start with `[stand-in …]`, and the System page flags
 the stand-in's missing chat model. A real model writes real answers in the same places.
 
+## Getting around
+
+The first time you sign in, in each browser, a short walkthrough points out the workspace switcher and each
+page in the sidebar. The `?` Help button at the bottom of the sidebar replays it and links to the API docs.
+
 ## Who can do what
 
 Everyone signs in through Keycloak. There is one global role, **admin**. Inside a workspace, each person
