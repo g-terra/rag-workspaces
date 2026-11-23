@@ -47,7 +47,8 @@ the key's role and workspaces decide what the agent sees.
 | `list_folders`, `list_documents` | What is in one |
 | `search_passages` | Passages with scores, no model call |
 | `read_passage` | One passage in full |
-| `ask` | An answer with citations |
+| `list_styles` | The response styles `ask` can use |
+| `ask` | An answer with citations, in an optional `style` (`null` for none) |
 
 None of them change any material.
 
