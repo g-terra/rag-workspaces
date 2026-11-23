@@ -6,6 +6,7 @@ import type {
   Folder,
   PassageSearchResult,
   PassageWithNeighbours,
+  StyleList,
   Workspace,
 } from '@rag/shared';
 import { z } from 'zod';
@@ -146,6 +147,22 @@ export function createServer(api: RagApi, version: string): McpServer {
   );
 
   server.registerTool(
+    'list_styles',
+    {
+      title: 'List response styles',
+      description:
+        'Styles an answer can be written in (tone, length, format), for the `style` argument of ask. ' +
+        'They never change what an answer may say: it still cites the material and refuses what it does not cover.',
+      annotations: readOnly,
+    },
+    () =>
+      reply(async () => {
+        const { data } = await api.get<StyleList>('/v1/styles');
+        return data.map((s) => ({ slug: s.slug, name: s.name, description: s.description }));
+      }),
+  );
+
+  server.registerTool(
     'ask',
     {
       title: 'Ask the workspace',
@@ -156,6 +173,12 @@ export function createServer(api: RagApi, version: string): McpServer {
         workspace,
         question: z.string().min(1).describe('The question, in plain words.'),
         folderId,
+        style: z
+          .string()
+          .optional()
+          .describe(
+            "A response style slug from list_styles, e.g. \"concise\". Leave out for the workspace's default.",
+          ),
       },
       // It runs a model and stores the answer, but changes no material.
       annotations: {
@@ -165,9 +188,9 @@ export function createServer(api: RagApi, version: string): McpServer {
         openWorldHint: false,
       },
     },
-    ({ workspace: slug, question, folderId: folder }) =>
+    ({ workspace: slug, question, folderId: folder, style }) =>
       reply(async () => {
-        const a = await api.post<Answer>(`${slugPath(slug)}/answers`, { question, folderId: folder });
+        const a = await api.post<Answer>(`${slugPath(slug)}/answers`, { question, folderId: folder, style });
         return {
           answerId: a.id,
           grounded: a.grounded,
@@ -181,6 +204,7 @@ export function createServer(api: RagApi, version: string): McpServer {
             snippet: c.snippet,
           })),
           model: a.model,
+          style: a.style,
         };
       }),
   );
