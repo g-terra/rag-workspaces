@@ -1,9 +1,10 @@
-import type { Workspace } from '@rag/shared';
+import type { HostedProvider, Workspace } from '@rag/shared';
 import { Loader2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Field } from '@/components/field';
 import { Notice } from '@/components/states';
 import { DeleteWorkspaceDialog } from '@/components/delete-workspace-dialog';
+import { ProviderKeyDialog, ProviderKeys } from '@/components/provider-keys';
 import { ReindexDialog } from '@/components/reindex-dialog';
 import { TopBar } from '@/components/top-bar';
 import { WorkspaceMembers } from '@/components/workspace-members';
@@ -11,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useSystem } from '@/system/queries';
 import { useCurrentWorkspace } from '@/workspaces/current';
+import { HOSTED, useWorkspaceProviders, withWorkspaceProviders } from '@/workspaces/providers';
 import { useUpdateWorkspace } from '@/workspaces/queries';
 import {
   chatProviderChoices,
@@ -69,7 +71,14 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
   const [saved, setSaved] = useState(false);
   const [reindexing, setReindexing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const system = useSystem();
+  const systemStatus = useSystem();
+  const providers = useWorkspaceProviders(workspace.slug);
+  // The providers as this workspace sees them (with its own keys), so a key saved here unlocks its
+  // models in the pickers at once. Everything else (defaults, health) is the system's.
+  const system = { ...systemStatus, data: withWorkspaceProviders(systemStatus.data, providers.data) };
+  const [addingKey, setAddingKey] = useState<HostedProvider | null>(null);
+  const chosen = providers.data?.find((p) => p.id === form.chatProvider);
+  const needsKey = !!chosen && (HOSTED as readonly string[]).includes(chosen.id) && !chosen.configured;
   const save = useUpdateWorkspace(workspace.slug);
   const dirty = isDirty(form, loaded);
   // Pinned on what the field holds now, not on what was saved: a model belongs to the provider it
@@ -269,6 +278,17 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
               </select>
             </Field>
 
+            {needsKey && (
+              <p role="status" className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted-foreground">
+                  {form.chatProvider} has no API key for this workspace, so its models can't be listed.
+                </span>
+                <Button size="sm" variant="outline" onClick={() => setAddingKey(chosen.id as HostedProvider)}>
+                  Add {form.chatProvider} key
+                </Button>
+              </p>
+            )}
+
             {warning && (
               <p
                 role="status"
@@ -388,6 +408,18 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
           </Section>
 
           <Section
+            title="Provider keys"
+            note="Hosted providers need an API key. One saved here is used by this workspace only, instead of the API's .env; it is stored encrypted and never shown again."
+          >
+            <ProviderKeys slug={workspace.slug} providers={providers.data} onAdd={setAddingKey} />
+            {providers.error && (
+              <p role="alert" className="text-destructive text-sm">
+                The providers couldn't be read: {providers.error.message}
+              </p>
+            )}
+          </Section>
+
+          <Section
             title="Reindex"
             note="Changed the chunking, or need another embedding model? A reindex runs every document through the ingest flow again."
           >
@@ -440,6 +472,13 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
           workspace={workspace}
           system={system.data}
           onOpenChange={(open) => setReindexing(open)}
+        />
+      )}
+      {addingKey && (
+        <ProviderKeyDialog
+          slug={workspace.slug}
+          provider={addingKey}
+          onOpenChange={(open) => !open && setAddingKey(null)}
         />
       )}
       {deleting && <DeleteWorkspaceDialog workspace={workspace} onOpenChange={(open) => setDeleting(open)} />}

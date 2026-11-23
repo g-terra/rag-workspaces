@@ -2,7 +2,7 @@
 title: change the embedding model from the settings page
 date: 2026-11-23
 pr: "#94"
-status: in review
+status: merged
 areas: [admin]
 ---
 
