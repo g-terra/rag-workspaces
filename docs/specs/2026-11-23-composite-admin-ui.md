@@ -1,7 +1,7 @@
 ---
 title: Composite workspaces in the admin UI
 date: 2026-11-23
-pr: pending
+pr: "#118"
 status: in review
 areas: [admin, docs]
 ---
