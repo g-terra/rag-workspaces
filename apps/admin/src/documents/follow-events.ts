@@ -1,7 +1,7 @@
+import { failureDetail } from '@/api/problem';
+import { createSseParser, reconnectDelay } from '@/api/sse';
 import { sendAuthorized, type TokenSource } from '@/auth/authorized';
 import { toDocumentEvent, type DocumentEvent } from './events';
-import { createSseParser, reconnectDelay } from './sse';
-import { failureDetail } from './upload';
 
 export interface FollowOptions {
   slug: string;

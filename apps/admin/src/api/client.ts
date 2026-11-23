@@ -1,3 +1,5 @@
+import { problemDetail } from './problem';
+
 /** An error response from the API, with the problem JSON's `detail` (or the status text) as its message. */
 export class ApiError extends Error {
   constructor(
@@ -34,17 +36,8 @@ export function createApiClient({
     if (token) headers.set('authorization', `Bearer ${token}`);
     const res = await fetch(`/api${path}`, { ...init, headers });
     if (res.status === 401) onUnauthorized();
-    if (!res.ok) throw new ApiError(res.status, await problemMessage(res));
+    if (!res.ok) throw new ApiError(res.status, await problemDetail(res));
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
   };
-}
-
-async function problemMessage(res: Response): Promise<string> {
-  try {
-    const body = (await res.json()) as { detail?: string; title?: string };
-    return body.detail ?? body.title ?? res.statusText;
-  } catch {
-    return res.statusText || `HTTP ${res.status}`;
-  }
 }
