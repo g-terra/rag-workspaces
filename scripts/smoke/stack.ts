@@ -26,6 +26,7 @@ const SMOKE_SETTINGS = {
   PUBLIC_API_URL: 'http://localhost:13000',
   ADMIN_UI_URL: 'http://localhost:18080',
   KEYCLOAK_PUBLIC_URL: 'http://localhost:18081',
+  LANGFLOW_PUBLIC_URL: 'http://localhost:17860',
   DEFAULT_EMBEDDING_PROVIDER: 'lmstudio',
   DEFAULT_EMBEDDING_MODEL: 'standin-embed-a',
   // The stand-in has no prefixes of its own; these show they reach the model (check.ts).
