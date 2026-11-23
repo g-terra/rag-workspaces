@@ -5,6 +5,7 @@ import { Field } from '@/components/field';
 import { Notice } from '@/components/states';
 import { DeleteWorkspaceDialog } from '@/components/delete-workspace-dialog';
 import { ProviderKeyDialog, ProviderKeys } from '@/components/provider-keys';
+import { CompositeSourcesSettings } from '@/components/composite-sources';
 import { ReindexDialog } from '@/components/reindex-dialog';
 import { TopBar } from '@/components/top-bar';
 import { WorkspaceMembers } from '@/components/workspace-members';
@@ -85,6 +86,8 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
   // was chosen under, so the one saved for another provider must never be offered under this one.
   const models = modelChoices(system.data, form.chatProvider, form.chatModel);
   const warning = hostedWarning(form.chatProvider);
+  // A composite has no documents: embedding, chunking, threshold and reindex belong to its sources.
+  const standard = workspace.kind === 'standard';
 
   const set = (field: SettingsField) => (value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -298,65 +301,71 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
               </p>
             )}
 
-            <Field
-              id="ws-embedding"
-              label="Embedding model"
-              hint={
-                dirty
-                  ? 'Save your changes first: changing the model reindexes with the settings saved now.'
-                  : 'Changing it embeds every document again, and asking and search pause until that finishes.'
-              }
-            >
-              <div className="flex gap-2">
-                <Input
-                  id="ws-embedding"
-                  value={`${workspace.settings.embeddingProvider} / ${workspace.settings.embeddingModel}`}
-                  disabled
-                />
-                <Button
-                  variant="outline"
-                  className="h-9 shrink-0"
-                  aria-label="Change embedding model"
-                  // Same rule as the Reindex button below: it ingests with the saved settings.
-                  disabled={workspace.status === 'reindexing' || dirty}
-                  onClick={() => setReindexing(true)}
-                >
-                  Change…
-                </Button>
-              </div>
-            </Field>
+            {standard && (
+              <Field
+                id="ws-embedding"
+                label="Embedding model"
+                hint={
+                  dirty
+                    ? 'Save your changes first: changing the model reindexes with the settings saved now.'
+                    : 'Changing it embeds every document again, and asking and search pause until that finishes.'
+                }
+              >
+                <div className="flex gap-2">
+                  <Input
+                    id="ws-embedding"
+                    value={`${workspace.settings.embeddingProvider} / ${workspace.settings.embeddingModel}`}
+                    disabled
+                  />
+                  <Button
+                    variant="outline"
+                    className="h-9 shrink-0"
+                    aria-label="Change embedding model"
+                    // Same rule as the Reindex button below: it ingests with the saved settings.
+                    disabled={workspace.status === 'reindexing' || dirty}
+                    onClick={() => setReindexing(true)}
+                  >
+                    Change…
+                  </Button>
+                </div>
+              </Field>
+            )}
 
             <div className="grid gap-3.5 sm:grid-cols-2">
-              <Field
-                id="ws-chunk-size"
-                label="Chunk size"
-                error={errors.chunkSize}
-                hint="Characters per passage."
-              >
-                <NumberInput
+              {standard && (
+                <Field
                   id="ws-chunk-size"
-                  field="chunkSize"
-                  placeholder={defaultPlaceholder(system.data, 'chunkSize')}
-                  form={form}
-                  errors={errors}
-                  set={set}
-                />
-              </Field>
-              <Field
-                id="ws-chunk-overlap"
-                label="Chunk overlap"
-                error={errors.chunkOverlap}
-                hint="Characters each passage repeats from the one before."
-              >
-                <NumberInput
+                  label="Chunk size"
+                  error={errors.chunkSize}
+                  hint="Characters per passage."
+                >
+                  <NumberInput
+                    id="ws-chunk-size"
+                    field="chunkSize"
+                    placeholder={defaultPlaceholder(system.data, 'chunkSize')}
+                    form={form}
+                    errors={errors}
+                    set={set}
+                  />
+                </Field>
+              )}
+              {standard && (
+                <Field
                   id="ws-chunk-overlap"
-                  field="chunkOverlap"
-                  placeholder={defaultPlaceholder(system.data, 'chunkOverlap')}
-                  form={form}
-                  errors={errors}
-                  set={set}
-                />
-              </Field>
+                  label="Chunk overlap"
+                  error={errors.chunkOverlap}
+                  hint="Characters each passage repeats from the one before."
+                >
+                  <NumberInput
+                    id="ws-chunk-overlap"
+                    field="chunkOverlap"
+                    placeholder={defaultPlaceholder(system.data, 'chunkOverlap')}
+                    form={form}
+                    errors={errors}
+                    set={set}
+                  />
+                </Field>
+              )}
               <Field
                 id="ws-topk"
                 label="Top-k passages"
@@ -372,21 +381,23 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
                   set={set}
                 />
               </Field>
-              <Field
-                id="ws-min-score"
-                label="Relevance threshold"
-                error={errors.minScore}
-                hint="Below this, answers say the material doesn't cover it."
-              >
-                <NumberInput
+              {standard && (
+                <Field
                   id="ws-min-score"
-                  field="minScore"
-                  placeholder={defaultPlaceholder(system.data, 'minScore')}
-                  form={form}
-                  errors={errors}
-                  set={set}
-                />
-              </Field>
+                  label="Relevance threshold"
+                  error={errors.minScore}
+                  hint="Below this, answers say the material doesn't cover it."
+                >
+                  <NumberInput
+                    id="ws-min-score"
+                    field="minScore"
+                    placeholder={defaultPlaceholder(system.data, 'minScore')}
+                    form={form}
+                    errors={errors}
+                    set={set}
+                  />
+                </Field>
+              )}
             </div>
 
             <Field
@@ -419,33 +430,44 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
             )}
           </Section>
 
-          <Section
-            title="Reindex"
-            note="Changed the chunking, or need another embedding model? A reindex runs every document through the ingest flow again."
-          >
-            <p className="text-muted-foreground text-sm">
-              The workspace's vectors are built from nothing, so asking, chatting and search answer 503 until
-              the last document is done.
-            </p>
-            <div>
-              <Button
-                variant="outline"
-                size="sm"
-                // A reindex ingests with the settings the workspace has when it starts, so unsaved
-                // chunking would take a second run to apply. Save first, then reindex.
-                disabled={workspace.status === 'reindexing' || dirty}
-                onClick={() => setReindexing(true)}
-              >
-                {workspace.status === 'reindexing' ? 'Reindexing…' : 'Reindex workspace'}
-              </Button>
-              {dirty && workspace.status !== 'reindexing' && (
-                <p role="status" className="text-muted-foreground mt-1.5 text-xs">
-                  Save your changes first: a reindex ingests with the settings the workspace has when it
-                  starts.
-                </p>
-              )}
-            </div>
-          </Section>
+          {!standard && (
+            <Section
+              title="Sources"
+              note="The workspaces this one answers from. Each is searched with its own embedding model, chunking and relevance threshold; this workspace's chat model, prompt and top-k apply to the answer."
+            >
+              <CompositeSourcesSettings workspace={workspace} />
+            </Section>
+          )}
+
+          {standard && (
+            <Section
+              title="Reindex"
+              note="Changed the chunking, or need another embedding model? A reindex runs every document through the ingest flow again."
+            >
+              <p className="text-muted-foreground text-sm">
+                The workspace's vectors are built from nothing, so asking, chatting and search answer 503
+                until the last document is done.
+              </p>
+              <div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  // A reindex ingests with the settings the workspace has when it starts, so unsaved
+                  // chunking would take a second run to apply. Save first, then reindex.
+                  disabled={workspace.status === 'reindexing' || dirty}
+                  onClick={() => setReindexing(true)}
+                >
+                  {workspace.status === 'reindexing' ? 'Reindexing…' : 'Reindex workspace'}
+                </Button>
+                {dirty && workspace.status !== 'reindexing' && (
+                  <p role="status" className="text-muted-foreground mt-1.5 text-xs">
+                    Save your changes first: a reindex ingests with the settings the workspace has when it
+                    starts.
+                  </p>
+                )}
+              </div>
+            </Section>
+          )}
 
           <Section
             title="Members"

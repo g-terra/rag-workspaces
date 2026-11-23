@@ -1,12 +1,14 @@
-import { Plus } from 'lucide-react';
+import { Layers, Plus } from 'lucide-react';
 import { useRef, useState, type MouseEvent } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '@/auth/auth-context';
+import { CreateCompositeDialog } from '@/components/composite-sources';
 import { CreateWorkspaceDialog } from '@/components/create-workspace-dialog';
 import { ErrorState, Loading, Notice } from '@/components/states';
 import { TopBar } from '@/components/top-bar';
 import { Button } from '@/components/ui/button';
 import { WorkspaceAvatar } from '@/components/workspace-avatar';
+import { sourceChoices } from '@/workspaces/composite';
 import { useWorkspaces } from '@/workspaces/queries';
 
 /** "All workspaces": a card per workspace the caller can see; admins can create one. */
@@ -14,6 +16,7 @@ export function Workspaces() {
   const { me } = useAuth();
   const workspaces = useWorkspaces();
   const [creating, setCreating] = useState(false);
+  const [combining, setCombining] = useState(false);
   // The button that opened the dialog, so focus goes back to it on close.
   const opener = useRef<HTMLElement | null>(null);
   const openCreate = (e: MouseEvent<HTMLElement>) => {
@@ -35,9 +38,17 @@ export function Workspaces() {
             </p>
           </div>
           {isAdmin && (
-            <Button onClick={openCreate}>
-              <Plus /> New workspace
-            </Button>
+            <div className="flex gap-2">
+              {/* A composite needs two workspaces to draw on. */}
+              {sourceChoices(workspaces.data ?? []).length >= 2 && (
+                <Button variant="outline" onClick={() => setCombining(true)}>
+                  <Layers /> New composite
+                </Button>
+              )}
+              <Button onClick={openCreate}>
+                <Plus /> New workspace
+              </Button>
+            </div>
           )}
         </div>
         {workspaces.isPending && <Loading what="workspaces" />}
@@ -78,6 +89,12 @@ export function Workspaces() {
                   </div>
                 </div>
                 <p className="text-muted-foreground min-h-10.5 text-sm leading-normal">{w.description}</p>
+                {w.kind === 'composite' && (
+                  <p className="text-muted-foreground -mt-2 flex items-center gap-1.5 text-xs">
+                    <Layers className="size-3.5" aria-hidden /> Composite of{' '}
+                    {w.sources?.join(', ') || 'no workspaces'}
+                  </p>
+                )}
                 <Button variant="outline" size="sm" asChild>
                   <Link to={`/w/${w.slug}`} aria-label={`Open ${w.name}`}>
                     Open
@@ -89,6 +106,7 @@ export function Workspaces() {
         )}
       </div>
       {isAdmin && <CreateWorkspaceDialog open={creating} onOpenChange={setCreating} returnFocusTo={opener} />}
+      {isAdmin && <CreateCompositeDialog open={combining} onOpenChange={setCombining} />}
     </>
   );
 }
