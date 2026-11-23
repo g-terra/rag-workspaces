@@ -192,6 +192,7 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
       passageId: `psg_${docId.slice(4)}_4`,
       documentId: docId,
       documentTitle: 'Week 3 slides',
+      sourceUrl: null,
       page: 12,
       startSeconds: null,
       score: 0.83,

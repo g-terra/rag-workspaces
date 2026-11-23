@@ -200,6 +200,7 @@ export function createServer(api: RagApi, version: string): McpServer {
             rank: c.rank,
             passageId: c.passageId,
             documentTitle: c.documentTitle,
+            sourceUrl: c.sourceUrl,
             page: c.page,
             startSeconds: c.startSeconds,
             snippet: c.snippet,

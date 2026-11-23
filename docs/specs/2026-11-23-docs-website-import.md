@@ -1,8 +1,8 @@
 ---
 title: Import a documentation website into a workspace
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#119"
+status: merged
 areas: [api, db, flows, langflow-client, admin, docs]
 ---
 

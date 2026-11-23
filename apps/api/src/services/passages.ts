@@ -119,7 +119,7 @@ export async function resolveHits(
   const ids = [...new Set(hits.map((h) => h.document_id).filter((id): id is string => !!id))];
   const docs = ids.length
     ? await db
-        .select({ id: documents.id, title: documents.title })
+        .select({ id: documents.id, title: documents.title, sourceUrl: documents.sourceUrl })
         .from(documents)
         .where(
           and(
@@ -130,17 +130,18 @@ export async function resolveHits(
           ),
         )
     : [];
-  const titles = new Map(docs.map((d) => [d.id, d.title]));
+  const byId = new Map(docs.map((d) => [d.id, d]));
   return hits.flatMap((h) => {
-    const title = h.document_id ? titles.get(h.document_id) : undefined;
-    if (!h.document_id || title === undefined) return [];
+    const doc = h.document_id ? byId.get(h.document_id) : undefined;
+    if (!h.document_id || !doc) return [];
     const index = h.chunk_index ?? Number(h.id.split(':').pop());
     return [
       {
         rank: h.rank,
         id: passageId(h.document_id, index),
         documentId: h.document_id,
-        documentTitle: title,
+        documentTitle: doc.title,
+        sourceUrl: doc.sourceUrl,
         page: typeof h.page === 'number' ? h.page : null,
         startSeconds: typeof h.start_seconds === 'number' ? h.start_seconds : null,
         chunkIndex: index,

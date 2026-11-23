@@ -1,4 +1,4 @@
-import { documents, folders, newId, workspaces } from '@rag/db';
+import { documents, folders, newId, sites, workspaces } from '@rag/db';
 import { createTestDatabase } from '@rag/db/testing';
 import { LangflowClient } from '@rag/langflow-client';
 import { eq } from 'drizzle-orm';
@@ -141,6 +141,50 @@ describe.skipIf(!url)('passages (against TEST_DATABASE_URL)', () => {
   const get = (path: string, who: keyof typeof auth = 'reader') =>
     app.inject({ url: path, headers: { authorization: auth[who] } });
 
+  it('gives a passage from an imported website its page URL', async () => {
+    const [ws] = await t.db.select().from(workspaces).where(eq(workspaces.slug, 'ouc'));
+    const siteId = newId('site');
+    await t.db.insert(sites).values({
+      id: siteId,
+      workspaceId: ws!.id,
+      startUrl: 'https://auth0.com/docs',
+      scope: 'https://auth0.com/docs/',
+      maxPages: 10,
+      maxDepth: 3,
+    });
+    const pageId = newId('document');
+    await t.db.insert(documents).values({
+      id: pageId,
+      workspaceId: ws!.id,
+      siteId,
+      sourceUrl: 'https://auth0.com/docs/get-started',
+      title: 'Get Started with Auth0',
+      fileName: 'https://auth0.com/docs/get-started',
+      type: 'web',
+      sizeBytes: 10,
+      sha256: 'b'.repeat(64),
+      storagePath: `ouc/${pageId}.md`,
+      status: 'ready',
+    });
+    langflowReply = () =>
+      flowOutput([
+        {
+          rank: 1,
+          id: `${pageId}:0`,
+          text: 'Tenants',
+          score: 0.9,
+          document_id: pageId,
+          page: null,
+          chunk_index: 0,
+        },
+      ]);
+    const res = await get('/v1/workspaces/ouc/passages?query=tenant');
+    expect(res.json().data[0]).toMatchObject({
+      documentTitle: 'Get Started with Auth0',
+      sourceUrl: 'https://auth0.com/docs/get-started',
+    });
+  });
+
   it('search runs rw-retrieve with the workspace model and collection, and returns scored passages', async () => {
     const res = await get('/v1/workspaces/ouc/passages?query=what%20is%20rag');
     expect(res.statusCode).toBe(200);
@@ -149,6 +193,7 @@ describe.skipIf(!url)('passages (against TEST_DATABASE_URL)', () => {
         id: `psg_${docId.slice(4)}_1`,
         documentId: docId,
         documentTitle: 'Week 3 slides',
+        sourceUrl: null,
         page: 2,
         startSeconds: null,
         chunkIndex: 1,
