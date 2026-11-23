@@ -11,7 +11,7 @@ areas: [docs]
 ## Summary
 
 `docs/guide/playground.md` gains a short paragraph in "Response styles" that summarises the measurements
-added to `docs/tuning.md` (#126) and links them: every style cites, `concise` was the most accurate, and
+added to `docs/tuning.md` (#126) and links them: every style cites, `concise` was the only one with no wrong answer, and
 `talkative` sometimes answers uncovered questions instead of refusing. Also marks the previous guide
 follow-up spec merged. No code changed.
 
