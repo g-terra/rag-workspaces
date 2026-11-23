@@ -1,7 +1,7 @@
 ---
 title: keep every flow connection when a flow opens in the Langflow editor
 date: 2026-11-23
-pr: "#41"
+pr: "#42"
 status: in review
 areas: [flows, api, docs]
 ---
