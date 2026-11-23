@@ -7,7 +7,9 @@ import { loadConfig } from './config.js';
 import { chromaCheck, keycloakCheck } from './services/checks.js';
 import { ChromaService } from './services/chroma.js';
 import { DocumentEvents } from './services/document-events.js';
+import { Crawler, PgBossCrawlQueue } from './services/crawl.js';
 import { IngestProcessor, PgBossIngestQueue } from './services/ingest.js';
+import { LangflowPageFetcher } from './services/web-fetch.js';
 import { LangflowService } from './services/langflow.js';
 import { UploadStorage } from './services/storage.js';
 import { WhisperClient } from './services/whisper.js';
@@ -45,6 +47,21 @@ const queue = new PgBossIngestQueue(
   { maxAttempts: config.INGEST_MAX_ATTEMPTS },
 );
 
+const crawls = new PgBossCrawlQueue(
+  config.DATABASE_URL,
+  new Crawler({
+    db: database.db,
+    storage,
+    fetcher: new LangflowPageFetcher(langflow.client),
+    chroma,
+    events,
+    ingest: queue,
+    config,
+    log: logger.child({ component: 'crawl' }),
+  }),
+  logger.child({ component: 'crawl-queue' }),
+);
+
 const usage = new UsageLog(database.db, logger.child({ component: 'usage' }));
 
 const app = await buildApp({
@@ -56,6 +73,7 @@ const app = await buildApp({
   chroma,
   storage,
   queue,
+  crawls,
   events,
   authenticators: [
     apiKeyAuthenticator(database.db),
@@ -84,8 +102,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     app.log.info({ signal }, 'shutting down');
     langflow.stop();
-    queue
-      .stop()
+    Promise.all([queue.stop(), crawls.stop()])
       .then(() => app.close())
       .then(() => usage.flush())
       .then(() => database.close())
@@ -100,6 +117,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 }
 
 await queue.start();
+await crawls.start();
 await app.listen({ host: config.HOST, port: config.PORT });
 // Get a Langflow key after listening, so /health answers while Langflow is still slow.
 await langflow.start();
@@ -107,3 +125,6 @@ await langflow.start();
 void langflow.ready
   .then(() => queue.startWorking())
   .catch((err: unknown) => app.log.error({ err }, 'ingestion could not start; documents stay queued'));
+void langflow.ready
+  .then(() => crawls.startWorking())
+  .catch((err: unknown) => app.log.error({ err }, 'crawling could not start; sites stay queued'));

@@ -28,6 +28,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Workspace | `/v1/workspaces` | admin creates; members and keys see their own |
 | Folder | `/v1/workspaces/{slug}/folders` | reader to list, editor to change |
 | Document | `/v1/workspaces/{slug}/documents` | editor to change, reader to list |
+| Site (imported website) | `/v1/workspaces/{slug}/sites` | editor to change, reader to list |
 | Passage | `/v1/workspaces/{slug}/passages` | reader |
 | Answer (+ feedback) | `/v1/workspaces/{slug}/answers` | reader; an answer is visible only to whoever asked and to admins |
 | Conversation (+ messages) | `/v1/workspaces/{slug}/conversations` | reader; a conversation is visible only to whoever started it and to admins |
@@ -180,15 +181,18 @@ Custom styles are shared by every workspace. Answers keep the slug of the style 
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/file` | Download the original |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/transcript` | The timed transcript of a video or audio file: `{ "language": "en", "segments": [{ "start": 0, "end": 4.3, "text": "…" }] }` (seconds). `404` for other types and until it is transcribed |
 | GET | `/v1/workspaces/{slug}/documents/events` | Live status changes (server-sent events); see below |
+| GET, POST | `/v1/workspaces/{slug}/sites` | List imported websites; import one (`{ "url", "folderId"?, "maxPages"?, "maxDepth"?, "excludePaths"? }`, `202`, the crawl runs in the background; `409` for a start URL the workspace already has) |
+| GET, PATCH, DELETE | `/v1/workspaces/{slug}/sites/{siteId}` | Read with its crawl counters; change limits or folder (a folder change moves the existing pages; `409` while crawling); remove it with all its pages (`409` while crawling or while a page is processing) |
+| POST | `/v1/workspaces/{slug}/sites/{siteId}/crawl` | Crawl again: changed pages are re-ingested, new ones added, gone ones removed; `202`, or `409` while queued or crawling |
 
 ```json
 { "id": "doc_01J…", "workspace": "ouc", "folderId": "fld_01J…", "title": "Week 3 slides",
   "fileName": "week3.pdf", "type": "pdf", "sizeBytes": 2483011, "sha256": "9f2c…",
   "status": "processing", "attempts": 1, "error": null, "passageCount": null,
-  "tags": ["rag"], "createdAt": "…", "updatedAt": "…" }
+  "tags": ["rag"], "siteId": null, "sourceUrl": null, "createdAt": "…", "updatedAt": "…" }
 ```
 
-`type` is `pdf`, `docx`, `txt`, `md`, or with the video profile `mp4`, `mp3` or `wav` (without it those get `415`). `status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit (`MAX_UPLOAD_BYTES`, 2 GB by default) return `413` with the limit in `detail`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. `folderId` is `null` for a document at the top level.
+`type` is `pdf`, `docx`, `txt`, `md`, or with the video profile `mp4`, `mp3` or `wav` (without it those get `415`); `web` is a page of an imported website, with `siteId` and `sourceUrl` (the page's address) set, and stored as the Markdown it was turned into. `status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit (`MAX_UPLOAD_BYTES`, 2 GB by default) return `413` with the limit in `detail`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. `folderId` is `null` for a document at the top level.
 
 The events stream (`text/event-stream`, read with `fetch` since `EventSource` can't send `Authorization`) sends:
 
@@ -199,6 +203,34 @@ The events stream (`text/event-stream`, read with `fetch` since `EventSource` ca
 | `removed` | `{ "id": "doc_01J…" }` | A document was deleted |
 
 A document that finished or was deleted while a client was disconnected is not in the next snapshot, so a client that was following it fetches it with `GET …/documents/{documentId}` (`404` means it was deleted). Comments (`: keep-alive`) arrive every 15 seconds.
+
+### Imported websites
+
+A site is a documentation website crawled into the workspace, one document per page
+(docs/specs/2026-11-23-docs-website-import.md). Its **scope** is the start URL's directory (`https://auth0.com/docs`
+gives `https://auth0.com/docs/`): only pages on that host under that path are fetched, minus `excludePaths` (path
+prefixes such as translations, `/docs/fr-ca/`). The crawl honours robots.txt, starts from the sitemap when there is
+one, waits `CRAWL_DELAY_MS` (1 s by default, longer if robots.txt asks) between requests, and stops after `maxPages`
+(default 1000, at most 10,000) pages or `maxDepth` (default 10, at most 20) links from the start. When the site
+publishes `llms.txt`, each page's own Markdown (`<page>.md`) is used. Fetching goes through Langflow (`rw-fetch`),
+whose SSRF guard refuses private addresses.
+
+```json
+{ "id": "site_01J…", "workspace": "auth0", "folderId": null, "startUrl": "https://auth0.com/docs",
+  "scope": "https://auth0.com/docs/", "excludePaths": ["/docs/fr-ca/", "/docs/ja-jp/", "/docs/ko-kr/"],
+  "maxPages": 1000, "maxDepth": 10, "status": "crawling",
+  "pages": { "found": 2311, "fetched": 340, "new": 338, "changed": 0, "unchanged": 0, "removed": 0, "failed": 2 },
+  "documentCount": 338, "lastError": "https://auth0.com/docs/x: HTTP 500", "crawledAt": null,
+  "createdAt": "…", "updatedAt": "…" }
+```
+
+`status` is `queued`, `crawling`, `ready` or `failed` (`lastError` says why: the start URL answered 404, robots.txt
+disallows it, Langflow could not be reached). Pages appear in the documents list as they are found and are ingested
+like uploads, so the events stream shows their progress. Crawling again fetches every page the site has (even pages
+nothing links to any more) and re-ingests only pages whose content changed. It leaves a page alone while it is
+being ingested, and removes a page only when it answers 404 or 410, robots.txt now disallows it, or `excludePaths`
+now leaves it out; a page that errors or lies beyond `maxPages` keeps what it had. Pages are deduplicated within
+their site, not against uploads. The start URL must not carry a user name or password.
 
 ## Usage analytics
 

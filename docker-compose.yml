@@ -64,6 +64,8 @@ services:
       LANGFLOW_LOAD_FLOWS_PATH: /app/flows
       # Langflow 1.13 blocks model URLs on private networks; LM Studio on the host is one (F3).
       LANGFLOW_SSRF_ALLOWED_HOSTS: host.docker.internal
+      # Private hosts an imported docs website may be on (docs/setup.md, "Documentation websites").
+      CRAWL_ALLOWED_HOSTS: ${CRAWL_ALLOWED_HOSTS:-}
       # Never put OPENAI_API_KEY here: Langflow refuses to send env keys to non-OpenAI hosts (F3).
       DO_NOT_TRACK: 'true'
     volumes:
