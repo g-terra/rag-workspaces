@@ -24,6 +24,7 @@ import {
   type ConversationService,
 } from '../services/conversations.js';
 import { flowProblem } from '../services/flow-errors.js';
+import { styleFor } from '../services/styles.js';
 import { wantsEventStream } from '../sse.js';
 import { messageUsage } from '../usage/details.js';
 import { streamGeneration } from './streaming.js';
@@ -181,6 +182,7 @@ export const conversationRoutes: FastifyPluginAsyncZod<ConversationRoutesOptions
         conversation,
         content: req.body.content,
         folderId: req.body.folderId && (await requireFolder(db, workspace.id, req.body.folderId)),
+        style: styleFor(req.body.style, workspace),
         requestId: req.id,
       };
 

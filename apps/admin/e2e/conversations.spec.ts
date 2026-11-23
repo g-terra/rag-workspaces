@@ -89,6 +89,12 @@ test('lists conversations, opens one, carries it on and deletes it', async ({ pa
   await page.reload();
   await expect(page.getByTestId('stored-reply')).toHaveCount(2);
 
+  // Backing out of the delete dialog puts focus back on the Delete button that opened it.
+  await page.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByText(/This can't be undone/)).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Delete' })).toBeFocused();
+
   // Deleting asks first, then the conversation and its messages are gone without showing a 404 error pane.
   await page.getByRole('button', { name: 'Delete' }).click();
   await expect(page.getByText(/This can't be undone/)).toBeVisible();
@@ -96,6 +102,8 @@ test('lists conversations, opens one, carries it on and deletes it', async ({ pa
   await expect(page.getByRole('heading', { name: 'No conversations yet' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Open a conversation' })).toBeVisible();
   await expect(page.getByText('The conversation could not be loaded')).toHaveCount(0);
+  // The Delete button that opened the dialog is gone with the conversation, so focus moves to the heading.
+  await expect(page.getByRole('heading', { name: 'Conversations', exact: true })).toBeFocused();
   const gone = await page.request.get(`/api/v1/workspaces/${ws.slug}/conversations/${conversationId}`, {
     headers,
   });

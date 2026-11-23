@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Citation, Usage } from './answers.js';
 import { WorkspaceSlug } from './common.js';
+import { StyleSlug } from './styles.js';
 
 export const Message = z.object({
   id: z.string(),
@@ -13,6 +14,8 @@ export const Message = z.object({
   grounded: z.boolean().nullable(),
   citations: z.array(Citation),
   model: z.string().nullable(),
+  /** Assistant replies: the response style used, or `null` for none. Always `null` for the user's messages. */
+  style: StyleSlug.nullable(),
   usage: Usage,
   latencyMs: z.number().int().nullable(),
   timeToFirstTokenMs: z.number().int().nullable(),
@@ -40,6 +43,8 @@ export const SendMessage = z.object({
   content: z.string().trim().min(1).max(4000),
   /** Only use passages from documents in this folder, for this message. */
   folderId: z.string().min(1).optional(),
+  /** A response style slug for this reply (`GET /v1/styles`). Left out: the workspace's `settings.style`; `null`: no style. */
+  style: StyleSlug.nullable().optional(),
 });
 export type SendMessage = z.infer<typeof SendMessage>;
 

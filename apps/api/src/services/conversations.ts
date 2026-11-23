@@ -8,7 +8,7 @@ import {
   type Workspace,
 } from '@rag/db';
 import type { LangflowClient } from '@rag/langflow-client';
-import type { Conversation, Message } from '@rag/shared';
+import type { Conversation, Message, ResponseStyle } from '@rag/shared';
 import { desc, eq } from 'drizzle-orm';
 import type { Principal } from '../auth/principal.js';
 import type { Config } from '../config.js';
@@ -23,6 +23,7 @@ type SendInput = {
   conversation: ConversationRow;
   content: string;
   folderId?: string;
+  style: ResponseStyle | null;
   requestId?: string;
   onToken?: (text: string) => void;
   signal?: AbortSignal;
@@ -86,6 +87,7 @@ export class ConversationService {
       searchQuery: previousQuestion ? `${clip(previousQuestion, 500)}\n${content}` : content,
       history,
       folderId: input.folderId,
+      style: input.style,
       sessionId: conversation.id,
       onToken: input.onToken,
       signal: input.signal,
@@ -103,6 +105,7 @@ export class ConversationService {
         citations: gen.citations,
         provider: gen.provider,
         model: gen.model,
+        style: gen.style,
         promptTokens: gen.promptTokens,
         completionTokens: gen.completionTokens,
         latencyMs: gen.latencyMs,
@@ -149,6 +152,7 @@ export function toApiMessage(m: MessageRow): Message {
     grounded: m.grounded,
     citations: m.citations.map(withStartSeconds),
     model: m.model,
+    style: m.style,
     usage: { promptTokens: m.promptTokens, completionTokens: m.completionTokens },
     latencyMs: m.latencyMs,
     timeToFirstTokenMs: m.timeToFirstTokenMs,

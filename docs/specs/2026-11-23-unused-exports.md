@@ -2,7 +2,7 @@
 title: Stop exporting helpers nothing imports
 date: 2026-11-23
 pr: "#102"
-status: in review
+status: merged
 areas: [api, db]
 ---
 

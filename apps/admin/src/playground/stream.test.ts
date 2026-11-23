@@ -14,6 +14,7 @@ const answer: Answer = {
   citations: [],
   provider: 'lmstudio',
   model: 'a-model',
+  style: null,
   usage: { promptTokens: 120, completionTokens: 18 },
   latencyMs: 2310,
   timeToFirstTokenMs: 410,

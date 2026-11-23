@@ -85,7 +85,8 @@ curl -s "$RW/v1/workspaces/ouc/conversations/$CNV/messages" -H "Authorization: B
   -H 'content-type: application/json' -d '{ "content": "And what are its weaknesses?" }'
 ```
 
-Search, ask and chat messages all take an optional `folderId` to use only that folder's documents.
+Search, ask and chat messages all take an optional `folderId` to use only that folder's documents. Ask and chat
+messages also take an optional `style`, a response style from `GET /v1/styles` such as `academic` or `concise`.
 Answers and conversations are private: only the key or person that created them, and admins, can read them.
 
 ## From code

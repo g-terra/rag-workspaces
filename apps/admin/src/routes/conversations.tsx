@@ -1,6 +1,6 @@
 import type { ConversationWithMessages, Message } from '@rag/shared';
 import { Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState, type RefObject } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { conversationName, messageBody } from '@/conversations/thread';
 import { useConversation, useConversations, useDeleteConversation } from '@/conversations/queries';
@@ -27,13 +27,20 @@ export function Conversations() {
   const [params, setParams] = useSearchParams();
   const openId = params.get('c');
   const list = useConversations(w.slug);
+  const heading = useRef<HTMLHeadingElement>(null);
 
   return (
     <>
       <TopBar trail={[w.name, 'Conversations']} />
       <div className="flex w-full max-w-350 flex-col gap-5 px-6 pt-7 pb-12">
         <div>
-          <h1 className="mb-1.5 text-2xl font-semibold tracking-tight">Conversations</h1>
+          <h1
+            ref={heading}
+            tabIndex={-1}
+            className="mb-1.5 text-2xl font-semibold tracking-tight outline-none"
+          >
+            Conversations
+          </h1>
           <p className="text-muted-foreground text-sm">
             Your conversations with this workspace, with the passages each reply was given.
           </p>
@@ -100,6 +107,8 @@ export function Conversations() {
                 slug={w.slug}
                 id={openId}
                 onDeleted={() => setParams({}, { replace: true })}
+                // The Delete button that opened the dialog is gone with the conversation.
+                focusAfterDelete={() => heading.current?.focus()}
               />
             )}
           </div>
@@ -110,11 +119,22 @@ export function Conversations() {
 }
 
 /** One conversation: what is stored, then whatever you add to it now. */
-function Thread({ slug, id, onDeleted }: { slug: string; id: string; onDeleted(): void }) {
+function Thread({
+  slug,
+  id,
+  onDeleted,
+  focusAfterDelete,
+}: {
+  slug: string;
+  id: string;
+  onDeleted(): void;
+  focusAfterDelete(): void;
+}) {
   const stored = useConversation(slug, id);
   const chat = useChat(slug, id);
   const [openPassage, setOpenPassage] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const deleteButton = useRef<HTMLButtonElement>(null);
   const streaming = lastTurn(chat)?.status === 'streaming';
 
   if (stored.isPending) return <Loading what="the conversation" />;
@@ -135,7 +155,7 @@ function Thread({ slug, id, onDeleted }: { slug: string; id: string; onDeleted()
           <h2 className="truncate text-lg font-semibold">{conversationName(stored.data)}</h2>
           <p className="text-muted-foreground text-xs">Started {formatRelative(stored.data.createdAt)}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
+        <Button ref={deleteButton} variant="outline" size="sm" onClick={() => setConfirming(true)}>
           <Trash2 /> Delete
         </Button>
       </div>
@@ -170,6 +190,8 @@ function Thread({ slug, id, onDeleted }: { slug: string; id: string; onDeleted()
         open={confirming}
         onOpenChange={setConfirming}
         onDeleted={onDeleted}
+        returnFocusTo={deleteButton}
+        focusAfterDelete={focusAfterDelete}
       />
     </div>
   );
@@ -209,8 +231,12 @@ function DeleteDialog(props: {
   open: boolean;
   onOpenChange(open: boolean): void;
   onDeleted(): void;
+  /** Gets focus back when the dialog closes without deleting (it is opened from state, so Radix can't). */
+  returnFocusTo: RefObject<HTMLButtonElement | null>;
+  focusAfterDelete(): void;
 }) {
   const remove = useDeleteConversation(props.slug);
+  const deleted = useRef(false);
   return (
     <Dialog
       open={props.open}
@@ -220,7 +246,14 @@ function DeleteDialog(props: {
         props.onOpenChange(open);
       }}
     >
-      <DialogContent>
+      <DialogContent
+        onCloseAutoFocus={(e) => {
+          // Runs once the focus trap and aria-hidden are gone, so focus moved here stays and is announced.
+          e.preventDefault();
+          if (deleted.current) props.focusAfterDelete();
+          else props.returnFocusTo.current?.focus();
+        }}
+      >
         <DialogTitle>Delete this conversation?</DialogTitle>
         <DialogDescription>
           "{conversationName(props.conversation)}" and its {props.conversation.messages.length} messages are
@@ -243,6 +276,7 @@ function DeleteDialog(props: {
             onClick={() =>
               remove.mutate(props.conversation.id, {
                 onSuccess: () => {
+                  deleted.current = true;
                   props.onOpenChange(false);
                   props.onDeleted();
                 },
