@@ -27,7 +27,9 @@ Versions follow [semantic versioning](https://semver.org) and are picked from th
 1. Every push to `main` updates a release pull request (`chore(main): release x.y.z`) with the next version
    and `CHANGELOG.md`. `fix` bumps the patch version; `feat` and breaking changes bump the minor version
    while we are below 1.0.
-2. Merging it tags `vX.Y.Z` and creates the GitHub release.
+2. Merging it tags `vX.Y.Z`, creates the GitHub release, sets that version in the API's `package.json` (shown
+   in Swagger), and publishes `ghcr.io/g-terra/rag-workspaces-api` and `-admin` tagged `X.Y.Z`,
+   `X.Y` and `latest`.
 
 ## Run the stack
 
@@ -65,6 +67,7 @@ pnpm test        # Vitest in every package (database tests run when TEST_DATABAS
 pnpm lint        # ESLint
 pnpm typecheck   # tsc --noEmit
 pnpm format      # Prettier
+pnpm smoke       # end to end on a throwaway compose stack with a stand-in model (needs Docker)
 ```
 
 End-to-end tests drive the admin UI in a real browser against the running stack (`docker compose up -d --build`
@@ -83,6 +86,7 @@ pnpm --filter @rag/admin e2e
 | `apps/api` | Fastify API: `pnpm --filter @rag/api dev`, then Swagger UI at http://localhost:3000/docs |
 | `packages/config` | Shared TypeScript, ESLint and Vitest settings |
 | `packages/db` | Drizzle schema, SQL migrations (`drizzle/`) and the Postgres connection. Migrations run when the API starts |
+| `scripts/smoke` | The compose smoke test: `stack.ts up` and `down` run the stack as project `rag-workspaces-smoke` with `docker-compose.smoke.yml`, `check.ts` the checks |
 | `packages/langflow-client` | Typed client for Langflow's login, API key, flow and run/stream endpoints |
 | `packages/shared` | zod schemas shared by the API and the admin UI (the API contract) |
 | `docker-compose.yml`, `docker/` | The stack, the API image, the Postgres init script and the Keycloak realm |

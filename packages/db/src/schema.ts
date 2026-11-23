@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  boolean,
   index,
   integer,
   jsonb,
@@ -169,3 +170,157 @@ export const documents = pgTable(
 );
 
 export type Document = typeof documents.$inferSelect;
+
+export const answerStatus = pgEnum('answer_status', ['complete', 'failed']);
+export const callerKind = pgEnum('caller_kind', ['user', 'key']);
+export const feedbackRating = pgEnum('feedback_rating', ['up', 'down']);
+
+/** A passage given to the model, as stored with the answer (a snapshot: later re-indexing does not change it). */
+export type StoredCitation = {
+  /** The `[n]` the model saw for this passage. */
+  rank: number;
+  passageId: string;
+  documentId: string;
+  documentTitle: string;
+  page: number | null;
+  snippet: string;
+  score: number;
+};
+
+/**
+ * One question answered from a workspace's material. Stored whether it worked or not, so
+ * failures show in usage. Only the caller who asked (and admins) can read it back.
+ */
+export const answers = pgTable(
+  'answers',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    askedByKind: callerKind().notNull(),
+    /** Keycloak user id or API key id. Not a foreign key: answers outlive revoked keys. */
+    askedBy: text().notNull(),
+    question: text().notNull(),
+    /** `null` when generation failed. */
+    text: text(),
+    status: answerStatus().notNull(),
+    /** False when no passage reached the minimum score; the model was not called. */
+    grounded: boolean().notNull(),
+    citations: jsonb().$type<StoredCitation[]>().notNull().default([]),
+    /** `null` for an ungrounded answer (no model was called). */
+    provider: text(),
+    model: text(),
+    promptTokens: integer(),
+    completionTokens: integer(),
+    latencyMs: integer().notNull(),
+    /** Streaming only. */
+    timeToFirstTokenMs: integer(),
+    error: text(),
+    requestId: text(),
+    feedbackRating: feedbackRating(),
+    feedbackComment: text(),
+    feedbackAt: timestamp({ withTimezone: true }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('answers_workspace_created_idx').on(t.workspaceId, t.createdAt)],
+);
+
+export type Answer = typeof answers.$inferSelect;
+export type NewAnswer = typeof answers.$inferInsert;
+
+/** A chat in a workspace. Private to whoever started it (admins can read any). */
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    ownerKind: callerKind().notNull(),
+    /** Keycloak user id or API key id. */
+    ownerId: text().notNull(),
+    /** Set from the first message unless given. */
+    title: text(),
+    ...timestamps,
+  },
+  (t) => [index('conversations_owner_idx').on(t.workspaceId, t.ownerKind, t.ownerId, t.updatedAt)],
+);
+
+export type Conversation = typeof conversations.$inferSelect;
+
+export const messageRole = pgEnum('message_role', ['user', 'assistant']);
+
+/**
+ * One turn. The history the flow sees comes from here (the flow itself is stateless).
+ * Assistant messages carry the same fields as an answer.
+ */
+export const messages = pgTable(
+  'messages',
+  {
+    id: text().primaryKey(),
+    conversationId: text()
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    role: messageRole().notNull(),
+    /** `null` for an assistant reply that failed. */
+    content: text(),
+    status: answerStatus().notNull().default('complete'),
+    grounded: boolean(),
+    citations: jsonb().$type<StoredCitation[]>().notNull().default([]),
+    provider: text(),
+    model: text(),
+    promptTokens: integer(),
+    completionTokens: integer(),
+    latencyMs: integer(),
+    timeToFirstTokenMs: integer(),
+    error: text(),
+    requestId: text(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('messages_conversation_created_idx').on(t.conversationId, t.createdAt)],
+);
+
+export type Message = typeof messages.$inferSelect;
+
+/**
+ * The usage log: one row per `/v1` request, written after the response. No foreign keys, so
+ * rows outlive deleted workspaces and revoked keys (analytics keep their history).
+ * Asking routes add what was asked and how it went; `question` is cleared after the
+ * retention period (USAGE_QUESTION_RETENTION_DAYS) while the rest stays for counts.
+ */
+export const apiRequests = pgTable(
+  'api_requests',
+  {
+    id: bigint({ mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    requestId: text().notNull(),
+    method: text().notNull(),
+    /** The route pattern (`/v1/workspaces/:slug/answers`), so requests group by endpoint. */
+    route: text().notNull(),
+    statusCode: integer().notNull(),
+    latencyMs: integer().notNull(),
+    /** From the `:slug` in the path; `workspaceId` is null when no such workspace existed. */
+    workspaceSlug: text(),
+    workspaceId: text(),
+    callerKind: callerKind(),
+    callerId: text(),
+    // --- Asking routes only ---
+    question: text(),
+    answerId: text(),
+    messageId: text(),
+    model: text(),
+    grounded: boolean(),
+    promptTokens: integer(),
+    completionTokens: integer(),
+    timeToFirstTokenMs: integer(),
+    citedDocumentIds: text().array(),
+  },
+  (t) => [
+    index('api_requests_created_idx').on(t.createdAt),
+    index('api_requests_workspace_created_idx').on(t.workspaceId, t.createdAt),
+    index('api_requests_caller_created_idx').on(t.callerKind, t.callerId, t.createdAt),
+  ],
+);
+
+export type NewApiRequest = typeof apiRequests.$inferInsert;

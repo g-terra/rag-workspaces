@@ -17,6 +17,19 @@ rag-workspaces is a general tool; its first use is the COS512 Langflow assignmen
 9. Tests at every layer, running in CI.
 10. A submittable assignment early: the brief is fully covered once the API, flows, analytics, tests and docs exist (milestone M2 in the [work breakdown](work-breakdown.md)). The admin UI, video and the rest build on top and must not put the hand-in at risk.
 
+## Status
+
+This document describes the whole design. As of 2026-11-22 the backend through M2 is built (in review
+as a stack of PRs), and each change has a spec in [docs/specs/](specs/) saying what it added and why.
+
+| Built | Not built yet |
+|---|---|
+| Compose stack, `pnpm env:init`, API skeleton, readiness | `GET /v1/system`, `GET /v1/users`, rate limits |
+| Keycloak auth, API keys, workspaces, members, isolation | Folders, document `PATCH`, workspace reindex and the `reindexing` status |
+| Upload, dedupe, pg-boss ingestion, SSE status | Whisper and the `video` profile, transcripts |
+| Passages, answers (+ streaming, feedback), conversations (`rw-chat`) | Workspace `stats`, per-key request counts |
+| Usage log and analytics, release versioning | `pnpm doctor`, `backup`/`restore`, `flows:export`/`flows:import`; admin UI screens (shell only) |
+
 ## System overview
 
 ```mermaid
@@ -75,7 +88,7 @@ The provider is a setting, not code. LM Studio is the default and needs no key.
 | Anthropic | yes | no | `ANTHROPIC_API_KEY`; has no embedding models, so embeddings come from another provider |
 | Any OpenAI-compatible endpoint | yes | if it offers them | Base URL and key |
 
-- Providers are configured in `.env` (base URL and key per provider). Keys never go through the API or into flow JSON; Langflow reads them as global variables.
+- Providers are configured in `.env` (base URL and key per provider). The API reads the keys and sends them to Langflow as per-run tweaks (see the last bullet); they never go into flow JSON or Langflow's environment, and API routes never accept or return them.
 - Chat and embeddings are chosen separately: a global default for each in `.env`, and a workspace can override either (`chatProvider` and `chatModel`, `embeddingProvider` and `embeddingModel`). A common mix is local embeddings with a hosted chat model.
 - The embedding provider and model are pinned per workspace like the embedding model was; changing either means a reindex.
 - **A hosted provider sends that workspace's passages and questions to the provider.** The workspace settings screen says so in plain words, and a workspace on LM Studio stays fully local.
@@ -89,9 +102,9 @@ Easy start:
 
 ```bash
 # In LM Studio: load a chat model and an embedding model, start the local server
-cp .env.example .env
-docker compose up -d                   # core stack
-docker compose --profile video up -d   # plus video transcription
+pnpm env:init                          # writes .env with fresh secrets
+docker compose up -d --build           # core stack
+docker compose --profile video up -d   # plus video transcription (M5, not built yet)
 # Admin UI http://localhost:8080 · Swagger http://localhost:3000/docs · Langflow http://localhost:7860
 ```
 

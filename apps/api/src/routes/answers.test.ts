@@ -1,0 +1,468 @@
+import { answers, documents, newId, workspaces } from '@rag/db';
+import { createTestDatabase } from '@rag/db/testing';
+import { LangflowClient } from '@rag/langflow-client';
+import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildApp, type App } from '../app.js';
+import { apiKeyAuthenticator } from '../auth/api-keys.js';
+import { keycloakAuthenticator } from '../auth/keycloak.js';
+import { loadConfig } from '../config.js';
+import { AnswerService, NOT_FOUND_TEXT } from '../services/answers.js';
+import { ChromaService } from '../services/chroma.js';
+import { testKeycloak } from '../test/tokens.js';
+
+const url = process.env.TEST_DATABASE_URL;
+
+type Run = { flow: string; body: { input_value: string; tweaks: Record<string, Record<string, unknown>> } };
+
+const output = (outputs: Record<string, string>, usage?: unknown) =>
+  Response.json(outputBody(outputs, usage));
+const outputBody = (outputs: Record<string, string>, usage?: unknown) => ({
+  outputs: [
+    {
+      outputs: Object.entries(outputs).map(([component_id, text]) => ({
+        component_id,
+        results: { message: { text, properties: { usage } } },
+      })),
+    },
+  ],
+});
+const fenced = (v: unknown) => '```json\n' + JSON.stringify(v) + '\n```';
+
+describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
+  let t: Awaited<ReturnType<typeof createTestDatabase>>;
+  let app: App;
+  let docId = '';
+  const auth = { admin: '', reader: '', other: '' };
+  const runs: Run[] = [];
+  let hits: unknown[] = [];
+  let answerReply: () => Response;
+  let kc: Awaited<ReturnType<typeof testKeycloak>>;
+  let streamEvents: () => unknown[];
+  /** When set, the streamed run sends one token and then waits until it is aborted. */
+  let hangAfterFirstToken = false;
+
+  const langflowFetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const flow = /\/run\/([^?]+)/.exec(String(input))![1]!;
+    runs.push({ flow, body: JSON.parse(String(init?.body)) });
+    if (flow === 'rw-retrieve') return output({ 'ChatOutput-passages': fenced({ passages: hits }) });
+    if (String(input).includes('stream=true') && hangAfterFirstToken) {
+      const signal = init?.signal;
+      return new Response(
+        new ReadableStream({
+          start(c) {
+            c.enqueue(
+              new TextEncoder().encode(JSON.stringify({ event: 'token', data: { chunk: 'RAG ' } }) + '\n\n'),
+            );
+            signal?.addEventListener('abort', () => c.error(signal.reason));
+          },
+        }),
+      );
+    }
+    if (String(input).includes('stream=true')) {
+      return new Response(
+        streamEvents()
+          .map((e) => JSON.stringify(e) + '\n\n')
+          .join(''),
+      );
+    }
+    return answerReply();
+  }) as typeof fetch;
+
+  beforeAll(async () => {
+    t = await createTestDatabase(url!);
+    kc = await testKeycloak();
+    auth.admin = `Bearer ${await kc.token({ sub: 'admin-1', realm_access: { roles: ['admin'] } })}`;
+    auth.reader = `Bearer ${await kc.token({ sub: 'reader-1' })}`;
+    auth.other = `Bearer ${await kc.token({ sub: 'reader-2' })}`;
+    app = await buildApp({
+      config: loadConfig({
+        NODE_ENV: 'test',
+        DEFAULT_CHAT_PROVIDER: 'lmstudio',
+        DEFAULT_CHAT_MODEL: 'qwen-test',
+        DEFAULT_TOP_K: '4',
+      }),
+      db: t.db,
+      chroma: new ChromaService({ CHROMA_URL: 'http://chroma:8000' }, (async () =>
+        Response.json({ id: 'cid' })) as typeof fetch),
+      langflow: new LangflowClient({ baseUrl: 'http://lf', apiKey: 'sk', fetch: langflowFetch }),
+      logger: false,
+      authenticators: [apiKeyAuthenticator(t.db), keycloakAuthenticator(kc.options)],
+    });
+    const h = { authorization: auth.admin };
+    await app.inject({
+      method: 'POST',
+      url: '/v1/workspaces',
+      headers: h,
+      payload: { slug: 'ouc', name: 'OUC' },
+    });
+    for (const id of ['reader-1', 'reader-2']) {
+      await app.inject({
+        method: 'PUT',
+        url: `/v1/workspaces/ouc/members/${id}`,
+        headers: h,
+        payload: { role: 'reader' },
+      });
+    }
+    const [ws] = await t.db.select().from(workspaces).where(eq(workspaces.slug, 'ouc'));
+    docId = newId('document');
+    await t.db.insert(documents).values({
+      id: docId,
+      workspaceId: ws!.id,
+      title: 'Week 3 slides',
+      fileName: 'week3.pdf',
+      type: 'pdf',
+      sizeBytes: 10,
+      sha256: 'b'.repeat(64),
+      storagePath: `ouc/${docId}.pdf`,
+      status: 'ready',
+      passageCount: 2,
+    });
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    await t?.drop();
+  });
+
+  beforeEach(() => {
+    runs.length = 0;
+    const passage = {
+      rank: 1,
+      id: `${docId}:4`,
+      text: 'RAG retrieves relevant passages '.repeat(20),
+      score: 0.83,
+      document_id: docId,
+      page: 12,
+      chunk_index: 4,
+    };
+    hits = [passage];
+    hangAfterFirstToken = false;
+    streamEvents = () => [
+      { event: 'add_message', data: {} },
+      { event: 'token', data: { chunk: 'RAG combines ' } },
+      { event: 'token', data: { chunk: '' } },
+      { event: 'token', data: { chunk: 'retrieval [1].' } },
+      { event: 'end', data: { result: JSON.parse(JSON.stringify(answerBody())) } },
+    ];
+    answerReply = () => Response.json(answerBody());
+    const answerBody = () =>
+      outputBody(
+        {
+          'ChatOutput-answer': 'RAG combines retrieval with generation [1].',
+          'ChatOutput-citations': fenced({ passages: [passage] }),
+        },
+        { input_tokens: 1840, output_tokens: 212 },
+      );
+  });
+
+  const ask = (payload: unknown, who: keyof typeof auth = 'reader') =>
+    app.inject({
+      method: 'POST',
+      url: '/v1/workspaces/ouc/answers',
+      headers: { authorization: auth[who] },
+      payload: payload as object,
+    });
+
+  it('answers with citations, usage and the workspace chat model, and stores it', async () => {
+    const res = await ask({ question: 'What is RAG?' });
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body).toMatchObject({
+      workspace: 'ouc',
+      question: 'What is RAG?',
+      text: 'RAG combines retrieval with generation [1].',
+      status: 'complete',
+      grounded: true,
+      provider: 'lmstudio',
+      model: 'qwen-test',
+      usage: { promptTokens: 1840, completionTokens: 212 },
+      timeToFirstTokenMs: null,
+      error: null,
+      feedback: null,
+    });
+    expect(body.id).toMatch(/^ans_/);
+    expect(body.citations).toHaveLength(1);
+    expect(body.citations[0]).toMatchObject({
+      rank: 1,
+      passageId: `psg_${docId.slice(4)}_4`,
+      documentId: docId,
+      documentTitle: 'Week 3 slides',
+      page: 12,
+      score: 0.83,
+    });
+    expect(body.citations[0].snippet.length).toBeLessThanOrEqual(241);
+
+    expect(runs.map((r) => r.flow)).toEqual(['rw-retrieve', 'rw-answer']);
+    const llm = runs[1]!.body.tweaks.LLM!;
+    expect(llm).toMatchObject({ provider: 'lmstudio', model_name: 'qwen-test', stream: false });
+    expect(String(llm.system_message)).toContain('[n]');
+    expect(runs[1]!.body.tweaks.Search).toMatchObject({ collection_name: 'ws_ouc', top_k: 4 });
+
+    const [stored] = await t.db.select().from(answers).where(eq(answers.id, body.id));
+    expect(stored).toMatchObject({
+      askedByKind: 'user',
+      askedBy: 'reader-1',
+      requestId: res.headers['x-request-id'],
+    });
+  });
+
+  it('nothing relevant: an ungrounded answer with the fixed text, and no model call', async () => {
+    hits = [];
+    const res = await ask({ question: 'What is the capital of Peru?' });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({
+      grounded: false,
+      text: NOT_FOUND_TEXT,
+      citations: [],
+      provider: null,
+    });
+    expect(runs.map((r) => r.flow)).toEqual(['rw-retrieve']);
+  });
+
+  it('maxPassages sets how many passages the model gets', async () => {
+    await ask({ question: 'x', maxPassages: 2 });
+    expect(runs[1]!.body.tweaks.Search).toMatchObject({ top_k: 2 });
+  });
+
+  it('a failed generation is a 502 and is still stored as failed', async () => {
+    answerReply = () => Response.json({ detail: { message: 'model qwen-test not loaded' } }, { status: 500 });
+    const res = await ask({ question: 'Will this fail?' });
+    expect(res.statusCode).toBe(502);
+    expect(res.json().detail).toContain('not loaded');
+    const [stored] = await t.db.select().from(answers).where(eq(answers.question, 'Will this fail?'));
+    expect(stored).toMatchObject({ status: 'failed', text: null, model: 'qwen-test' });
+    expect(stored!.error).toContain('not loaded');
+  });
+
+  it('a missing provider key is a 503', async () => {
+    await app.inject({
+      method: 'PATCH',
+      url: '/v1/workspaces/ouc',
+      headers: { authorization: auth.admin },
+      payload: { settings: { chatProvider: 'anthropic', chatModel: 'claude' } },
+    });
+    try {
+      const res = await ask({ question: 'x' });
+      expect(res.statusCode).toBe(503);
+      expect(res.json().detail).toContain('ANTHROPIC_API_KEY');
+      expect(runs).toHaveLength(0);
+    } finally {
+      await app.inject({
+        method: 'PATCH',
+        url: '/v1/workspaces/ouc',
+        headers: { authorization: auth.admin },
+        payload: { settings: { chatProvider: null, chatModel: null } },
+      });
+    }
+  });
+
+  it('only the asker and admins can read or rate an answer', async () => {
+    const id = (await ask({ question: 'mine' })).json().id;
+    const get = (who: keyof typeof auth) =>
+      app.inject({ url: `/v1/workspaces/ouc/answers/${id}`, headers: { authorization: auth[who] } });
+    expect((await get('reader')).statusCode).toBe(200);
+    expect((await get('admin')).statusCode).toBe(200);
+    expect((await get('other')).statusCode).toBe(404);
+  });
+
+  it('feedback is stored, and rating again replaces it', async () => {
+    const id = (await ask({ question: 'rate me' })).json().id;
+    const rate = (payload: object) =>
+      app.inject({
+        method: 'POST',
+        url: `/v1/workspaces/ouc/answers/${id}/feedback`,
+        headers: { authorization: auth.reader },
+        payload,
+      });
+    const down = await rate({ rating: 'down', comment: 'missed week 4' });
+    expect(down.statusCode).toBe(200);
+    expect(down.json().feedback).toMatchObject({ rating: 'down', comment: 'missed week 4' });
+    const up = await rate({ rating: 'up' });
+    expect(up.json().feedback).toMatchObject({ rating: 'up', comment: null });
+    expect((await rate({ rating: 'meh' })).statusCode).toBe(400);
+  });
+
+  it('only the asker can rate: feedback from anyone else is 404 and changes nothing', async () => {
+    const id = (await ask({ question: 'not yours to rate' })).json().id;
+    const res = await app.inject({
+      method: 'POST',
+      url: `/v1/workspaces/ouc/answers/${id}/feedback`,
+      headers: { authorization: auth.other },
+      payload: { rating: 'down' },
+    });
+    expect(res.statusCode).toBe(404);
+    const [stored] = await t.db.select().from(answers).where(eq(answers.id, id));
+    expect(stored!.feedbackRating).toBeNull();
+  });
+
+  it("an API key and a person with the same id do not see each other's answers", async () => {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/v1/api-keys',
+      headers: { authorization: auth.admin },
+      payload: { name: 'bot', role: 'reader', workspaces: ['ouc'] },
+    });
+    const key = created.json();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/workspaces/ouc/answers',
+      headers: { authorization: `Bearer ${key.secret}` },
+      payload: { question: 'from a key' },
+    });
+    expect(res.statusCode).toBe(201);
+    // A person whose Keycloak id happens to equal the key's id, and a member of the workspace.
+    await app.inject({
+      method: 'PUT',
+      url: `/v1/workspaces/ouc/members/${key.id}`,
+      headers: { authorization: auth.admin },
+      payload: { role: 'reader' },
+    });
+    const twin = `Bearer ${await kc.token({ sub: key.id })}`;
+    const read = await app.inject({
+      url: `/v1/workspaces/ouc/answers/${res.json().id}`,
+      headers: { authorization: twin },
+    });
+    expect(read.statusCode).toBe(404);
+  });
+
+  it('an answer is only found through its own workspace', async () => {
+    const id = (await ask({ question: 'where am I' })).json().id;
+    await app.inject({
+      method: 'POST',
+      url: '/v1/workspaces',
+      headers: { authorization: auth.admin },
+      payload: { slug: 'personal', name: 'Personal' },
+    });
+    const res = await app.inject({
+      url: `/v1/workspaces/personal/answers/${id}`,
+      headers: { authorization: auth.admin },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('a hit whose document is not ready does not count: the answer is ungrounded', async () => {
+    await t.db.update(documents).set({ status: 'processing' }).where(eq(documents.id, docId));
+    try {
+      const res = await ask({ question: 'only stale hits' });
+      expect(res.json()).toMatchObject({ grounded: false });
+      expect(runs.map((r) => r.flow)).toEqual(['rw-retrieve']);
+    } finally {
+      await t.db.update(documents).set({ status: 'ready' }).where(eq(documents.id, docId));
+    }
+  });
+
+  it('an empty reply from the model is a failed answer, not an empty one', async () => {
+    answerReply = () =>
+      output({ 'ChatOutput-answer': '  ', 'ChatOutput-citations': fenced({ passages: [] }) });
+    const res = await ask({ question: 'say nothing' });
+    expect(res.statusCode).toBe(502);
+    const [stored] = await t.db.select().from(answers).where(eq(answers.question, 'say nothing'));
+    expect(stored).toMatchObject({ status: 'failed', error: 'The model returned an empty answer.' });
+  });
+
+  it('400 for an empty question', async () => {
+    expect((await ask({ question: '   ' })).statusCode).toBe(400);
+  });
+
+  /** Parse an event stream body into `[event, data]` pairs. */
+  const events = (body: string) =>
+    body
+      .split('\n\n')
+      .filter(Boolean)
+      .map((block) => {
+        const event = /^event: (.*)$/m.exec(block)![1]!;
+        return [event, JSON.parse(/^data: (.*)$/m.exec(block)![1]!)] as const;
+      });
+
+  const askStream = (question: string) =>
+    app.inject({
+      method: 'POST',
+      url: '/v1/workspaces/ouc/answers',
+      headers: { authorization: auth.reader, accept: 'text/event-stream' },
+      payload: { question },
+    });
+
+  it('streams tokens, then citations, then the stored answer', async () => {
+    const res = await askStream('Stream it');
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/event-stream');
+    const ev = events(res.body);
+    expect(ev.map(([e]) => e)).toEqual(['token', 'token', 'citations', 'done']);
+    expect(ev[0]![1]).toEqual({ text: 'RAG combines ' });
+    const done = ev[3]![1] as { id: string; text: string; timeToFirstTokenMs: number | null };
+    expect(done.text).toBe('RAG combines retrieval with generation [1].');
+    expect(done.timeToFirstTokenMs).toEqual(expect.any(Number));
+    expect(runs[1]!.body.tweaks.LLM).toMatchObject({ stream: true });
+    const [stored] = await t.db.select().from(answers).where(eq(answers.id, done.id));
+    expect(stored!.timeToFirstTokenMs).toEqual(expect.any(Number));
+  });
+
+  it('a stream that fails midway ends with an error event, and the answer is stored as failed', async () => {
+    streamEvents = () => [
+      { event: 'token', data: { chunk: 'RAG ' } },
+      { event: 'error', data: { text: 'Connection error.\n' } },
+      { event: 'error', data: { error: '500: long trace' } },
+    ];
+    const res = await askStream('Fail midway');
+    const ev = events(res.body);
+    expect(ev.map(([e]) => e)).toEqual(['token', 'error']);
+    const problem = ev[1]![1] as { status: number; detail: string; answerId: string };
+    expect(problem).toMatchObject({ status: 502, detail: expect.stringContaining('Connection error.') });
+    const [stored] = await t.db.select().from(answers).where(eq(answers.id, problem.answerId));
+    expect(stored).toMatchObject({ status: 'failed', error: 'Connection error.' });
+  });
+
+  it('a failure before the first token is a plain HTTP error, not a stream', async () => {
+    streamEvents = () => [{ event: 'error', data: { text: 'model not loaded' } }];
+    const res = await askStream('Fail early');
+    expect(res.statusCode).toBe(502);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+  });
+
+  it('an unexpected error after the stream opened still ends it, with an error event', async () => {
+    const spy = vi.spyOn(AnswerService.prototype, 'ask').mockImplementation(async (input) => {
+      input.onToken?.('RAG ');
+      throw new Error('database went away');
+    });
+    try {
+      const ev = events((await askStream('Break after a token')).body);
+      expect(ev.map(([e]) => e)).toEqual(['token', 'error']);
+      expect(ev[1]![1]).toMatchObject({ status: 500 });
+      expect(JSON.stringify(ev[1]![1])).not.toContain('database went away');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('when the caller hangs up mid-stream, the run is stopped and the answer stored as failed', async () => {
+    hangAfterFirstToken = true;
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const ctrl = new AbortController();
+    const res = await fetch(`${address}/v1/workspaces/ouc/answers`, {
+      method: 'POST',
+      headers: {
+        authorization: auth.reader,
+        accept: 'text/event-stream',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ question: 'Hang up' }),
+      signal: ctrl.signal,
+    });
+    const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+    expect((await reader.read()).value).toContain('event: token');
+    ctrl.abort();
+    await expect
+      .poll(async () => (await t.db.select().from(answers).where(eq(answers.question, 'Hang up')))[0], {
+        timeout: 5_000,
+      })
+      .toMatchObject({ status: 'failed', error: 'The caller left before the answer finished.' });
+  });
+
+  it('an ungrounded answer streams its fixed text as one token', async () => {
+    hits = [];
+    const ev = events((await askStream('Off topic')).body);
+    expect(ev.map(([e]) => e)).toEqual(['token', 'citations', 'done']);
+    expect(ev[0]![1]).toEqual({ text: NOT_FOUND_TEXT });
+  });
+});

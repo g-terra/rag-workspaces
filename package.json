@@ -16,7 +16,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky || true",
-    "env:init": "node scripts/env-init.ts"
+    "env:init": "node scripts/env-init.ts",
+    "smoke": "node scripts/smoke/run.ts"
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.4",

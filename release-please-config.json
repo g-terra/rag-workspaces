@@ -54,7 +54,14 @@
   ],
   "packages": {
     ".": {
-      "package-name": "rag-workspaces"
+      "package-name": "rag-workspaces",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "apps/api/package.json",
+          "jsonpath": "$.version"
+        }
+      ]
     }
   }
 }

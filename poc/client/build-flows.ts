@@ -6,13 +6,15 @@
 // when the model is wired to a node whose id says ChatOutput.
 //
 //   node client/build-flows.ts        (needs the stack up and .env present)
+//   OUT_DIR=/some/dir node client/build-flows.ts   (write somewhere else, to diff first)
 //
 // The generated JSON is committed; normal setup only imports it (bootstrap.ts).
 
 import { writeFile } from 'node:fs/promises';
 import { LANGFLOW_URL, bearer, login, readEnvFile } from './lib.ts';
 
-const env = await readEnvFile();
+// The repo's .env (the stack), or poc/.env when run against the POC stack.
+const env = { ...(await readEnvFile(new URL('../../.env', import.meta.url))), ...(await readEnvFile()) };
 const token = await login(env.LANGFLOW_SUPERUSER ?? 'admin', env.LANGFLOW_SUPERUSER_PASSWORD);
 const all: Record<string, Record<string, any>> = await (await fetch(`${LANGFLOW_URL}/api/v1/all`, { headers: bearer(token) })).json();
 
@@ -75,7 +77,7 @@ const split = node('Split', 'SplitText', 350, 0, { chunk_size: 400, chunk_overla
 const upsert = node('Upsert', ext('ChromaWorkspaceUpsert'), 700, 0);
 const ingestOut = chatOutput('ChatOutput-result', 1050, 0);
 const ingestEmb = embeddings(350, 300);
-const ingest = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e01', 'rag-ingest', 'rag-ingest',
+const ingest = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e01', 'rw-ingest', 'rw-ingest',
   'Load one document, split, embed and upsert into the workspace collection. Tweak Loader, Upsert, Embeddings, Split.',
   [loader, split, upsert, ingestOut, ingestEmb],
   [edge(loader, 'pages', split, 'data_inputs'), edge(split, 'dataframe', upsert, 'chunks'),
@@ -86,7 +88,7 @@ const rIn = chatInput(0, 0);
 const rEmb = embeddings(0, 300);
 const rSearch = node('Search', ext('ChromaWorkspaceSearch'), 350, 0);
 const rOut = chatOutput('ChatOutput-passages', 700, 0);
-const retrieve = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e02', 'rag-retrieve', 'rag-retrieve',
+const retrieve = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e02', 'rw-retrieve', 'rw-retrieve',
   'Return the top passages for a question as JSON (text, score, document_id, page). Tweak Search and Embeddings.',
   [rIn, rEmb, rSearch, rOut],
   [edge(rIn, 'message', rSearch, 'search_query'), edge(rEmb, 'embeddings', rSearch, 'embedding'),
@@ -113,7 +115,7 @@ const llm = node('LLM', ext('WorkspaceChatModel'), 1050, 0, {
 });
 const aOut = chatOutput('ChatOutput-answer', 1400, 0, true);
 const aCites = chatOutput('ChatOutput-citations', 1050, 300);
-const answer = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e03', 'rag-answer', 'rag-answer',
+const answer = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e03', 'rw-answer', 'rw-answer',
   'Answer a question from the workspace collection, streaming tokens; Citations output carries the passages. Tweak Search, Embeddings, LLM, Prompt.',
   [aIn, aEmb, aSearch, prompt, llm, aOut, aCites],
   [edge(aIn, 'message', aSearch, 'search_query'), edge(aIn, 'message', prompt, 'question'),
@@ -124,12 +126,48 @@ const answer = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e03', 'rag-answer', 'rag-a
 // ---- delete: remove a document's vectors ----
 const del = node('Delete', ext('ChromaWorkspaceDelete'), 0, 0);
 const dOut = chatOutput('ChatOutput-result', 350, 0);
-const deleteFlow = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e04', 'rag-delete', 'rag-delete',
+const deleteFlow = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e04', 'rw-delete', 'rw-delete',
   'Delete a document\'s vectors by document id. Tweak Delete.',
   [del, dOut], [edge(del, 'result', dOut, 'input_value')]);
 
-for (const f of [ingest, retrieve, answer, deleteFlow]) {
-  const path = new URL(`../flows/${f.name.replace('rag-', '')}.json`, import.meta.url);
+// ---- chat: like answer, plus the conversation so far. Stateless: the API sends the history. ----
+// The chat input is what gets searched for: the API sends the latest message plus the previous
+// question, so a follow-up like "and in week 4?" still finds passages. `Question` is the latest
+// message alone, for the prompt; `History` is the last turns as text. (The search must hang off
+// the chat input: Langflow only returns outputs downstream of it, so a separate text input for
+// the query loses the citations output.)
+const cIn = chatInput(0, 0);
+const cQuestion = node('Question', 'TextInput', 0, 150, { input_value: '' });
+const cHistory = node('History', 'TextInput', 0, 450, { input_value: '' });
+const cEmb = embeddings(0, 300);
+const cSearch = node('Search', ext('ChromaWorkspaceSearch'), 350, 0);
+const cPrompt = node('Prompt', 'Prompt Template', 700, 0, {
+  template:
+    'Answer the latest question using only the context. Cite passages as [n]. Use the conversation so far ' +
+    'only to understand what the question refers to.\n\nConversation so far:\n{history}\n\nContext:\n{context}\n\n' +
+    'Question: {question}\n\nAnswer:',
+}, 'Prompt');
+for (const v of ['history', 'context', 'question']) {
+  cPrompt.data.node.template[v] = structuredClone(prompt.data.node.template.context);
+  Object.assign(cPrompt.data.node.template[v], { name: v, display_name: v });
+}
+cPrompt.data.node.custom_fields = { template: ['history', 'context', 'question'] };
+const cLlm = node('LLM', ext('WorkspaceChatModel'), 1050, 0, {
+  provider: 'lmstudio', model_name: 'standin-chat-a', api_key: DUMMY_KEY, stream: true, temperature: 0.2,
+});
+const cOut = chatOutput('ChatOutput-answer', 1400, 0, true);
+const cCites = chatOutput('ChatOutput-citations', 1050, 300);
+const chat = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e05', 'rw-chat', 'rw-chat',
+  'Answer the latest message of a conversation from the workspace collection, streaming tokens. The API sends the history. Tweak Question, History, Search, Embeddings, LLM, Prompt.',
+  [cIn, cQuestion, cHistory, cEmb, cSearch, cPrompt, cLlm, cOut, cCites],
+  [edge(cIn, 'message', cSearch, 'search_query'), edge(cQuestion, 'text', cPrompt, 'question'),
+   edge(cHistory, 'text', cPrompt, 'history'), edge(cEmb, 'embeddings', cSearch, 'embedding'),
+   edge(cSearch, 'context', cPrompt, 'context'), edge(cPrompt, 'prompt', cLlm, 'input_value'),
+   edge(cLlm, 'text_output', cOut, 'input_value'), edge(cSearch, 'passages', cCites, 'input_value')]);
+
+const outDir = process.env.OUT_DIR ? `${process.env.OUT_DIR.replace(/\/$/, '')}/` : new URL('../../flows/', import.meta.url).pathname;
+for (const f of [ingest, retrieve, answer, deleteFlow, chat]) {
+  const path = `${outDir}${f.name.replace('rw-', '')}.json`;
   await writeFile(path, JSON.stringify(f, null, 2) + '\n');
-  console.log('wrote', path.pathname);
+  console.log('wrote', path);
 }

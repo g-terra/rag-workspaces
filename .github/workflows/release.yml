@@ -2,8 +2,8 @@ name: Release
 
 # On every push to main, release-please keeps a "chore(main): release x.y.z" pull request up
 # to date with the next version (from the Conventional Commit messages) and CHANGELOG.md.
-# Merging that pull request tags vX.Y.Z and creates the GitHub release. (Publishing the
-# Docker images with the same version is added once the images exist.)
+# Merging that pull request tags vX.Y.Z, creates the GitHub release, and publishes the
+# Docker images with the same version.
 
 on:
   push:
@@ -25,3 +25,46 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  images:
+    name: Publish images
+    needs: release-please
+    if: needs.release-please.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Only this job pushes images.
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image: api
+            dockerfile: docker/api.Dockerfile
+          - image: admin
+            dockerfile: docker/admin.Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}-${{ matrix.image }}
+          # 0.4.2 → tags 0.4.2, 0.4 and latest (and the major alone once we are past 1.0).
+          tags: |
+            type=semver,pattern={{version}},value=v${{ needs.release-please.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.release-please.outputs.version }}
+            type=semver,pattern={{major}},value=v${{ needs.release-please.outputs.version }},enable=${{ !startsWith(needs.release-please.outputs.version, '0.') }}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

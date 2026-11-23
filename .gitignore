@@ -4,6 +4,7 @@ coverage/
 .turbo/
 *.tsbuildinfo
 .env
+.env.smoke
 .langflow-api-key
 poc/results/
 playwright-report/

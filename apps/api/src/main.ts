@@ -9,6 +9,7 @@ import { ChromaService } from './services/chroma.js';
 import { DocumentEvents } from './services/document-events.js';
 import { IngestProcessor, PgBossIngestQueue } from './services/ingest.js';
 import { LangflowService } from './services/langflow.js';
+import { UsageLog } from './usage/log.js';
 
 const config = loadConfig();
 const logger =
@@ -39,10 +40,14 @@ const queue = new PgBossIngestQueue(
   { maxAttempts: config.INGEST_MAX_ATTEMPTS },
 );
 
+const usage = new UsageLog(database.db, logger.child({ component: 'usage' }));
+
 const app = await buildApp({
   config,
+  usage,
   loggerInstance: logger,
   db: database.db,
+  langflow: langflow.client,
   chroma,
   queue,
   events,
@@ -58,6 +63,15 @@ const app = await buildApp({
   ],
 });
 
+// Clear old question text from the usage log now and every six hours.
+const trimUsage = () =>
+  usage
+    .trimQuestions(config.USAGE_QUESTION_RETENTION_DAYS)
+    .then((n) => n && app.log.info({ rows: n }, 'cleared old question text from the usage log'))
+    .catch((err: unknown) => app.log.warn({ err }, 'usage retention failed'));
+void trimUsage();
+setInterval(trimUsage, 6 * 60 * 60 * 1000).unref();
+
 // Stop accepting requests and let in-flight ones finish on `docker compose stop`.
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
@@ -66,6 +80,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     queue
       .stop()
       .then(() => app.close())
+      .then(() => usage.flush())
       .then(() => database.close())
       .then(
         () => process.exit(0),

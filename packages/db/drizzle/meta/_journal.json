@@ -29,6 +29,27 @@
       "when": 1795193686599,
       "tag": "0003_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795194715175,
+      "tag": "0004_answers",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795195329539,
+      "tag": "0005_conversations",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795195607141,
+      "tag": "0006_usage_log",
+      "breakpoints": true
     }
   ]
 }
