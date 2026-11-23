@@ -2,26 +2,40 @@
 // It checks the machine, writes .env, helps pick the model provider and models, starts compose,
 // waits for the API, and prints where to sign in. Safe to run again: it keeps every secret and
 // offers the current values as the defaults.
-//   pnpm run setup          ask
+//   pnpm run setup          interactive wizard (arrow-key selection)
 //   pnpm run setup --yes    take the current values or the defaults, ask nothing (scripts, CI)
 // (`pnpm setup` without `run` is pnpm's own command, which sets up pnpm itself.)
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { Writable } from 'node:stream';
-import { createInterface, type Interface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
-import { hostUrl, parseEnv, setEnv, splitModels } from './setup/env-file.ts';
+import * as p from '@clack/prompts';
+import {
+  CUSTOM_MODEL,
+  modelOptions,
+  providerOptions,
+  type ModelKind,
+  type Provider,
+} from './setup/choices.ts';
+import { hostUrl, parseEnv, setEnv } from './setup/env-file.ts';
 import { portFree } from './setup/ports.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const envPath = `${root}.env`;
 const yes = process.argv.includes('--yes') || !process.stdin.isTTY;
 
-const say = (text = '') => console.log(text);
-const ok = (text: string) => say(`  ✓ ${text}`);
-const warn = (text: string) => say(`  ! ${text}`);
+function abort(): never {
+  p.cancel('Setup cancelled.');
+  process.exit(0);
+}
+
+function unwrap<T>(value: T): Exclude<T, symbol> {
+  if (p.isCancel(value)) abort();
+  return value as Exclude<T, symbol>;
+}
+
 function fail(text: string): never {
-  say(`  ✗ ${text}`);
+  p.log.error(text);
+  p.outro('Setup stopped.');
   process.exit(1);
 }
 
@@ -34,64 +48,37 @@ function run(cmd: string, args: string[], opts: { quiet?: boolean } = {}) {
   return { ok: res.status === 0, out: (res.stdout ?? '').trim(), err: (res.stderr ?? '').trim() };
 }
 
-// ---- prompts ----
-
-let rl: Interface | undefined;
-const prompt = () => (rl ??= createInterface({ input: process.stdin, output: process.stdout }));
-
-async function ask(question: string, fallback: string): Promise<string> {
-  if (yes) return fallback;
-  const answer = (await prompt().question(`  ${question}${fallback ? ` [${fallback}]` : ''}: `)).trim();
-  return answer || fallback;
-}
-
-/** A numbered list; returns the chosen entry. */
-async function choose(question: string, options: string[], fallback: string): Promise<string> {
-  if (yes) return fallback;
-  options.forEach((o, i) => say(`    ${i + 1}. ${o}`));
-  for (;;) {
-    const answer = await ask(question, fallback);
-    const n = Number(answer);
-    if (Number.isInteger(n) && n >= 1 && n <= options.length) return options[n - 1]!;
-    if (options.includes(answer)) return answer;
-    warn(`Pick a number from 1 to ${options.length}.`);
-  }
-}
-
-/** Typed without echo, for API keys. An empty answer keeps the current value. */
-async function askSecret(question: string, current: string): Promise<string> {
-  if (yes) return current;
-  // A second interface whose output goes nowhere, so the key is not echoed; ours prints the label.
-  rl?.close();
-  rl = undefined;
-  process.stdout.write(`  ${question}${current ? ' [Enter keeps the current one]' : ''}: `);
-  const muted = new Writable({ write: (_chunk, _enc, done) => done() });
-  const hidden = createInterface({ input: process.stdin, output: muted, terminal: true });
+async function withSpinner<T>(message: string, task: () => Promise<T>): Promise<T> {
+  if (yes) return task();
+  const s = p.spinner();
+  s.start(message);
   try {
-    return (await hidden.question('')).trim() || current;
-  } finally {
-    hidden.close();
-    process.stdout.write('\n');
+    const result = await task();
+    s.stop(message);
+    return result;
+  } catch (err) {
+    s.stop(message);
+    throw err;
   }
 }
 
 // ---- 1. the machine ----
 
 function checkTools() {
-  say('Checking the tools');
+  p.log.step('Checking the tools');
   const [major = 0, minor = 0] = process.versions.node.split('.').map(Number);
-  if (major < 22 || (major === 22 && minor < 18))
+  if (major < 22 || (major === 22 && minor < 18)) {
     fail(`Node ${process.versions.node}: 22.18 or newer is needed.`);
-  ok(`Node ${process.versions.node}`);
+  }
   const docker = run('docker', ['version', '--format', '{{.Server.Version}}'], { quiet: true });
-  if (!docker.ok)
+  if (!docker.ok) {
     fail(
       `Docker isn't running (${docker.err.split('\n')[0] || 'docker not found'}). Start Docker and try again.`,
     );
-  ok(`Docker ${docker.out}`);
+  }
   const compose = run('docker', ['compose', 'version', '--short'], { quiet: true });
   if (!compose.ok) fail('Docker Compose v2 is needed (`docker compose`).');
-  ok(`Docker Compose ${compose.out}`);
+  p.log.success(`Node ${process.versions.node} · Docker ${docker.out} · Compose ${compose.out}`);
 }
 
 /** The program listening on a port, from lsof (macOS and most Linux), or null. */
@@ -103,10 +90,10 @@ function holder(port: number): string | null {
 }
 
 async function checkPorts(env: Record<string, string>) {
-  say('Checking the ports');
+  p.log.step('Checking the ports');
   const running = run('docker', ['compose', 'ps', '--status', 'running', '-q'], { quiet: true });
   if (running.ok && running.out) {
-    ok('The stack is already running; it will be updated in place.');
+    p.log.success('The stack is already running; it will be updated in place.');
     return;
   }
   const ports: [string, string][] = [
@@ -124,31 +111,31 @@ async function checkPorts(env: Record<string, string>) {
     taken.push(`${port} (${key})${who ? ` is used by ${who}` : ' is in use'}`);
   }
   if (taken.length) {
-    for (const t of taken) warn(t);
+    for (const t of taken) p.log.warn(t);
     fail(
       'Stop what holds those ports, or set other ports in .env (README, "Run the stack"), then run this again.',
     );
   }
-  ok('Ports free');
+  p.log.success('All required ports are free');
 }
 
 // ---- 2. .env ----
 
 function writeSecrets() {
-  say('Writing .env');
+  p.log.step('Preparing .env');
   const res = run(process.execPath, [`${root}scripts/env-init.ts`], { quiet: true });
   if (!res.ok) fail(`pnpm env:init failed: ${res.err}`);
-  ok(res.out);
+  p.log.success(res.out);
 }
 
 // ---- 3. models ----
 
-type Provider = 'lmstudio' | 'openai' | 'gemini' | 'anthropic';
 const KEY_OF: Record<Exclude<Provider, 'lmstudio'>, string> = {
   openai: 'OPENAI_API_KEY',
   gemini: 'GEMINI_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
 };
+
 const SUGGESTED: Record<Provider, { chat?: string; embedding?: string }> = {
   lmstudio: { chat: 'qwen2.5-7b-instruct', embedding: 'text-embedding-nomic-embed-text-v1.5' },
   openai: { chat: 'gpt-4o-mini', embedding: 'text-embedding-3-small' },
@@ -186,49 +173,124 @@ async function listModels(provider: Provider, env: Record<string, string>): Prom
   }
 }
 
+async function promptProvider(kind: ModelKind, initialValue: Provider): Promise<Provider> {
+  if (yes) return initialValue;
+  return unwrap(
+    await p.select({
+      message:
+        kind === 'chat'
+          ? 'Choose the default chat provider'
+          : 'Choose the default embedding provider (pinned per workspace)',
+      options: providerOptions(kind),
+      initialValue,
+    }),
+  );
+}
+
 /** Make sure the provider can be reached (asking for its key if needed); returns its models, or []. */
 async function reach(provider: Provider, env: Record<string, string>, changes: Record<string, string>) {
   if (provider !== 'lmstudio') {
     const key = KEY_OF[provider];
-    const value = await askSecret(`${key}`, env[key] ?? '');
+    const current = env[key] ?? '';
+    let value = current;
+    if (!yes) {
+      const entered = unwrap(
+        await p.password({
+          message: current ? `${key} (press Enter to keep the current key)` : `Enter ${key}`,
+          validate: (v) => (!current && !v?.trim() ? `${key} is required for ${provider}.` : undefined),
+        }),
+      ).trim();
+      value = entered || current;
+    }
     if (!value) fail(`${key} is needed for ${provider}. Set it in .env or run this again.`);
-    if (value !== env[key]) changes[key] = env[key] = value;
+    if (value !== current) changes[key] = env[key] = value;
   }
-  const models = await listModels(provider, env);
+
+  const models = await withSpinner(`Checking ${provider} models…`, () => listModels(provider, env));
   if (typeof models === 'string') {
-    if (provider === 'lmstudio')
-      warn(`LM Studio didn't answer (${models}). Start its server (port 1234) with the models loaded.`);
-    else warn(`${provider} refused the key or couldn't be reached (${models}).`);
+    if (provider === 'lmstudio') {
+      p.log.warn(`LM Studio didn't answer (${models}). Start its server (port 1234) with the models loaded.`);
+    } else {
+      p.log.warn(`${provider} refused the key or couldn't be reached (${models}).`);
+    }
     return [];
   }
-  ok(`${provider} answers, with ${models.length} model(s)`);
+  p.log.success(`${provider} answered with ${models.length} model(s)`);
   return models;
 }
 
-async function pickModel(kind: 'chat' | 'embedding', provider: Provider, models: string[], current: string) {
-  const fallback = current || SUGGESTED[provider][kind] || '';
-  const offered = provider === 'lmstudio' ? splitModels(models)[kind] : [];
-  const chosen = offered.length
-    ? await choose(
-        `${kind === 'chat' ? 'Chat' : 'Embedding'} model`,
-        offered,
-        offered.includes(fallback) ? fallback : offered[0]!,
-      )
-    : await ask(`${kind === 'chat' ? 'Chat' : 'Embedding'} model id`, fallback);
-  if (models.length && !models.includes(chosen))
-    warn(`${chosen} isn't among the models ${provider} offers now.`);
+async function pickModel(
+  kind: ModelKind,
+  provider: Provider,
+  models: string[],
+  current: string,
+): Promise<string> {
+  const suggested = SUGGESTED[provider][kind];
+  const fallback = current || suggested || '';
+  const built = modelOptions(kind, provider, models, current, suggested);
+
+  if (yes) return fallback || built?.initialValue || '';
+
+  const label = kind === 'chat' ? 'Chat model' : 'Embedding model';
+  let chosen: string;
+
+  if (built) {
+    // Use searchable autocomplete for large lists (e.g. OpenAI/Gemini), plain arrow-key select for small ones.
+    const selected =
+      built.options.length > 10
+        ? unwrap(
+            await p.autocomplete({
+              message: `${label} (${provider})`,
+              options: built.options,
+              initialValue: built.initialValue,
+              placeholder: 'Type to filter, arrow keys to select…',
+              maxItems: 10,
+            }),
+          )
+        : unwrap(
+            await p.select({
+              message: `${label} (${provider})`,
+              options: built.options,
+              initialValue: built.initialValue,
+              maxItems: 10,
+            }),
+          );
+
+    if (selected === CUSTOM_MODEL) {
+      chosen = unwrap(
+        await p.text({
+          message: `Enter ${label.toLowerCase()} id`,
+          placeholder: fallback || 'model-id',
+          defaultValue: fallback,
+          validate: (v) => (!v?.trim() ? 'A model id is required.' : undefined),
+        }),
+      ).trim();
+    } else {
+      chosen = selected;
+    }
+  } else {
+    chosen = unwrap(
+      await p.text({
+        message: `${label} id (${provider})`,
+        placeholder: fallback || 'model-id',
+        defaultValue: fallback,
+        validate: (v) => (!v?.trim() ? 'A model id is required.' : undefined),
+      }),
+    ).trim();
+  }
+
+  if (models.length && !models.includes(chosen)) {
+    p.log.warn(`${chosen} isn't among the models ${provider} offers now.`);
+  }
   return chosen;
 }
 
 async function chooseModels(env: Record<string, string>): Promise<Record<string, string>> {
-  say('Choosing the models');
+  p.log.step('Choosing the models');
   const changes: Record<string, string> = {};
-  const providers: Provider[] = ['lmstudio', 'openai', 'gemini', 'anthropic'];
-  const chatProvider = (await choose(
-    'Chat provider (lmstudio runs on this machine, offline)',
-    providers,
-    env.DEFAULT_CHAT_PROVIDER || 'lmstudio',
-  )) as Provider;
+
+  const chatDefault = (env.DEFAULT_CHAT_PROVIDER || 'lmstudio') as Provider;
+  const chatProvider = await promptProvider('chat', chatDefault);
   const chatModels = await reach(chatProvider, env, changes);
   const chatModel = await pickModel(
     'chat',
@@ -237,15 +299,9 @@ async function chooseModels(env: Record<string, string>): Promise<Record<string,
     chatProvider === env.DEFAULT_CHAT_PROVIDER ? (env.DEFAULT_CHAT_MODEL ?? '') : '',
   );
 
-  // Anthropic has no embedding models.
-  const embeddingProviders = providers.filter((p) => p !== 'anthropic');
-  const embeddingDefault =
-    env.DEFAULT_EMBEDDING_PROVIDER || (chatProvider === 'anthropic' ? 'lmstudio' : chatProvider);
-  const embeddingProvider = (await choose(
-    'Embedding provider (each new workspace keeps the one chosen now)',
-    embeddingProviders,
-    embeddingDefault,
-  )) as Provider;
+  const embeddingDefault = (env.DEFAULT_EMBEDDING_PROVIDER ||
+    (chatProvider === 'anthropic' ? 'lmstudio' : chatProvider)) as Provider;
+  const embeddingProvider = await promptProvider('embedding', embeddingDefault);
   const embeddingModels =
     embeddingProvider === chatProvider ? chatModels : await reach(embeddingProvider, env, changes);
   const embeddingModel = await pickModel(
@@ -261,51 +317,76 @@ async function chooseModels(env: Record<string, string>): Promise<Record<string,
     DEFAULT_EMBEDDING_PROVIDER: embeddingProvider,
     DEFAULT_EMBEDDING_MODEL: embeddingModel,
   };
-  for (const [k, v] of Object.entries(wanted)) if (env[k] !== v) changes[k] = v;
-  ok(`Chat: ${chatProvider} ${chatModel}. Embeddings: ${embeddingProvider} ${embeddingModel}.`);
+  for (const [k, v] of Object.entries(wanted)) {
+    if (env[k] !== v) changes[k] = v;
+  }
+  p.note(
+    `Chat:       ${chatProvider} / ${chatModel}\nEmbeddings: ${embeddingProvider} / ${embeddingModel}`,
+    'Selected models',
+  );
   return changes;
 }
 
 // ---- 4. start ----
 
 async function start(env: Record<string, string>) {
-  say('Starting the stack (the first start pulls about 2 GB of images and takes a few minutes)');
+  if (!yes) {
+    const proceed = unwrap(
+      await p.confirm({
+        message: 'Start or update the Docker stack now?',
+        initialValue: true,
+      }),
+    );
+    if (!proceed) {
+      p.outro('Saved .env. Run `docker compose up -d --build` whenever you are ready.');
+      process.exit(0);
+    }
+  }
+
+  p.log.step('Starting the stack (first start pulls ~2 GB of images and may take a few minutes)');
   if (!run('docker', ['compose', 'up', '--detach', '--build', '--wait', '--wait-timeout', '900']).ok) {
     fail('docker compose up failed. `docker compose ps` and `docker compose logs <service>` say why.');
   }
+
   const ready = `http://localhost:${env.API_PORT || '3000'}/ready`;
-  const deadline = Date.now() + 300_000;
-  for (;;) {
-    const res = await fetch(ready).catch(() => null);
-    if (res?.ok) break;
-    if (Date.now() > deadline)
-      fail(`The API isn't ready after 5 minutes: ${ready}. Try \`docker compose logs api\`.`);
-    await new Promise((r) => setTimeout(r, 3000));
-  }
-  ok('The API is ready');
+  await withSpinner(`Waiting for the API at ${ready}…`, async () => {
+    const deadline = Date.now() + 300_000;
+    for (;;) {
+      const res = await fetch(ready).catch(() => null);
+      if (res?.ok) return;
+      if (Date.now() > deadline) {
+        fail(`The API isn't ready after 5 minutes: ${ready}. Try \`docker compose logs api\`.`);
+      }
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  });
+  p.log.success('The API is ready');
 }
 
 // ---- main ----
 
-say(yes ? 'rag-workspaces setup (taking the defaults)\n' : 'rag-workspaces setup\n');
+p.intro(yes ? 'rag-workspaces setup (taking defaults)' : 'rag-workspaces setup');
 checkTools();
 await checkPorts(existsSync(envPath) ? parseEnv(readFileSync(envPath, 'utf8')) : {});
 writeSecrets();
 const env = parseEnv(readFileSync(envPath, 'utf8'));
 const changes = await chooseModels(env);
-rl?.close();
 if (Object.keys(changes).length) {
   writeFileSync(envPath, setEnv(readFileSync(envPath, 'utf8'), changes), { mode: 0o600 });
-  ok(`Updated .env: ${Object.keys(changes).join(', ')}`);
+  p.log.success(`Updated .env: ${Object.keys(changes).join(', ')}`);
 }
 await start(env);
 
 const url = (key: string, fallback: string) => env[key] || fallback;
-say(`
-Done. Sign in to the admin UI as ${env.RW_ADMIN_USERNAME} (password: RW_ADMIN_PASSWORD in .env).
-
-  Admin UI           ${url('ADMIN_UI_URL', 'http://rag.localhost')}
-  API and Swagger    ${url('PUBLIC_API_URL', 'http://api.rag.localhost')}/docs
-  Keycloak console   ${url('KEYCLOAK_PUBLIC_URL', 'http://auth.rag.localhost')}/admin  (KEYCLOAK_ADMIN / KEYCLOAK_ADMIN_PASSWORD)
-
-Next: create a workspace in the admin UI and upload some files. docs/setup.md explains the rest.`);
+p.note(
+  [
+    `Admin UI           ${url('ADMIN_UI_URL', 'http://rag.localhost')}`,
+    `API and Swagger    ${url('PUBLIC_API_URL', 'http://api.rag.localhost')}/docs`,
+    `Langflow editor    http://langflow.rag.localhost`,
+    `Keycloak console   ${url('KEYCLOAK_PUBLIC_URL', 'http://auth.rag.localhost')}/admin`,
+    '',
+    `Admin sign-in      ${env.RW_ADMIN_USERNAME} (password: RW_ADMIN_PASSWORD in .env)`,
+  ].join('\n'),
+  'Ready to use',
+);
+p.outro('Create a workspace in the admin UI and upload some files. See docs/setup.md for more.');
