@@ -7,3 +7,5 @@ coverage/
 .env.smoke
 .langflow-api-key
 poc/results/
+playwright-report/
+test-results/
