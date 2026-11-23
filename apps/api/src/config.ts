@@ -104,6 +104,10 @@ const ConfigSchema = z.object({
   INGEST_TIMEOUT_MS_PER_MB: z.coerce.number().int().nonnegative().default(60_000),
   /** Attempts per document before it is `failed` (1 + retries). */
   INGEST_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(4),
+  /** The shortest gap between two requests to an imported website (robots.txt's Crawl-delay can make it longer). */
+  CRAWL_DELAY_MS: z.coerce.number().int().nonnegative().default(1000),
+  /** How long one `rw-fetch` run (one page) may take. */
+  CRAWL_FETCH_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
   // --- Asking ---
   /** A passage search (embedding the query plus one Chroma query) gets this long. */

@@ -2,11 +2,13 @@ import { Answer } from '@rag/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { useAuth } from '@/auth/auth-context';
+import { styleRequest } from '@/styles/styles';
 import { askReducer, idleAsk, type AskState } from './ask';
 import { streamGeneration } from './stream';
 
 export type Ask = AskState & {
-  ask(question: string, maxPassages: number): void;
+  /** `style` is the style picker's value (see `styleRequest`). */
+  ask(question: string, maxPassages: number, style: string): void;
   /** Aborts the request; whatever had streamed stays on screen. */
   stop(): void;
   /** Takes the answer the API returned after a rating, so the feedback shows. */
@@ -24,14 +26,14 @@ export function useAsk(slug: string): Ask {
   useEffect(() => () => running.current?.abort(), []);
 
   const ask = useCallback(
-    (question: string, maxPassages: number) => {
+    (question: string, maxPassages: number, style: string) => {
       running.current?.abort();
       const controller = new AbortController();
       running.current = controller;
       dispatch({ type: 'started', question });
       void streamGeneration({
         path: `/v1/workspaces/${encodeURIComponent(slug)}/answers`,
-        body: { question, maxPassages },
+        body: { question, maxPassages, ...styleRequest(style) },
         result: Answer,
         auth,
         signal: controller.signal,

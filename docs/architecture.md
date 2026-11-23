@@ -26,7 +26,7 @@ as a stack of PRs), and each change has a spec in [docs/specs/](specs/) saying w
 |---|---|
 | Compose stack, `pnpm env:init`, API skeleton, readiness, `GET /v1/users`, `GET /v1/system`, rate limits | (all built) |
 | Keycloak auth, API keys, workspaces and workspace reindex, members, isolation, folders (with the folder filter on search, answers and chat), document `PATCH` | (all built) |
-| Upload, dedupe, pg-boss ingestion, SSE status, video and audio through Whisper (`video` profile), transcripts, start times on passages and citations | (all built) |
+| Upload, dedupe, pg-boss ingestion, SSE status, video and audio through Whisper (`video` profile), transcripts, start times on passages and citations, documentation websites crawled page by page | (all built) |
 | Passages, answers (+ streaming, feedback), conversations (`rw-chat`) | Workspace `stats`, per-key request counts |
 | Usage log and analytics, release versioning, MCP server (`apps/mcp`) | `pnpm doctor`, `backup`/`restore`, `flows:export`/`flows:import`; admin UI screens (shell only) |
 
@@ -139,7 +139,7 @@ The embedding model is fixed per workspace once it holds documents, because vect
 
 The API and the flows meet at a small, tested contract, because this is the part of the design most likely to break quietly:
 
-- **Run by name, not id.** Each flow has a fixed endpoint name (`rw-ingest`, `rw-retrieve`, `rw-answer`, `rw-chat`; `rw-delete` removes a document's vectors). The full contract, node by node, is in [`flows/README.md`](../flows/README.md).
+- **Run by name, not id.** Each flow has a fixed endpoint name (`rw-ingest`, `rw-retrieve`, `rw-answer`, `rw-chat`; `rw-delete` removes a document's vectors; `rw-fetch` fetches one web page for the crawler). The full contract, node by node, is in [`flows/README.md`](../flows/README.md).
 - **Node ids are part of the contract.** Tweaks are keyed by node id (`Loader`, `Split`, `Embeddings`, `Search`, `Prompt`, `LLM`, `Upsert`, `Delete`), so those ids are fixed. Chat input and output nodes must keep the `ChatInput-` and `ChatOutput-` prefixes, or tokens silently stop streaming.
 - **Inputs are tweaks on named components.** The API passes collection name, embedding model, chat model, system prompt, chunk size and overlap, top-k, folder filter and document id as tweaks. The component names the API relies on are listed in `flows/README.md`, and a CI test fails if a committed flow no longer has them.
 - **Outputs are structured.** Langflow's run API has no "return this data" mode, so flows send passages as fenced JSON inside a chat message and the API parses it. `rw-retrieve`, `rw-answer` and `rw-chat` return the retrieved passages (passage id, document id, chunk index, page or start seconds, text, score) next to the answer text. Citations are the passages that were given to the model; the API does not guess which ones the model used.
@@ -169,6 +169,13 @@ flowchart LR
 - Statuses per document: `queued`, `transcribing` (video and audio: Whisper writes a timed transcript next to the file, and the ingest flow reads that, with `start_seconds` on each passage), `processing`, `ready`, `failed`. The admin UI shows them live over server-sent events.
 - Re-uploading an identical file in the same workspace is a no-op. Re-indexing a document deletes its vectors by `document_id` and runs the flow again.
 - Progress is per file, not per chunk, because the flow runs as one step. That is the trade for keeping all AI logic in Langflow.
+- **Documentation websites** (`POST …/sites`) are crawled by the API one URL at a time through the `rw-fetch` flow, on a
+  second pg-boss queue (`crawl`, one site at a time). The API keeps the frontier, the scope (the start URL's directory),
+  robots.txt's Crawl-delay, the page and depth limits; Langflow fetches each page through its SSRF guard and returns its
+  main content as Markdown (or the page's own `.md` twin when the site publishes `llms.txt`) with its links. Each page
+  is saved as `<slug>/<document id>.md` and becomes a document of type `web` with its `sourceUrl`, ingested by the
+  usual queue. Crawling again re-ingests only changed pages and removes pages that are gone. The frontier is kept in
+  memory: after a restart the crawl starts over, and unchanged pages cost one request and no embedding.
 
 Rules that keep ingestion honest when things fail:
 

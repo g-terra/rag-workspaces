@@ -133,7 +133,7 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
     async (req, reply) => {
       const admin = currentUser(req);
       const { slug, name, description, kind = 'standard', sources, settings = {} } = req.body;
-      if (settings.style) findStyle(settings.style);
+      if (settings.style) await findStyle(db, settings.style);
       const [taken] = await db
         .select({ id: workspaces.id })
         .from(workspaces)
@@ -208,7 +208,7 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
     async (req) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'admin');
       const { sources, settings } = req.body;
-      if (settings?.style) findStyle(settings.style);
+      if (settings?.style) await findStyle(db, settings.style);
       if (workspace.kind === 'standard' && sources)
         throw new HttpProblem(
           400,

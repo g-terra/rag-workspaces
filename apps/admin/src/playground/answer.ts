@@ -55,11 +55,16 @@ export function answerParts(text: string, ranks: number[]): AnswerPart[] {
 type Meta = Pick<Answer, 'model' | 'usage'> & {
   latencyMs: number | null;
   provider?: string | null;
+  style?: string | null;
 };
 
-/** "2.3 s · a-model · 1,840 + 212 tokens", without the parts the API did not report. */
-export function answerMeta({ latencyMs, model, provider = null, usage }: Meta): string {
-  const parts = [latencyMs === null ? null : formatDuration(latencyMs), model ?? provider];
+/** "2.3 s · a-model · academic style · 1,840 + 212 tokens", without the parts the API did not report. */
+export function answerMeta({ latencyMs, model, provider = null, style = null, usage }: Meta): string {
+  const parts = [
+    latencyMs === null ? null : formatDuration(latencyMs),
+    model ?? provider,
+    style && `${style} style`,
+  ];
   if (usage.promptTokens !== null && usage.completionTokens !== null) {
     parts.push(
       `${usage.promptTokens.toLocaleString('en')} + ${usage.completionTokens.toLocaleString('en')} tokens`,

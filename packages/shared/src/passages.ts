@@ -8,6 +8,8 @@ export const Passage = z.object({
   id: z.string(),
   documentId: z.string(),
   documentTitle: z.string(),
+  /** For a page of an imported website, its URL; otherwise `null`. */
+  sourceUrl: z.string().nullable(),
   /** 1-based page for PDFs, otherwise `null`. */
   page: z.number().int().nullable(),
   /** For a video or audio transcript, the second the passage starts at; otherwise `null`. */

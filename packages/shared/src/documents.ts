@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { WorkspaceSlug } from './common.js';
 
-export const DocumentType = z.enum(['pdf', 'docx', 'txt', 'md', 'mp4', 'mp3', 'wav']);
+/** `web`: a page of an imported website (`sourceUrl` is its address). */
+export const DocumentType = z.enum(['pdf', 'docx', 'txt', 'md', 'mp4', 'mp3', 'wav', 'web']);
 export const DocumentStatus = z.enum(['queued', 'transcribing', 'processing', 'ready', 'failed']);
 
 export const Document = z.object({
@@ -20,6 +21,9 @@ export const Document = z.object({
   error: z.string().nullable(),
   passageCount: z.number().int().nullable(),
   tags: z.array(z.string()),
+  /** For a page of an imported website: the site it came from and the page's URL; otherwise `null`. */
+  siteId: z.string().nullable(),
+  sourceUrl: z.string().nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });

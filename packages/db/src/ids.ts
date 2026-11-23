@@ -13,6 +13,7 @@ export const ID_PREFIXES = {
   conversation: 'cnv',
   message: 'msg',
   apiKey: 'key',
+  site: 'site',
 } as const;
 
 export type IdKind = keyof typeof ID_PREFIXES;
