@@ -42,6 +42,7 @@ describe('MCP tools', () => {
       'ask',
       'list_documents',
       'list_folders',
+      'list_styles',
       'list_workspaces',
       'read_passage',
       'search_passages',
@@ -88,6 +89,55 @@ describe('MCP tools', () => {
     expect(text(res)).toBe('HTTP 429: Too many searches. (retry after 12 s)');
   });
 
+  it('lists response styles, so the agent can pick one for ask', async () => {
+    respond = () =>
+      Response.json({
+        data: [
+          {
+            slug: 'academic',
+            name: 'Academic',
+            description: 'Formal.',
+            instructions: 'Long text…',
+            builtIn: true,
+          },
+          {
+            slug: 'socratic',
+            name: 'Socratic',
+            description: 'Asks back.',
+            instructions: '…',
+            builtIn: false,
+          },
+        ],
+      });
+    const res = await client.callTool({ name: 'list_styles', arguments: {} });
+    expect(seen[0]).toMatchObject({ method: 'GET', url: '/v1/styles' });
+    expect(JSON.parse(text(res))).toEqual([
+      { slug: 'academic', name: 'Academic', description: 'Formal.' },
+      { slug: 'socratic', name: 'Socratic', description: 'Asks back.' },
+    ]);
+  });
+
+  it('asks in a response style, and says which style the answer used', async () => {
+    respond = () =>
+      Response.json({
+        id: 'ans_2',
+        grounded: true,
+        text: 'Short [1].',
+        citations: [],
+        model: 'm',
+        style: 'concise',
+      });
+    const res = await client.callTool({
+      name: 'ask',
+      arguments: { workspace: 'ouc', question: 'What is Langflow?', style: 'concise' },
+    });
+    expect(seen[0]).toMatchObject({ body: { question: 'What is Langflow?', style: 'concise' } });
+    expect(JSON.parse(text(res))).toMatchObject({ answerId: 'ans_2', style: 'concise' });
+    // null asks for no style, even where the workspace has a default.
+    await client.callTool({ name: 'ask', arguments: { workspace: 'ouc', question: 'Plain?', style: null } });
+    expect(seen[1]).toMatchObject({ body: { question: 'Plain?', style: null } });
+  });
+
   it('asks, and returns the answer with its citations', async () => {
     respond = () =>
       Response.json({
@@ -109,6 +159,7 @@ describe('MCP tools', () => {
           },
         ],
         model: 'qwen3-8b',
+        style: null,
         createdAt: '2026-11-23T00:00:00.000Z',
       });
     const res = await client.callTool({
@@ -135,6 +186,7 @@ describe('MCP tools', () => {
         },
       ],
       model: 'qwen3-8b',
+      style: null,
     });
   });
 
