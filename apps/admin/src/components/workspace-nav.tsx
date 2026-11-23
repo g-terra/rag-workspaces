@@ -1,4 +1,4 @@
-import { BarChart3, FileText, Settings, Upload } from 'lucide-react';
+import { BarChart3, FileText, Settings, Sparkles, Upload } from 'lucide-react';
 import { NavLink, useMatch } from 'react-router';
 import { navItemClass } from '@/lib/utils';
 import { useWorkspaces } from '@/workspaces/queries';
@@ -19,6 +19,9 @@ export function WorkspaceNav() {
       )}
       <NavLink to={`${base}/documents`} className={navItemClass}>
         <FileText className="size-4" /> Documents
+      </NavLink>
+      <NavLink to={`${base}/playground`} className={navItemClass}>
+        <Sparkles className="size-4" /> Playground
       </NavLink>
       {workspace.access !== 'reader' && (
         <NavLink to={`${base}/usage`} className={navItemClass}>

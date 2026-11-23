@@ -1,4 +1,5 @@
 import type { UploadResult } from '@rag/shared';
+import { failureDetail } from '@/api/problem';
 
 export type UploadOutcome =
   | { ok: true; status: number; result: UploadResult['data'][number] }
@@ -40,13 +41,4 @@ export function uploadFile(opts: {
     form.append('files', opts.file, opts.file.name);
     xhr.send(form);
   });
-}
-
-/** A refused upload's reason: the problem JSON's detail or title, else the status text, else `HTTP 502`. */
-export function failureDetail(
-  body: { detail?: string; title?: string } | null,
-  status: number,
-  statusText: string,
-): string {
-  return body?.detail ?? body?.title ?? (statusText || `HTTP ${status}`);
 }
