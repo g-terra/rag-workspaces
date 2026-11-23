@@ -15,7 +15,7 @@ Milestones define the order; a workstream only starts a milestone item when its 
 | M5 | **Video** | `video` compose profile: upload mp4/mp3/wav, transcript via Whisper, timestamped citations |
 | M6 | **Hardening** | Retrieval evaluation run and written up, backup and restore tested, `pnpm doctor`, rate limits and upload limits tested, docs complete (ingestion guide, operations) |
 | M7 | **Assignment deliverables** | Flow JSON in `flows/`, setup docs and the `pnpm setup` wizard, 3 to 5 page report, 3 to 5 minute demo video. Can start as soon as M2 is done; M4 only makes the video nicer |
-| Later | **MCP server for agents** | Optional. Agents can already use the REST API through its OpenAPI spec, so this is a convenience and not part of the core plan |
+| Later | **MCP server for agents** | Built 2026-11-23 (`apps/mcp`, decision 13): a stdio server over the REST API with search, read and ask tools |
 
 ```mermaid
 flowchart LR

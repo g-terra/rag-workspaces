@@ -28,7 +28,7 @@ as a stack of PRs), and each change has a spec in [docs/specs/](specs/) saying w
 | Keycloak auth, API keys, workspaces and workspace reindex, members, isolation, folders (with the folder filter on search, answers and chat), document `PATCH` | (all built) |
 | Upload, dedupe, pg-boss ingestion, SSE status | Whisper and the `video` profile, transcripts |
 | Passages, answers (+ streaming, feedback), conversations (`rw-chat`) | Workspace `stats`, per-key request counts |
-| Usage log and analytics, release versioning | `pnpm doctor`, `backup`/`restore`, `flows:export`/`flows:import`; admin UI screens (shell only) |
+| Usage log and analytics, release versioning, MCP server (`apps/mcp`) | `pnpm doctor`, `backup`/`restore`, `flows:export`/`flows:import`; admin UI screens (shell only) |
 
 ## System overview
 
@@ -217,6 +217,7 @@ Small, but written down so the system can be trusted with real notes:
 apps/
   api/            Fastify + zod + Swagger; routes, auth, workspace isolation, ingestion queue, analytics
   admin/          Vite + React + Tailwind + shadcn/ui
+  mcp/            MCP server (stdio) for agents, a thin client of the REST API
 packages/
   shared/         zod schemas and types shared by api and admin (the API contract)
   db/             Drizzle schema + migrations
