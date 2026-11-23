@@ -29,13 +29,30 @@ export function embeddingPrefixes(
   return KNOWN_PREFIXES.find(([pattern]) => pattern.test(model))?.[1] ?? { document: '', query: '' };
 }
 
-/** Thrown when a workspace names a provider whose key is not set in `.env`. */
+/** Thrown when a workspace names a provider it has no usable key for (in `.env` or saved for it). */
 export class ProviderNotConfigured extends Error {}
+
+/**
+ * Put in place of a key saved for a workspace that won't open (`SECRETS_KEY` missing or changed), by
+ * `withWorkspaceKeys`. Never sent anywhere: the endpoints below refuse it with the reason.
+ */
+export const UNREADABLE_KEY = '\u0000unreadable';
+
+function usable(name: string, value: string | undefined): string {
+  if (value === UNREADABLE_KEY) {
+    throw new ProviderNotConfigured(
+      `the ${name} saved for this workspace can't be read (SECRETS_KEY is missing or changed); save it again in the workspace settings`,
+    );
+  }
+  if (!value) throw new ProviderNotConfigured(`${name} is not set`);
+  return value;
+}
 
 /**
  * Where a workspace's embeddings come from. The ingest flow's embeddings node speaks the
  * OpenAI embeddings API, which LM Studio, OpenAI and Gemini all offer. Keys come from the
- * API's environment and travel to Langflow as tweaks on each run (POC finding F7).
+ * API's environment, or the workspace's own saved keys (`withWorkspaceKeys`), and travel to Langflow
+ * as tweaks on each run (POC finding F7).
  */
 export function embeddingEndpoint(
   provider: string,
@@ -46,13 +63,14 @@ export function embeddingEndpoint(
       // LM Studio ignores the key, but the client needs a non-empty one.
       return { baseUrl: config.LMSTUDIO_BASE_URL, apiKey: 'lm-studio' };
     case 'openai':
-      if (!config.OPENAI_API_KEY) throw new ProviderNotConfigured('OPENAI_API_KEY is not set');
-      return { baseUrl: 'https://api.openai.com/v1', apiKey: config.OPENAI_API_KEY };
+      return {
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: usable('OPENAI_API_KEY', config.OPENAI_API_KEY),
+      };
     case 'gemini':
-      if (!config.GEMINI_API_KEY) throw new ProviderNotConfigured('GEMINI_API_KEY is not set');
       return {
         baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
-        apiKey: config.GEMINI_API_KEY,
+        apiKey: usable('GEMINI_API_KEY', config.GEMINI_API_KEY),
       };
     default:
       throw new ProviderNotConfigured(`unknown embedding provider "${provider}"`);
@@ -81,11 +99,7 @@ export function chatEndpoint(
 ): ChatEndpoint {
   const provider = settings.chatProvider ?? config.DEFAULT_CHAT_PROVIDER;
   const model = settings.chatModel ?? config.DEFAULT_CHAT_MODEL;
-  const key = (name: 'OPENAI_API_KEY' | 'GEMINI_API_KEY' | 'ANTHROPIC_API_KEY') => {
-    const value = config[name];
-    if (!value) throw new ProviderNotConfigured(`${name} is not set`);
-    return value;
-  };
+  const key = (name: 'OPENAI_API_KEY' | 'GEMINI_API_KEY' | 'ANTHROPIC_API_KEY') => usable(name, config[name]);
   switch (provider) {
     case 'lmstudio':
       return { provider, model, baseUrl: config.LMSTUDIO_BASE_URL, apiKey: 'lm-studio' };

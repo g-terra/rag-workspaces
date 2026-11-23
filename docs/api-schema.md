@@ -34,7 +34,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Usage | `/v1/usage`, `/v1/workspaces/{slug}/usage` | admin (global), editor (own workspace) |
 | User | `/v1/users` | admin |
 | System | `/v1/system` | admin |
-| Provider key | `/v1/workspaces/{slug}/providers`, `/v1/providers/{provider}/models` | admin |
+| Provider key | `/v1/workspaces/{slug}/providers` | admin |
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
 
@@ -84,7 +84,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 ```
 
 - `slug` is 3 to 40 characters, lowercase letters, digits and hyphens, and cannot be changed after creation (the collection and the upload folder are named after it). A taken slug returns `409`.
-- `chatProvider` and `embeddingProvider` are one of the providers configured in `.env`: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the providers and the models each offers; choosing one whose key is not set returns `422`. Provider keys can be saved per workspace (below) and are never returned by the API.
+- `chatProvider` and `embeddingProvider` are one of the providers configured in `.env` or with a key saved for the workspace: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the providers and the models each offers; choosing one whose key is not set returns `422`. Provider keys can be saved per workspace (below) and are never returned by the API.
 - `null` settings use the global defaults from `.env`. `embeddingProvider` and `embeddingModel` are the exception: they are filled in from the default when the workspace is created and are never `null` afterwards, so a later change to `.env` cannot silently break search in existing workspaces. `PATCH` refuses to change them (`400`); change them with workspace reindex, since vectors from two models can't be compared.
 - `embeddingPrefixes` (read-only) is the text put before each document and each search query when embedding. It is pinned with the model, at creation and at every reindex, from the built-in table (nomic-embed-text and Qwen3-Embedding) or `EMBEDDING_PREFIXES` in `.env`, so a workspace's queries always match how its documents were embedded. It is `null` for a workspace not reindexed since prefixes were added, which embeds without them.
 - `chunkSize` and `chunkOverlap` apply to documents ingested after the change; reindex applies them to everything.
@@ -104,12 +104,10 @@ A hosted provider's key can be saved for one workspace from the admin UI, and th
 
 // PUT /v1/workspaces/{slug}/providers/{provider}/key  { "apiKey": "..." } → 200 with that provider, as above
 // DELETE /v1/workspaces/{slug}/providers/{provider}/key → 204; the workspace goes back to .env's key
-// POST /v1/providers/{provider}/models { "apiKey": "..." } → 200 with the provider's models; nothing saved
 ```
 
-- `PUT` asks the provider for its models with the key first and saves nothing when it refuses (`422` with the provider's reason). `lmstudio` takes no key (`400`). Without `SECRETS_KEY` in `.env` keys can't be saved (`503`).
-- Keys are stored encrypted (AES-256-GCM under `SECRETS_KEY`, bound to the workspace and provider) and never returned: only the last four characters. Deleting the workspace deletes its keys.
-- `POST /v1/providers/{provider}/models` is for setting up a workspace that doesn't exist yet: it checks a key and lists the models without storing it.
+- `PUT` asks the provider for its models with the key first and saves nothing when it refuses (`422` with the provider's reason) or can't be asked (`502`, or `504` when too slow). `lmstudio` takes no key (`400`). Without `SECRETS_KEY` in `.env` keys can't be saved (`503`).
+- Keys are stored encrypted (AES-256-GCM under `SECRETS_KEY`, bound to the workspace and provider) and never returned: only the last four characters. Deleting the workspace deletes its keys. A saved key that no longer opens (`SECRETS_KEY` changed) is reported in the list and refused by every run, never replaced by `.env`'s key.
 
 ## Asking
 

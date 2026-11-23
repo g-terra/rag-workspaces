@@ -20,5 +20,5 @@ export const WorkspaceProvider = ProviderStatus.extend({
 export type WorkspaceProvider = z.infer<typeof WorkspaceProvider>;
 
 /** `PUT /v1/workspaces/{slug}/providers/{provider}/key`. */
-export const SetProviderKey = z.strictObject({ apiKey: z.string().trim().min(8).max(500) });
+export const SetProviderKey = z.strictObject({ apiKey: z.string().trim().min(20).max(500) });
 export type SetProviderKey = z.infer<typeof SetProviderKey>;

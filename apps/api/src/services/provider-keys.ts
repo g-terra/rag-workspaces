@@ -1,9 +1,10 @@
 import { providerKeys, type Database } from '@rag/db';
-import type { HostedProvider, ModelProviderId, WorkspaceProvider } from '@rag/shared';
+import type { HostedProvider, ModelProviderId, ProviderStatus, WorkspaceProvider } from '@rag/shared';
 import { and, eq } from 'drizzle-orm';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
 import { ModelCatalog } from './models.js';
+import { UNREADABLE_KEY } from './providers.js';
 import { openSecret, sealSecret, SecretUnreadable } from './secrets.js';
 
 type KeyName = 'OPENAI_API_KEY' | 'GEMINI_API_KEY' | 'ANTHROPIC_API_KEY';
@@ -18,10 +19,12 @@ const KEY_NAME: Record<HostedProvider, KeyName> = {
 const isHosted = (id: string): id is HostedProvider => id in KEY_NAME;
 const context = (workspaceId: string, provider: string) => `${workspaceId}:${provider}`;
 
+type Saved = Map<HostedProvider, { value: string | null; last4: string }>;
+
 /** The keys saved for a workspace, opened. A key that won't open (another SECRETS_KEY) is `null`. */
-async function savedKeys(db: Database, secretsKey: string | undefined, workspaceId: string) {
+async function savedKeys(db: Database, secretsKey: string | undefined, workspaceId: string): Promise<Saved> {
   const rows = await db.select().from(providerKeys).where(eq(providerKeys.workspaceId, workspaceId));
-  const keys = new Map<HostedProvider, { value: string | null; last4: string }>();
+  const keys: Saved = new Map();
   for (const row of rows) {
     if (!isHosted(row.provider)) continue;
     let value: string | null = null;
@@ -35,22 +38,33 @@ async function savedKeys(db: Database, secretsKey: string | undefined, workspace
   return keys;
 }
 
+/** `config` with the saved keys in place of `.env`'s; an unreadable one becomes `unreadable`. */
+function merge<C extends Partial<KeyConfig>>(config: C, saved: Saved, unreadable: string | undefined): C {
+  if (saved.size === 0) return config;
+  const merged: Partial<KeyConfig> = { ...config };
+  for (const [provider, { value }] of saved) merged[KEY_NAME[provider]] = value ?? unreadable;
+  return merged as C;
+}
+
 /**
  * The config a workspace's flows run with: the API's own, with each key saved for the workspace in
- * place of the one from `.env`. A saved key that can't be opened becomes empty, so a run that needs
- * it fails as "not set" instead of quietly using `.env`'s key.
+ * place of the one from `.env`. A saved key that can't be opened becomes `UNREADABLE_KEY`, which the
+ * provider endpoints refuse with the reason, so a run never quietly falls back to `.env`'s key.
  */
 export async function withWorkspaceKeys<C extends Partial<KeyConfig>>(
   db: Database,
   config: C,
   workspaceId: string,
 ): Promise<C> {
-  const saved = await savedKeys(db, config.SECRETS_KEY, workspaceId);
-  if (saved.size === 0) return config;
-  const merged: Partial<KeyConfig> = { ...config };
-  for (const [provider, { value }] of saved) merged[KEY_NAME[provider]] = value ?? '';
-  return merged as C;
+  return merge(config, await savedKeys(db, config.SECRETS_KEY, workspaceId), UNREADABLE_KEY);
 }
+
+const keyInfo = (status: ProviderStatus, saved: Saved, config: KeyConfig): WorkspaceProvider['key'] => {
+  if (!isHosted(status.id)) return { source: null, last4: null };
+  const own = saved.get(status.id);
+  if (own) return { source: 'workspace', last4: own.last4 };
+  return { source: config[KEY_NAME[status.id]] ? 'env' : null, last4: null };
+};
 
 /** Every provider as the workspace sees it, asked with the key it would use. */
 export async function workspaceProviders(
@@ -61,50 +75,50 @@ export async function workspaceProviders(
   signal: AbortSignal,
 ): Promise<WorkspaceProvider[]> {
   const saved = await savedKeys(db, config.SECRETS_KEY, workspaceId);
-  const catalog = new ModelCatalog(await withWorkspaceKeys(db, config, workspaceId), fetchFn);
-  const statuses = await catalog.status(signal);
+  // An unreadable key is left out (undefined), so the provider is not asked with anything.
+  const statuses = await new ModelCatalog(merge(config, saved, undefined), fetchFn).status(signal);
   return statuses.map((status) => {
-    if (!isHosted(status.id)) return { ...status, key: { source: null, last4: null } };
-    const own = saved.get(status.id);
-    if (own?.value === null) {
+    const key = keyInfo(status, saved, config);
+    if (isHosted(status.id) && saved.get(status.id)?.value === null) {
       return {
         ...status,
-        configured: false,
-        reachable: null,
-        models: [],
         error:
           "The key saved for this workspace can't be read: SECRETS_KEY is missing or changed. Save it again.",
-        key: { source: 'workspace', last4: own.last4 },
+        key,
       };
     }
-    if (own) return { ...status, key: { source: 'workspace', last4: own.last4 } };
-    return { ...status, key: { source: config[KEY_NAME[status.id]] ? 'env' : null, last4: null } };
+    return { ...status, key };
   });
 }
 
 /**
- * Asks a hosted provider for its models with a key that is not saved anywhere, so the create-workspace
- * wizard can offer them before the workspace exists. `422` with the provider's reason when it fails.
+ * Asks a hosted provider for its models with a key. `422` when the provider turned the key down,
+ * `504` when it didn't answer in time, `502` when it failed otherwise (down, busy).
  */
-export async function checkProviderKey(
+async function checkProviderKey(
   config: KeyConfig,
-  provider: ModelProviderId,
+  provider: HostedProvider,
   apiKey: string,
   fetchFn: typeof fetch,
   signal: AbortSignal,
-) {
-  if (!isHosted(provider)) throw new HttpProblem(400, 'LM Studio runs on this machine and takes no API key.');
-  const status = await new ModelCatalog({ ...config, [KEY_NAME[provider]]: apiKey }, fetchFn).provider(
-    provider,
-    signal,
+): Promise<ProviderStatus> {
+  const { status, refused } = await new ModelCatalog(
+    { ...config, [KEY_NAME[provider]]: apiKey },
+    fetchFn,
+  ).check(provider, signal);
+  if (status.reachable) return status;
+  if (refused) throw new HttpProblem(422, `The key was not saved: ${status.error}.`);
+  const timedOut = signal.aborted || /timeout|aborted/i.test(status.error ?? '');
+  throw new HttpProblem(
+    timedOut ? 504 : 502,
+    `The key was not saved, because ${provider} couldn't be asked whether it works: ${status.error}. Try again.`,
   );
-  if (!status.reachable) throw new HttpProblem(422, `The key doesn't work: ${status.error}.`);
-  return status;
 }
 
 /**
  * Checks a key with the provider (its model list) and saves it encrypted for the workspace,
- * replacing any earlier one. Nothing is saved when the provider refuses it.
+ * replacing any earlier one. Nothing is saved unless the provider accepts it. Answers with the
+ * provider as the workspace now sees it.
  */
 export async function saveProviderKey(
   db: Database,
@@ -112,7 +126,7 @@ export async function saveProviderKey(
   input: { workspaceId: string; provider: ModelProviderId; apiKey: string; savedBy: string },
   fetchFn: typeof fetch,
   signal: AbortSignal,
-): Promise<void> {
+): Promise<WorkspaceProvider> {
   const { workspaceId, provider, apiKey, savedBy } = input;
   if (!isHosted(provider)) throw new HttpProblem(400, 'LM Studio runs on this machine and takes no API key.');
   if (!config.SECRETS_KEY) {
@@ -121,7 +135,7 @@ export async function saveProviderKey(
       "Keys can't be saved: SECRETS_KEY is not set. Run `pnpm env:init` and restart the API, or set the key in .env.",
     );
   }
-  await checkProviderKey(config, provider, apiKey, fetchFn, signal);
+  const status = await checkProviderKey(config, provider, apiKey, fetchFn, signal);
 
   const row = {
     workspaceId,
@@ -137,6 +151,7 @@ export async function saveProviderKey(
       target: [providerKeys.workspaceId, providerKeys.provider],
       set: { sealed: row.sealed, last4: row.last4, savedBy },
     });
+  return { ...status, key: { source: 'workspace', last4: row.last4 } };
 }
 
 /** Removes a saved key; false when there was none. */

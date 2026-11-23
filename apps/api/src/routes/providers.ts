@@ -1,19 +1,11 @@
 import type { Database } from '@rag/db';
-import {
-  ModelProviderId,
-  ProviderStatus,
-  SetProviderKey,
-  WorkspaceProvider,
-  WorkspaceSlug,
-} from '@rag/shared';
+import { ModelProviderId, SetProviderKey, WorkspaceProvider, WorkspaceSlug } from '@rag/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
-import { requireAdmin } from '../auth/plugin.js';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
 import {
-  checkProviderKey,
   removeProviderKey,
   saveProviderKey,
   workspaceProviders,
@@ -41,25 +33,6 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
 ) => {
   const signal = () => AbortSignal.timeout(config.READY_TIMEOUT_MS);
   const list = (workspaceId: string) => workspaceProviders(db, config, workspaceId, fetchFn, signal());
-
-  app.post(
-    '/v1/providers/:provider/models',
-    {
-      preHandler: requireAdmin,
-      schema: {
-        tags: ['system'],
-        security: [{ bearerAuth: [] }],
-        summary: 'Check a provider API key and list its models, without saving it (admins only)',
-        description:
-          'For setting up a workspace before it exists: the key is used for this one call to the ' +
-          "provider's model list and is not stored or logged. `422` with the provider's reason when it fails.",
-        params: z.object({ provider: ModelProviderId }),
-        body: SetProviderKey,
-        response: { 200: ProviderStatus },
-      },
-    },
-    async (req) => checkProviderKey(config, req.params.provider, req.body.apiKey, fetchFn, signal()),
-  );
 
   app.get(
     '/v1/workspaces/:slug/providers',
@@ -90,7 +63,8 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
         description:
           'The key is checked by asking the provider for its models, then stored encrypted (AES-256-GCM ' +
           "under `SECRETS_KEY`) and used instead of `.env`'s key for this workspace. `422` when the " +
-          'provider refuses it (nothing is saved), `400` for `lmstudio`, `503` when `SECRETS_KEY` is not set.',
+          'provider refuses it, `502` or `504` when it fails or is too slow to answer (nothing is saved ' +
+          'either way), `400` for `lmstudio`, `503` when `SECRETS_KEY` is not set.',
         params: ProviderParams,
         body: SetProviderKey,
         response: { 200: WorkspaceProvider },
@@ -98,7 +72,7 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
     },
     async (req) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'admin');
-      await saveProviderKey(
+      const saved = await saveProviderKey(
         db,
         config,
         {
@@ -115,8 +89,7 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
         { workspace: workspace.slug, provider: req.params.provider, by: req.principal?.id },
         'provider key saved',
       );
-      const providers = await list(workspace.id);
-      return providers.find((p) => p.id === req.params.provider)!;
+      return saved;
     },
   );
 
