@@ -1,7 +1,7 @@
 ---
 title: Answer from a composite workspace's sources
 date: 2026-11-23
-pr: pending
+pr: "#117"
 status: in review
 areas: [api, flows, langflow, docs]
 ---
