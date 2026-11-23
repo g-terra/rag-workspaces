@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { formatBytes, statusLabel } from '@/documents/files';
 import {
   filterDocuments,
-  formatUpdated,
   isIngesting,
   librarySummary,
   shortSha,
@@ -24,6 +23,7 @@ import {
   useLiveDocuments,
   useReindexDocument,
 } from '@/documents/queries';
+import { formatRelative } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { useCurrentWorkspace } from '@/workspaces/current';
 
@@ -167,7 +167,7 @@ function Library() {
                           timeStyle: 'short',
                         })}
                       >
-                        {formatUpdated(d.updatedAt)}
+                        {formatRelative(d.updatedAt)}
                       </td>
                     </tr>
                   ))}
