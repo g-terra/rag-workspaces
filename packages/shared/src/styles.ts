@@ -23,3 +23,16 @@ export type ResponseStyle = z.infer<typeof ResponseStyle>;
 
 export const StyleList = z.object({ data: z.array(ResponseStyle) });
 export type StyleList = z.infer<typeof StyleList>;
+
+/** `POST /v1/styles`: a custom style, shared by every workspace. */
+export const CreateStyle = z.object({
+  slug: StyleSlug,
+  name: z.string().trim().min(1).max(60),
+  description: z.string().trim().max(200).default(''),
+  instructions: z.string().trim().min(1).max(2000),
+});
+export type CreateStyle = z.infer<typeof CreateStyle>;
+
+/** `PATCH /v1/styles/{slug}`: the slug never changes, since answers and workspaces refer to it. */
+export const UpdateStyle = CreateStyle.omit({ slug: true }).partial().strict();
+export type UpdateStyle = z.infer<typeof UpdateStyle>;

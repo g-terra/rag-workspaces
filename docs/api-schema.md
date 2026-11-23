@@ -37,7 +37,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Provider key | `/v1/workspaces/{slug}/providers`, `/v1/providers/{provider}/models` | admin |
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
-| Response style | `/v1/styles` | anyone authenticated |
+| Response style | `/v1/styles` | anyone authenticated to list; admins create, change and delete custom ones |
 
 Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down. The admin UI's workspace Settings screen reads it for its provider and model pickers, and shows `defaults.workspace` (from `DEFAULT_CHUNK_SIZE`, `DEFAULT_CHUNK_OVERLAP`, `DEFAULT_TOP_K`, `DEFAULT_MIN_SCORE` and the built-in system prompt) as the value an empty setting uses.
 
@@ -157,6 +157,15 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
 ### Response styles
 
 `GET /v1/styles` lists the styles an answer can be written in: `{ "data": [{ "slug": "academic", "name": "Academic", "description": "…", "instructions": "…", "builtIn": true }] }`. Four are built in: `academic`, `talkative`, `concise` and `tutor`. A style changes tone, length and format only. Its instructions are added after the workspace's system prompt, behind a header that repeats the grounding rules (cite with `[n]`, use only the passages, complete lists, say only that the material does not cover it), so no style can switch citations or refusals off. The fixed "not found" reply is the same in every style.
+
+| Method | Path | Does |
+|---|---|---|
+| GET | `/v1/styles` | Built-in styles, then custom ones by name |
+| POST | `/v1/styles` | Admins: create a custom style, `{ "slug", "name", "description", "instructions" }` (instructions up to 2,000 characters). A taken slug, built-ins included, is `409` |
+| PATCH | `/v1/styles/{slug}` | Admins: change `name`, `description` or `instructions`. Built-ins are `403` |
+| DELETE | `/v1/styles/{slug}` | Admins: `204`; `409` while a workspace uses it as `settings.style`. Built-ins are `403` |
+
+Custom styles are shared by every workspace. Answers keep the slug of the style they used, even after it is changed or deleted.
 
 ## Material
 
