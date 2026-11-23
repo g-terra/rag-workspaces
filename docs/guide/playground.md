@@ -63,7 +63,12 @@ the workspace's; `"style": null` asks for none. `GET /v1/styles` lists them with
 In the playground, the "Response style" picker in Ask and in Chat chooses one for the next question:
 "Workspace default", "No style", or any built-in or custom style. Each answer shows the style it used.
 
-Admins can add their own styles with `POST /v1/styles` (a slug, name, description and instructions), and
+Admins add their own styles under "Response styles" in the sidebar: a name, a short description and the
+instructions the model gets after its usual rules. Custom styles are shared by every workspace. The built-in
+ones are listed there too, read-only. A style that a workspace uses as its default can't be deleted until
+that workspace picks another; the dialog names the workspaces.
+
+Through the API, admins add them with `POST /v1/styles` (a slug, name, description and instructions), and
 change or delete them with `PATCH` and `DELETE /v1/styles/{slug}`. A custom style works like a built-in one
 in every workspace, behind the same reminder of the grounding rules. Agents can pick one too: the MCP
 server has `list_styles`, and `ask` takes a `style` ([API keys and agents](api-keys.md#connect-an-ai-agent-mcp)).
