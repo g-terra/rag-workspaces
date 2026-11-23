@@ -26,7 +26,7 @@ as a stack of PRs), and each change has a spec in [docs/specs/](specs/) saying w
 |---|---|
 | Compose stack, `pnpm env:init`, API skeleton, readiness, `GET /v1/users`, `GET /v1/system`, rate limits | (all built) |
 | Keycloak auth, API keys, workspaces and workspace reindex, members, isolation, folders (with the folder filter on search, answers and chat), document `PATCH` | (all built) |
-| Upload, dedupe, pg-boss ingestion, SSE status | Whisper and the `video` profile, transcripts |
+| Upload, dedupe, pg-boss ingestion, SSE status, video and audio through Whisper (`video` profile), transcripts | Start times on passages and citations |
 | Passages, answers (+ streaming, feedback), conversations (`rw-chat`) | Workspace `stats`, per-key request counts |
 | Usage log and analytics, release versioning, MCP server (`apps/mcp`) | `pnpm doctor`, `backup`/`restore`, `flows:export`/`flows:import`; admin UI screens (shell only) |
 
@@ -104,7 +104,7 @@ Easy start:
 # In LM Studio: load a chat model and an embedding model, start the local server
 pnpm env:init                          # writes .env with fresh secrets
 docker compose up -d --build           # core stack
-docker compose --profile video up -d   # plus video transcription (M5, not built yet)
+docker compose --profile video up -d   # plus video and audio transcription (or COMPOSE_PROFILES=video in .env)
 # Admin UI http://rag.localhost · Swagger http://api.rag.localhost/docs · Langflow http://langflow.rag.localhost
 ```
 
@@ -166,7 +166,7 @@ flowchart LR
   L --> R["status ready<br/>or failed with error, retry"]
 ```
 
-- Statuses per document: `queued`, `transcribing` (video only), `processing`, `ready`, `failed`. The admin UI shows them live over server-sent events.
+- Statuses per document: `queued`, `transcribing` (video and audio: Whisper writes a timed transcript next to the file, and the ingest flow reads that, with `start_seconds` on each passage), `processing`, `ready`, `failed`. The admin UI shows them live over server-sent events.
 - Re-uploading an identical file in the same workspace is a no-op. Re-indexing a document deletes its vectors by `document_id` and runs the flow again.
 - Progress is per file, not per chunk, because the flow runs as one step. That is the trade for keeping all AI logic in Langflow.
 

@@ -120,6 +120,28 @@ services:
         - -c
         - exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.0\r\n\r\n' >&3 && grep -q '"UP"' <&3
 
+  # Video and audio transcription, off by default: COMPOSE_PROFILES=video and WHISPER_URL in .env.
+  # ffmpeg runs inside it, so it takes MP4, MP3 and WAV as they are. The model downloads on first start.
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:v1.10.0
+    profiles: [video]
+    restart: unless-stopped
+    environment:
+      ASR_ENGINE: faster_whisper
+      ASR_MODEL: ${WHISPER_MODEL:-base}
+    volumes:
+      - whisper-models:/root/.cache
+    healthcheck:
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 300s
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/docs', timeout=4)"
+
   api:
     build:
       context: .
@@ -159,6 +181,8 @@ services:
       # Per person or API key, per minute: all /v1 requests, and those that run a model. 0 is off.
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-600}
       RATE_LIMIT_MODEL_PER_MINUTE: ${RATE_LIMIT_MODEL_PER_MINUTE:-30}
+      # Video and audio: the whisper service below (http://whisper:9000), when the video profile is on.
+      WHISPER_URL: ${WHISPER_URL:-}
       # Largest upload in bytes, 2 GB by default; the web service gets the same value.
       MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-2147483648}
       USAGE_QUESTION_RETENTION_DAYS: ${USAGE_QUESTION_RETENTION_DAYS:-90}
@@ -209,3 +233,4 @@ volumes:
   chroma-data:
   langflow-data:
   uploads:
+  whisper-models:

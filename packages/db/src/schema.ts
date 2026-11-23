@@ -125,7 +125,7 @@ export const workspaceMembers = pgTable(
 
 export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
 
-export const documentType = pgEnum('document_type', ['pdf', 'docx', 'txt', 'md']);
+export const documentType = pgEnum('document_type', ['pdf', 'docx', 'txt', 'md', 'mp4', 'mp3', 'wav']);
 
 /** Ingestion status. `transcribing` is used by video and audio (M5). */
 export const documentStatus = pgEnum('document_status', [

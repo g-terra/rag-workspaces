@@ -65,6 +65,11 @@ const ConfigSchema = z.object({
 
   // --- Ingestion ---
   /** A flow run gets this long, plus INGEST_TIMEOUT_MS_PER_MB for each megabyte of the file. */
+  /**
+   * The Whisper ASR service (compose profile `video`), e.g. http://whisper:9000. Unset, video and audio
+   * uploads are refused with 415.
+   */
+  WHISPER_URL: z.preprocess((v) => (v === '' ? undefined : v), z.url().optional()),
   INGEST_TIMEOUT_MS: z.coerce.number().int().positive().default(120_000),
   INGEST_TIMEOUT_MS_PER_MB: z.coerce.number().int().nonnegative().default(60_000),
   /** Attempts per document before it is `failed` (1 + retries). */

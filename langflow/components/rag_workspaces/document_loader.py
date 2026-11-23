@@ -1,9 +1,13 @@
-"""Load one workspace document (PDF, DOCX, MD, TXT) into page-level rows.
+"""Load one workspace document (PDF, DOCX, MD, TXT, or a video/audio transcript) into rows.
 
 Each row carries the metadata the rest of the pipeline needs: document_id,
-filename, folder and, for PDFs, the 1-based page number.
+filename, folder and, for PDFs, the 1-based page number. A transcript
+(`<file>.transcript.json`, written by the API from Whisper's output) becomes rows
+of consecutive segments, each with `start_seconds` and `end_seconds`, so
+passages can point to the moment they come from.
 """
 
+import json
 from pathlib import Path
 
 from lfx.custom.custom_component.component import Component
@@ -11,10 +15,15 @@ from lfx.io import MessageTextInput, Output, StrInput
 from lfx.schema.data import Data
 from lfx.schema.dataframe import DataFrame
 
+# A transcript row ends after this many characters or seconds, whichever comes first. Smaller than
+# the usual chunk size, so most chunks keep the start time of the words they hold.
+TRANSCRIPT_ROW_CHARS = 600
+TRANSCRIPT_ROW_SECONDS = 60
+
 
 class WorkspaceDocumentLoader(Component):
     display_name = "Workspace Document Loader"
-    description = "Load a PDF, DOCX, MD or TXT file into page rows with document metadata."
+    description = "Load a PDF, DOCX, MD or TXT file, or a transcript, into rows with document metadata."
     icon = "file-text"
     name = "WorkspaceDocumentLoader"
 
@@ -61,6 +70,8 @@ class WorkspaceDocumentLoader(Component):
             doc = docx.Document(str(path))
             text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
             rows.append(Data(data={**meta, "text": text}))
+        elif path.name.endswith(".transcript.json"):
+            rows = transcript_rows(json.loads(path.read_text(encoding="utf-8")), meta)
         elif ext in {".md", ".markdown", ".txt"}:
             rows.append(Data(data={**meta, "text": path.read_text(encoding="utf-8", errors="replace")}))
         else:
@@ -72,3 +83,28 @@ class WorkspaceDocumentLoader(Component):
             raise ValueError(msg)
         self.status = f"{len(rows)} page row(s) from {path.name}"
         return DataFrame(rows)
+
+
+def transcript_rows(transcript: dict, meta: dict) -> list[Data]:
+    """Group Whisper segments into rows of a few sentences, keeping when each row starts and ends."""
+    rows: list[Data] = []
+    texts: list[str] = []
+    start = end = 0.0
+
+    def flush():
+        if texts:
+            rows.append(Data(data={**meta, "start_seconds": start, "end_seconds": end, "text": " ".join(texts)}))
+
+    for seg in transcript.get("segments", []):
+        text = str(seg.get("text", "")).strip()
+        if not text:
+            continue
+        if texts and (len(" ".join(texts)) + len(text) > TRANSCRIPT_ROW_CHARS or seg["start"] - start >= TRANSCRIPT_ROW_SECONDS):
+            flush()
+            texts = []
+        if not texts:
+            start = float(seg["start"])
+        texts.append(text)
+        end = float(seg["end"])
+    flush()
+    return rows

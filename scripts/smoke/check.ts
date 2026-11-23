@@ -28,7 +28,13 @@ type Doc = {
   passageCount: number | null;
   error: string | null;
 };
-type Passage = { document_id: string; page: number | null; folder?: string };
+type Passage = {
+  document_id: string;
+  page: number | null;
+  folder?: string;
+  start_seconds?: number;
+  end_seconds?: number;
+};
 
 class CheckFailed extends Error {}
 
@@ -334,6 +340,48 @@ async function main() {
       expect(again.folderId === null, `document still in folder ${again.folderId}`);
     },
   );
+
+  await step('video and audio: a WAV is transcribed, and its passages carry start times', async () => {
+    // A valid, silent WAV header; the stand-in Whisper answers any file with the same two segments.
+    const wav = Buffer.alloc(44 + 1600);
+    wav.write('RIFF', 0, 'latin1');
+    wav.writeUInt32LE(wav.length - 8, 4);
+    wav.write('WAVEfmt ', 8, 'latin1');
+    wav.writeUInt32LE(16, 16);
+    wav.writeUInt16LE(1, 20); // PCM
+    wav.writeUInt16LE(1, 22); // mono
+    wav.writeUInt32LE(8000, 24);
+    wav.writeUInt32LE(16000, 28);
+    wav.writeUInt16LE(2, 32);
+    wav.writeUInt16LE(16, 34);
+    wav.write('data', 36, 'latin1');
+    wav.writeUInt32LE(1600, 40);
+    const form = new FormData();
+    form.append('files', new Blob([wav]), 'lecture.wav');
+    const { data } = (await call(token, 'POST', `/v1/workspaces/${slug}/documents`, form)) as {
+      data: { document: Doc }[];
+    };
+    const [doc] = await waitUntilReady(token, slug, [data[0]!.document.id]);
+    const transcript = await call(token, 'GET', `/v1/workspaces/${slug}/documents/${doc!.id}/transcript`);
+    expect(
+      transcript.segments.length === 2 && transcript.segments[1].start === 3.2,
+      `transcript: ${JSON.stringify(transcript)}`,
+    );
+    const passages = await passagesOf(collection, doc!.id);
+    expect(
+      passages.length > 0 && passages.every((p) => typeof p.start_seconds === 'number'),
+      `passages need start_seconds: ${JSON.stringify(passages)}`,
+    );
+    const found = await call(
+      token,
+      'GET',
+      `/v1/workspaces/${slug}/passages?query=chroma+embeddings+metadata`,
+    );
+    expect(
+      found.data.some((p: { documentId: string }) => p.documentId === doc!.id),
+      'search did not find the transcript',
+    );
+  });
 
   await step('deleted the workspace, its Chroma collection is gone', async () => {
     await call(token, 'DELETE', `/v1/workspaces/${slug}`);

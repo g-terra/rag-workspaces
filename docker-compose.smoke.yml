@@ -32,6 +32,8 @@ services:
       standin: { condition: service_healthy }
     environment:
       LMSTUDIO_BASE_URL: http://standin:1234/v1
+      # The stand-in answers Whisper's /asr too, so video ingestion runs without the real model.
+      WHISPER_URL: http://standin:1234
 
   # Published so the checks can count what the ingest flow wrote.
   chroma:

@@ -136,7 +136,7 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
 | GET, PATCH, DELETE | `/v1/workspaces/{slug}/documents/{documentId}` | Read; move (`folderId`, `null` for the top level), rename (`title`) or retag (`tags`), where a move updates its passages too; delete with its vectors. PATCH and DELETE answer `409` while it is processing |
 | POST | `/v1/workspaces/{slug}/documents/{documentId}/reindex` | Delete its vectors and run the ingest flow again; `202`, or `409` while it is processing |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/file` | Download the original |
-| GET | `/v1/workspaces/{slug}/documents/{documentId}/transcript` *(planned)* | The timestamped transcript (video and audio only) |
+| GET | `/v1/workspaces/{slug}/documents/{documentId}/transcript` | The timed transcript of a video or audio file: `{ "language": "en", "segments": [{ "start": 0, "end": 4.3, "text": "…" }] }` (seconds). `404` for other types and until it is transcribed |
 | GET | `/v1/workspaces/{slug}/documents/events` | Live status changes (server-sent events); see below |
 
 ```json
@@ -146,7 +146,7 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
   "tags": ["rag"], "createdAt": "…", "updatedAt": "…" }
 ```
 
-`status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit (`MAX_UPLOAD_BYTES`, 2 GB by default) return `413` with the limit in `detail`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. `folderId` is `null` for a document at the top level.
+`type` is `pdf`, `docx`, `txt`, `md`, or with the video profile `mp4`, `mp3` or `wav` (without it those get `415`). `status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit (`MAX_UPLOAD_BYTES`, 2 GB by default) return `413` with the limit in `detail`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. `folderId` is `null` for a document at the top level.
 
 The events stream (`text/event-stream`, read with `fetch` since `EventSource` can't send `Authorization`) sends:
 

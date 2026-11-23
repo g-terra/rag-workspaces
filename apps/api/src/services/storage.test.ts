@@ -16,6 +16,18 @@ describe('detectType', () => {
     expect(detectType('recipes.txt', await head('personal/recipes.txt'))).toBe('txt');
   });
 
+  it('recognises video and audio by their headers', () => {
+    const mp4 = Buffer.concat([Buffer.from([0, 0, 0, 0x20]), Buffer.from('ftypisom')]);
+    expect(detectType('lecture.mp4', mp4)).toBe('mp4');
+    expect(detectType('lecture.mov', mp4)).toBe('mp4');
+    expect(detectType('talk.mp3', Buffer.from('ID3\x04\x00', 'latin1'))).toBe('mp3');
+    expect(detectType('talk.mp3', Buffer.from([0xff, 0xfb, 0x90, 0x64]))).toBe('mp3');
+    expect(detectType('memo.wav', Buffer.from('RIFF\x24\x08\x00\x00WAVEfmt ', 'latin1'))).toBe('wav');
+    // RIFF that isn't WAVE (AVI), and a frame-sync byte pair inside a file not named .mp3.
+    expect(detectType('clip.avi', Buffer.from('RIFF\x24\x08\x00\x00AVI LIST', 'latin1'))).toBeNull();
+    expect(detectType('data.bin', Buffer.from([0xff, 0xfb, 0x90, 0x64]))).toBeNull();
+  });
+
   it('trusts content over the name for PDFs', () => {
     expect(detectType('renamed.txt', Buffer.from('%PDF-1.7\n'))).toBe('pdf');
   });

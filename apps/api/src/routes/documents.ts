@@ -3,7 +3,15 @@ import type { ServerResponse } from 'node:http';
 import path from 'node:path';
 import multipart from '@fastify/multipart';
 import { documents, newId, type Database, type Document as DocumentRow } from '@rag/db';
-import { Document, DocumentQuery, UpdateDocument, UploadResult, WorkspaceSlug, page } from '@rag/shared';
+import {
+  Document,
+  DocumentQuery,
+  Transcript,
+  UpdateDocument,
+  UploadResult,
+  WorkspaceSlug,
+  page,
+} from '@rag/shared';
 import { and, desc, eq, inArray, isNull, notInArray, type SQL } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -17,7 +25,7 @@ import type { IngestQueue } from '../services/ingest-queue.js';
 import { requireFolder } from '../services/folders.js';
 import { finishReindexIfDone } from '../services/reindex.js';
 import type { UploadStorage } from '../services/storage.js';
-import { FileTooLarge, detectType } from '../services/storage.js';
+import { FileTooLarge, detectType, isMedia } from '../services/storage.js';
 
 export type DocumentRoutesOptions = {
   db: Database;
@@ -25,7 +33,7 @@ export type DocumentRoutesOptions = {
   chroma: ChromaService;
   queue: IngestQueue;
   events: DocumentEvents;
-  config: Pick<Config, 'MAX_UPLOAD_BYTES' | 'MAX_UPLOAD_FILES'>;
+  config: Pick<Config, 'MAX_UPLOAD_BYTES' | 'MAX_UPLOAD_FILES' | 'WHISPER_URL'>;
 };
 
 /** How often an idle status stream gets a comment line, to keep it open through proxies. */
@@ -52,6 +60,9 @@ const MIME: Record<DocumentRow['type'], string> = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   txt: 'text/plain; charset=utf-8',
   md: 'text/markdown; charset=utf-8',
+  mp4: 'video/mp4',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
 };
 
 export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = async (app, opts) => {
@@ -152,7 +163,17 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
           const type = detectType(fileName, await storage.head(file.tmpPath));
           if (!type) {
             await storage.discard(file);
-            throw new HttpProblem(415, `"${fileName}" is not a supported file. Use PDF, DOCX, TXT or MD.`);
+            throw new HttpProblem(
+              415,
+              `"${fileName}" is not a supported file. Use PDF, DOCX, TXT or MD, or MP4, MP3 or WAV with the video profile.`,
+            );
+          }
+          if (isMedia(type) && !config.WHISPER_URL) {
+            await storage.discard(file);
+            throw new HttpProblem(
+              415,
+              `"${fileName}" is video or audio, which needs the video profile (docs/setup.md, "Video and audio").`,
+            );
           }
           staged.push({ fileName, type, file });
         }
@@ -366,6 +387,27 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
         .type(MIME[doc.type])
         .header('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(doc.fileName)}`)
         .send(createReadStream(storage.absolute(doc.storagePath)));
+    },
+  );
+
+  app.get(
+    '/v1/workspaces/:slug/documents/:documentId/transcript',
+    {
+      schema: {
+        ...common,
+        summary: 'The transcript of a video or audio file',
+        description:
+          'Timed segments from Whisper. `404` for other types, and until the file has been transcribed.',
+        params: DocParams,
+        response: { 200: Transcript },
+      },
+    },
+    async (req) => {
+      const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'reader');
+      const doc = await loadDocument(workspace.id, req.params.documentId);
+      const transcript = isMedia(doc.type) ? await storage.readTranscript(doc.storagePath) : null;
+      if (!transcript) throw new HttpProblem(404, 'This document has no transcript.');
+      return transcript;
     },
   );
 

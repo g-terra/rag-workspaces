@@ -1,12 +1,21 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
-import { mkdir, open, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import type { Transcript } from '@rag/shared';
 
-export type FileType = 'pdf' | 'docx' | 'txt' | 'md';
+export type FileType = 'pdf' | 'docx' | 'txt' | 'md' | MediaType;
+export type MediaType = 'mp4' | 'mp3' | 'wav';
+
+/** `<slug>/<id>.mp4` → `<slug>/<id>.mp4.transcript.json`; the ingest flow's loader reads that file. */
+export const transcriptPath = (relative: string) => `${relative}.transcript.json`;
+
+/** Video and audio go through Whisper before the ingest flow. */
+export const isMedia = (type: string): type is MediaType =>
+  type === 'mp4' || type === 'mp3' || type === 'wav';
 
 export type StagedFile = {
   /** Absolute path of the temporary file. */
@@ -71,8 +80,27 @@ export class UploadStorage {
     return full;
   }
 
+  /** Delete a file, and the transcript next to it if there is one. */
   async remove(relative: string): Promise<void> {
     await rm(this.absolute(relative), { force: true });
+    await rm(this.absolute(transcriptPath(relative)), { force: true });
+  }
+
+  /** Write a document's transcript next to its file, where the ingest flow reads it. */
+  async writeTranscript(relative: string, transcript: Transcript): Promise<string> {
+    const target = transcriptPath(relative);
+    await writeFile(this.absolute(target), JSON.stringify(transcript));
+    return target;
+  }
+
+  /** A document's transcript, or null when it has none (not video or audio, or not transcribed yet). */
+  async readTranscript(relative: string): Promise<Transcript | null> {
+    try {
+      return JSON.parse(await readFile(this.absolute(transcriptPath(relative)), 'utf8')) as Transcript;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw err;
+    }
   }
 
   /** Delete a workspace's whole folder. */
@@ -110,6 +138,12 @@ export function detectType(fileName: string, head: Buffer): FileType | null {
   // DOCX is a zip archive; other zip formats (xlsx, odt, plain zip) are refused by the extension.
   if (head.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])))
     return ext === '.docx' ? 'docx' : null;
+  if (head.subarray(4, 8).toString('latin1') === 'ftyp') return 'mp4'; // MP4, M4A and MOV share it
+  if (head.subarray(0, 4).toString('latin1') === 'RIFF')
+    return head.subarray(8, 12).toString('latin1') === 'WAVE' ? 'wav' : null;
+  if (head.subarray(0, 3).toString('latin1') === 'ID3') return 'mp3';
+  // A bare MPEG audio frame header is only two bytes, so it needs the name to agree.
+  if (ext === '.mp3' && head[0] === 0xff && ((head[1] ?? 0) & 0xe0) === 0xe0) return 'mp3';
   if (ext === '.md' || ext === '.markdown' || ext === '.txt')
     return looksLikeText(head) ? (ext === '.txt' ? 'txt' : 'md') : null;
   return null;

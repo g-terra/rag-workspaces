@@ -2,12 +2,13 @@
 
 A self-hosted RAG platform built on Langflow. You create **workspaces** (for example `ouc` for study material, `personal` for your own notes), load files into each one, and every workspace gets its own isolated, documented API that people and AI agents can query.
 
-Material is loaded locally (PDF, DOCX, TXT, MD, and optionally video via Whisper), indexed into ChromaDB through Langflow flows, and served through a REST API with Swagger docs, Keycloak login, workspace-scoped API keys, usage analytics, and an admin UI with drag-and-drop upload and live progress.
+Material is loaded locally (PDF, DOCX, TXT, MD, and optionally MP4, MP3 and WAV via Whisper), indexed into ChromaDB through Langflow flows, and served through a REST API with Swagger docs, Keycloak login, workspace-scoped API keys, usage analytics, and an admin UI with drag-and-drop upload and live progress.
 
 The first workspace, `ouc`, is the project for the COS512 Langflow assignment (Option 4: expose AI interactions via an API).
 
 > Status: the backend is built (workspaces, ingestion, search, answers, chat, folders, analytics, API keys,
-> rate limits, an MCP server); the admin UI screens are being built (M4). Video (M5) is not built yet.
+> rate limits, an MCP server); the admin UI (M4); video and audio
+> transcription with Whisper (M5, optional `video` profile).
 
 The assignment brief's example endpoints map to these routes (no aliases, decision 6):
 
