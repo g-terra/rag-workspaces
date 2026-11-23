@@ -2,7 +2,7 @@
 title: Version the API from each release, shown in Swagger; publish Docker images on release
 date: 2026-11-20
 pr: '#23'
-status: in review
+status: merged
 areas: [ci, api]
 ---
 

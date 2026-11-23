@@ -2,7 +2,7 @@
 title: Usage analytics per workspace and overall
 date: 2026-11-20
 pr: '#26'
-status: in review
+status: merged
 areas: [api]
 ---
 

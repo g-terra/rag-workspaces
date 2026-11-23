@@ -2,7 +2,7 @@
 title: Keycloak sign-in and the app layout for the admin UI
 date: 2026-11-22
 pr: '#33'
-status: in review
+status: merged
 areas: [admin, infra]
 ---
 

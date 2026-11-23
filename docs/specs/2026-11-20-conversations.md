@@ -2,7 +2,7 @@
 title: Conversations with history through a new rw-chat flow
 date: 2026-11-20
 pr: '#21'
-status: in review
+status: merged
 areas: [api, db, flows]
 ---
 

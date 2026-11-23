@@ -2,7 +2,7 @@
 title: Bring the architecture, API schema and decisions up to date with the built stack
 date: 2026-11-22
 pr: '#30'
-status: in review
+status: merged
 areas: [docs]
 ---
 

@@ -2,7 +2,7 @@
 title: Create workspace dialog in the admin UI
 date: 2026-11-22
 pr: '#36'
-status: in review
+status: merged
 areas: [admin]
 ---
 
