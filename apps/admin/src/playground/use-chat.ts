@@ -18,17 +18,20 @@ export type Chat = ChatState & {
 };
 
 /**
- * A conversation in the playground. The first message creates the conversation
- * (`POST /v1/workspaces/{slug}/conversations`), then every message streams its reply from
+ * A conversation in the playground. Without an `existing` id the first message creates the conversation
+ * (`POST /v1/workspaces/{slug}/conversations`); either way every message streams its reply from
  * `POST …/conversations/{id}/messages`. The API keeps the history, so only the new message is sent.
+ *
+ * `existing` is read once, so a screen that moves between conversations keys this hook by the id it
+ * continues, the way the playground keys its panels by workspace.
  */
-export function useChat(slug: string): Chat {
+export function useChat(slug: string, existing: string | null = null): Chat {
   const auth = useAuth();
   const queryClient = useQueryClient();
   const [state, dispatch] = useReducer(chatReducer, idleChat);
-  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(existing);
   // The id the next message needs, which is set before the state the screen reads has caught up.
-  const conversation = useRef<string | null>(null);
+  const conversation = useRef<string | null>(existing);
   const running = useRef<AbortController | null>(null);
 
   // Leaving the page (or switching workspace) ends the request, so no tokens arrive for a gone screen.

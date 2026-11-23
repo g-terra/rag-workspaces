@@ -55,8 +55,9 @@ and admins upload files from "Upload" in the sidebar and watch each one through 
 "Documents" lists everything in the workspace, live, with download for everyone and reindex and delete for
 editors and admins. "Playground" asks the workspace a question and streams the answer back word by word,
 the way an agent would through the API; it also searches its passages with their scores and no model call
-at all, and holds a conversation where a follow-up is answered from the thread. The API docs are linked
-from the top bar of every page.
+at all, and holds a conversation where a follow-up is answered from the thread. "Conversations" lists the
+conversations held with the workspace and opens one in full, to read, carry on or delete. The API docs are
+linked from the top bar of every page.
 
 `docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
 
