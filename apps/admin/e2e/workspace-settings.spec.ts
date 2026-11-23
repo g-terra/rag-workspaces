@@ -131,3 +131,31 @@ test('an admin reindexes a workspace', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Reindex workspace' })).toBeDisabled();
   await expect(page.getByText(/Save your changes first/)).toBeVisible();
 });
+
+test('an admin sees where each provider key comes from, and a key the provider refuses is not saved', async ({
+  page,
+}) => {
+  await signIn(page, '/workspaces');
+  await createWorkspace(page);
+  await page.goto(`/w/${slug}/settings`);
+
+  // One row per hosted provider. The smoke stack sets no provider keys in .env.
+  for (const name of ['OpenAI', 'Google Gemini', 'Anthropic']) {
+    const row = page.getByRole('listitem', { name: `${name} key` });
+    await expect(row.getByText('No key yet.')).toBeVisible();
+  }
+
+  // The API checks a key with the provider before saving it; a made-up one never passes.
+  await page.getByRole('listitem', { name: 'OpenAI key' }).getByRole('button', { name: 'Add key' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('API key')).toHaveAttribute('type', 'password');
+  await dialog.getByLabel('API key').fill('sk-not-a-real-key-000');
+  await dialog.getByRole('button', { name: 'Save key' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('The key was not saved');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('listitem', { name: 'OpenAI key' }).getByText('No key yet.')).toBeVisible();
+
+  // Picking a provider with no key offers to add one right there.
+  await page.getByLabel('Chat provider').selectOption('gemini');
+  await expect(page.getByRole('button', { name: 'Add gemini key' })).toBeVisible();
+});
