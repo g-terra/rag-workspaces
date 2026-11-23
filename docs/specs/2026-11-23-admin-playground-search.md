@@ -31,16 +31,22 @@ results.
    and falls back to `ask`, so an unknown or missing value is never an error. The tabs are a
    `role="tablist"` group of buttons with `aria-selected`, which replace the mode in the URL rather
    than pushing a history entry. The route is now only the page's chrome: the panel for each mode lives
-   in its own file (`ask-panel.tsx`, `search-panel.tsx`), keyed by workspace and mode, so each mode
-   keeps its own question and switching workspace starts clean.
+   in its own file (`ask-panel.tsx`, `search-panel.tsx`). Both panels stay mounted, with the one you are
+   not on `hidden`, so reading the passages while an answer streams does not abort it and coming back
+   shows the answer still there; `hidden` also takes a panel out of the accessibility tree, so nothing
+   of it is reachable. They are keyed by workspace, so switching workspace starts both modes clean and
+   never shows one workspace's answer under another's name.
 2. **The shared box** (`src/playground/question-box.tsx`). Both modes type into the same card: a label,
    a growable textarea where `Ctrl`/`Cmd`+`Enter` submits, and a footer holding the mode's own controls
    and button. `Passages` is the count control, "5 passages" or "10 passages".
 3. **The search** (`src/playground/queries.ts`, `search.ts`). `usePassageSearch()` is idle until a query
    is submitted, so typing costs nothing, and is keyed by query and limit, so going back to an earlier
-   search is instant. `searchPath()` builds the path with `URLSearchParams`, which encodes a query
-   holding `&` or `=`; the panel also shows that exact path above the results, as the mock does, which
-   is why it is a function rather than inline string building.
+   search is instant. The panel holds the query and limit that were actually submitted, so changing the
+   count control does not quietly run another search, and the request line always names the search whose
+   results are below it; submitting the same query and count again refetches, since the material may have
+   changed since. `searchPath()` builds the path with `URLSearchParams`, which encodes a query holding
+   `&` or `=`; the panel also shows that exact path above the results, as the mock does, which is why it
+   is a function rather than inline string building.
 4. **The results** (`src/playground/search-panel.tsx`). One row per hit: the score to two decimals
    (`formatScore()`, which the citation list now uses too), the passage's place as a button that opens
    the preview, and the first lines of its text. An empty result says nothing matched and names the
@@ -54,7 +60,10 @@ results.
 | The mode lives in the URL | Component state | A tab you can link to and a reload that keeps it; the conversations screen will link straight to a mode |
 | Replace, not push, on a tab change | Push a history entry per tab | Back should leave the playground, not walk through the tabs you tried |
 | A panel file per mode | One large route file | The route file was already 300 lines with one mode; each panel owns its own state and reads on its own |
+| Both panels mounted, the inactive one `hidden` | Render only the mode you are on | Peeking at the passages must not abort a streaming answer, and coming back should show it still there |
 | `usePassageSearch` idle until submitted | Search as you type | Each search is an embedding call and a Chroma query; the mock has a Search button |
+| The submitted query *and* count drive the results | Read the live count control | Changing the count would otherwise run a search nobody asked for, under the old request line |
+| The same search again refetches | Do nothing when nothing changed | A Search button that sometimes does nothing reads as broken, and the material may have changed |
 | Keyed by query and limit | One key, refetched | Going back to the previous search shows its results without asking again |
 | Limits 5, 10, 20 | A number input | Three useful sizes, as the mock does; the API accepts 1 to 50 |
 | The passage's place is the button | The whole row is one button | A button named by three lines of passage text is unusable with a screen reader |

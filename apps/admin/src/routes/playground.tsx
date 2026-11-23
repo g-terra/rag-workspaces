@@ -33,7 +33,15 @@ export function Playground() {
                 type="button"
                 role="tab"
                 aria-selected={mode === key}
-                onClick={() => setParams({ mode: key }, { replace: true })}
+                onClick={() =>
+                  setParams(
+                    (prev) => {
+                      prev.set('mode', key);
+                      return prev;
+                    },
+                    { replace: true },
+                  )
+                }
                 className={cn(
                   'h-8 rounded-md px-3 text-sm',
                   mode === key ? 'bg-background font-medium shadow-xs' : 'text-muted-foreground',
@@ -44,14 +52,25 @@ export function Playground() {
             ))}
           </div>
         </div>
-        {/* Keyed by mode and workspace: each mode keeps its own question, and switching workspace
-            never shows one workspace's answer under another's name. */}
-        <Panel key={`${w.slug}:${mode}`} mode={mode} />
+        {/* Both panels stay mounted, with the one you are not on hidden: looking at the passages
+            while an answer streams must not abort it, and coming back shows it still there. Keyed by
+            workspace, so switching workspace never shows one workspace's answer under another's
+            name. A hidden panel is out of the accessibility tree, so nothing of it is reachable. */}
+        <Panel key={w.slug} mode={mode} />
       </div>
     </>
   );
 }
 
 function Panel({ mode }: { mode: Mode }) {
-  return mode === 'search' ? <SearchPanel /> : <AskPanel />;
+  return (
+    <>
+      <div hidden={mode !== 'ask'} className="flex flex-col gap-5">
+        <AskPanel />
+      </div>
+      <div hidden={mode !== 'search'} className="flex flex-col gap-5">
+        <SearchPanel />
+      </div>
+    </>
+  );
 }

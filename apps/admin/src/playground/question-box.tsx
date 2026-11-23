@@ -50,12 +50,10 @@ export function Passages({
   value,
   onChange,
   counts,
-  unit,
 }: {
   value: number;
   onChange(value: number): void;
   counts: number[];
-  unit: string;
 }) {
   return (
     <select
@@ -66,7 +64,7 @@ export function Passages({
     >
       {counts.map((n) => (
         <option key={n} value={n}>
-          {n} {unit}
+          {n} passages
         </option>
       ))}
     </select>

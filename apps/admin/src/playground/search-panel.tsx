@@ -17,10 +17,18 @@ export function SearchPanel() {
   const w = useCurrentWorkspace();
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(SEARCH_LIMITS[0]!);
-  const [submitted, setSubmitted] = useState<string | null>(null);
+  // The search that was asked for, so changing the count does not quietly run another one.
+  const [submitted, setSubmitted] = useState<{ query: string; limit: number } | null>(null);
   const [openPassage, setOpenPassage] = useState<string | null>(null);
-  const results = usePassageSearch(w.slug, submitted, limit);
-  const submit = () => setSubmitted(query.trim() || null);
+  const results = usePassageSearch(w.slug, submitted?.query ?? null, submitted?.limit ?? limit);
+  const submit = () => {
+    const text = query.trim();
+    if (!text) return;
+    // The same search again asks again, rather than doing nothing: the material, or the API's mood,
+    // may have changed since.
+    if (submitted?.query === text && submitted.limit === limit) void results.refetch();
+    else setSubmitted({ query: text, limit });
+  };
 
   return (
     <>
@@ -32,7 +40,7 @@ export function SearchPanel() {
         onChange={setQuery}
         onSubmit={submit}
       >
-        <Passages value={limit} onChange={setLimit} counts={SEARCH_LIMITS} unit="passages" />
+        <Passages value={limit} onChange={setLimit} counts={SEARCH_LIMITS} />
         <Button size="sm" onClick={submit} disabled={!query.trim()}>
           <Search /> Search <span className="text-primary-foreground/60 font-mono text-xs">Ctrl ↵</span>
         </Button>
@@ -41,7 +49,7 @@ export function SearchPanel() {
       {submitted !== null && (
         <div className="bg-card overflow-hidden rounded-xl border">
           <p className="text-muted-foreground border-b px-5 py-3 font-mono text-xs">
-            GET {searchPath(w.slug, submitted, limit)} · no model call
+            GET {searchPath(w.slug, submitted.query, submitted.limit)} · no model call
           </p>
           {results.isPending && <Loading what="passages" />}
           {results.isError && (
@@ -57,7 +65,7 @@ export function SearchPanel() {
             <div className="p-5">
               <Notice
                 title="Nothing matched"
-                body={`No passage was close enough to “${submitted}”. The workspace's relevance threshold decides how close is close enough.`}
+                body={`No passage was close enough to “${submitted.query}”. The workspace's relevance threshold decides how close is close enough.`}
               />
             </div>
           )}

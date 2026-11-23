@@ -43,7 +43,7 @@ export function AskPanel() {
         onChange={setQuestion}
         onSubmit={submit}
       >
-        <Passages value={maxPassages} onChange={setMaxPassages} counts={PASSAGE_COUNTS} unit="passages" />
+        <Passages value={maxPassages} onChange={setMaxPassages} counts={PASSAGE_COUNTS} />
         {streaming ? (
           <Button size="sm" variant="outline" onClick={ask.stop}>
             <SquareIcon /> Stop
