@@ -12,7 +12,7 @@ import type { Conversation, Message, ResponseStyle } from '@rag/shared';
 import { desc, eq } from 'drizzle-orm';
 import type { Principal } from '../auth/principal.js';
 import type { Config } from '../config.js';
-import { Generator, withStartSeconds, type GenerateConfig } from './generate.js';
+import { Generator, toApiCitation, type GenerateConfig } from './generate.js';
 
 /** Each earlier message is cut to this many characters in the history the model sees. */
 const HISTORY_MESSAGE_CHARS = 2000;
@@ -142,7 +142,7 @@ export function toApiConversation(c: ConversationRow, slug: string): Conversatio
   };
 }
 
-export function toApiMessage(m: MessageRow): Message {
+export function toApiMessage(m: MessageRow, slug: string): Message {
   return {
     id: m.id,
     conversationId: m.conversationId,
@@ -150,7 +150,7 @@ export function toApiMessage(m: MessageRow): Message {
     content: m.content,
     status: m.status,
     grounded: m.grounded,
-    citations: m.citations.map(withStartSeconds),
+    citations: m.citations.map((c) => toApiCitation(c, slug)),
     model: m.model,
     style: m.style,
     usage: { promptTokens: m.promptTokens, completionTokens: m.completionTokens },

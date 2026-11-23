@@ -6,6 +6,8 @@ export const FLOWS = {
   ingest: 'rw-ingest',
   retrieve: 'rw-retrieve',
   answer: 'rw-answer',
+  /** Prompt and generate from passages the API gives it (composite workspaces search each source first). */
+  generate: 'rw-generate',
   /** Like answer, with the conversation so far; the API keeps the history (stateless flow). */
   chat: 'rw-chat',
   delete: 'rw-delete',

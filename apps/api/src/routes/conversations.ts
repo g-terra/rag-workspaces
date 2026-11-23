@@ -133,7 +133,10 @@ export const conversationRoutes: FastifyPluginAsyncZod<ConversationRoutesOptions
         .from(messages)
         .where(eq(messages.conversationId, conversation.id))
         .orderBy(asc(messages.createdAt), asc(messages.id));
-      return { ...toApiConversation(conversation, workspace.slug), messages: rows.map(toApiMessage) };
+      return {
+        ...toApiConversation(conversation, workspace.slug),
+        messages: rows.map((m) => toApiMessage(m, workspace.slug)),
+      };
     },
   );
 
@@ -190,7 +193,7 @@ export const conversationRoutes: FastifyPluginAsyncZod<ConversationRoutesOptions
         const { reply: message, error } = await service.send(input);
         req.usage = messageUsage(message, input.content);
         if (error) throw flowProblem(error, 'Replying');
-        return reply.status(201).send(toApiMessage(message));
+        return reply.status(201).send(toApiMessage(message, workspace.slug));
       }
       return streamGeneration(req, reply, {
         what: 'Replying',
@@ -198,7 +201,7 @@ export const conversationRoutes: FastifyPluginAsyncZod<ConversationRoutesOptions
         run: async (hooks) => {
           const { reply: message, error } = await service.send({ ...input, ...hooks });
           req.usage = messageUsage(message, input.content);
-          return { result: toApiMessage(message), error };
+          return { result: toApiMessage(message, workspace.slug), error };
         },
       });
     },

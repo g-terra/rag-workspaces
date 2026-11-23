@@ -14,6 +14,7 @@ import {
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
 import { FLOWS } from '../flows.js';
+import { contextText, searchSources, type SourceHit } from './composite-search.js';
 import { normalise, resolveHits, retrieve, searchTweaks } from './passages.js';
 import { chatEndpoint, ProviderNotConfigured, type ChatEndpoint } from './providers.js';
 import { withWorkspaceKeys } from './provider-keys.js';
@@ -59,9 +60,17 @@ function citesAny(text: string, ranks: number[]): boolean {
   return false;
 }
 
-/** A stored citation as the API returns it: ones stored before start times existed have none. */
-export function withStartSeconds(c: StoredCitation) {
-  return { ...c, startSeconds: c.startSeconds ?? null, sourceUrl: c.sourceUrl ?? null };
+/**
+ * A stored citation as the API returns it, filling what older rows lack: start times, source URLs,
+ * and the workspace (before composites, always the one answering, `slug`).
+ */
+export function toApiCitation(c: StoredCitation, slug: string) {
+  return {
+    ...c,
+    startSeconds: c.startSeconds ?? null,
+    sourceUrl: c.sourceUrl ?? null,
+    workspace: c.workspace ?? slug,
+  };
 }
 
 export type GenerateConfig = Pick<
@@ -159,12 +168,14 @@ export class Generator {
       const config = await withWorkspaceKeys(db, this.deps.config, workspace.id);
       chat = chatEndpoint(workspace.settings, config);
       const opts = { limit: maxPassages, folderId };
+      const composite = workspace.kind === 'composite';
       // Resolve before deciding: a hit whose document was deleted or is not ready doesn't count.
-      const hits = await resolveHits(
-        db,
-        workspace.id,
-        await retrieve(langflow, workspace, searchQuery, config, opts),
-      );
+      // A composite searches each source with that source's own model and keys (not its own).
+      const hits: SourceHit[] = composite
+        ? await searchSources(this.deps, workspace, searchQuery, { limit: maxPassages })
+        : (
+            await resolveHits(db, workspace, await retrieve(langflow, workspace, searchQuery, config, opts))
+          ).map((h) => ({ ...h, workspaceName: workspace.name }));
       if (!hits.length) {
         timeToFirstTokenMs = onToken ? elapsed() : null;
         onToken?.(NOT_FOUND_TEXT);
@@ -178,9 +189,9 @@ export class Generator {
         };
       }
 
-      const flow = history === undefined ? FLOWS.answer : FLOWS.chat;
+      const flow = composite ? FLOWS.generate : history === undefined ? FLOWS.answer : FLOWS.chat;
       const tweaks: Tweaks = {
-        ...searchTweaks(workspace, config, opts),
+        ...(composite ? {} : searchTweaks(workspace, config, opts)),
         LLM: {
           provider: chat.provider,
           model_name: chat.model,
@@ -196,13 +207,16 @@ export class Generator {
           stream: Boolean(onToken),
         },
       };
-      if (history !== undefined) {
+      if (composite) {
+        // rw-generate has no search: the passages found above are its context, numbered as fused.
+        tweaks.Prompt = { context: contextText(hits), history: history || '(this is the first message)' };
+      } else if (history !== undefined) {
         // In rw-chat the chat input is the search query; the question and history are set
         // straight on the prompt's own fields, so the flow needs no extra input nodes.
         tweaks.Prompt = { question, history: history || '(this is the first message)' };
       }
       const request: RunRequest = {
-        input_value: history === undefined ? question : searchQuery,
+        input_value: composite || history === undefined ? question : searchQuery,
         session_id: sessionId,
         tweaks,
       };
@@ -216,12 +230,11 @@ export class Generator {
         : await langflow.run(flow, request, runSignal);
 
       const outputs = outputsByComponent(run);
+      // rw-answer and rw-chat return the passages the model saw; for rw-generate the API chose them.
       const citationsText = messageText(outputs['ChatOutput-citations']);
-      const cited = await resolveHits(
-        db,
-        workspace.id,
-        normalise(citationsText ? parseJsonMessage(citationsText) : []),
-      );
+      const cited = composite
+        ? hits
+        : await resolveHits(db, workspace, normalise(citationsText ? parseJsonMessage(citationsText) : []));
       const text = messageText(outputs['ChatOutput-answer']);
       if (!text.trim()) throw new HttpProblem(502, 'The model returned an empty answer.');
       return {
@@ -233,6 +246,7 @@ export class Generator {
         ),
         citations: cited.map((p) => ({
           rank: p.rank,
+          workspace: p.workspace,
           passageId: p.id,
           documentId: p.documentId,
           documentTitle: p.documentTitle,

@@ -23,7 +23,15 @@ function fakeLangflow(opts: { loginFails?: boolean; flows?: string[]; healthy?: 
   return new LangflowClient({ baseUrl: 'http://lf', fetch: fetchFn, sleep: async () => {} });
 }
 
-const ALL_FLOWS = ['rw-ingest', 'rw-retrieve', 'rw-answer', 'rw-chat', 'rw-delete', 'rw-fetch'];
+const ALL_FLOWS = [
+  'rw-ingest',
+  'rw-retrieve',
+  'rw-answer',
+  'rw-generate',
+  'rw-chat',
+  'rw-delete',
+  'rw-fetch',
+];
 const base = { LANGFLOW_URL: 'http://lf', LANGFLOW_SUPERUSER: 'admin' };
 const signal = new AbortController().signal;
 
@@ -84,7 +92,7 @@ describe('LangflowService', () => {
     });
     await svc.start();
     await expect(svc.readinessCheck().check(signal)).rejects.toThrow(
-      'flows missing in Langflow: rw-answer, rw-chat, rw-delete, rw-fetch',
+      'flows missing in Langflow: rw-answer, rw-generate, rw-chat, rw-delete, rw-fetch',
     );
   });
 

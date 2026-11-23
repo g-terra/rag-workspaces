@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { WorkspaceSlug } from './common.js';
 
 /**
  * A passage is one chunk of a document. Its id is `psg_<document ulid>_<chunk index>`, so it
@@ -6,6 +7,8 @@ import { z } from 'zod';
  */
 export const Passage = z.object({
   id: z.string(),
+  /** The workspace the passage is from: the one asked, or for a composite, one of its sources. */
+  workspace: WorkspaceSlug,
   documentId: z.string(),
   documentTitle: z.string(),
   /** For a page of an imported website, its URL; otherwise `null`. */

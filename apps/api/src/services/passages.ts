@@ -113,7 +113,7 @@ export function normalise(parsed: unknown): FlowPassage[] {
  */
 export async function resolveHits(
   db: Database,
-  workspaceId: string,
+  workspace: Pick<Workspace, 'id' | 'slug'>,
   hits: FlowPassage[],
 ): Promise<(ScoredPassage & { rank: number })[]> {
   const ids = [...new Set(hits.map((h) => h.document_id).filter((id): id is string => !!id))];
@@ -123,7 +123,7 @@ export async function resolveHits(
         .from(documents)
         .where(
           and(
-            eq(documents.workspaceId, workspaceId),
+            eq(documents.workspaceId, workspace.id),
             inArray(documents.id, ids),
             // Hits from a document that is not ready (re-indexing, or a failed run's leftovers) are dropped.
             eq(documents.status, 'ready'),
@@ -139,6 +139,7 @@ export async function resolveHits(
       {
         rank: h.rank,
         id: passageId(h.document_id, index),
+        workspace: workspace.slug,
         documentId: h.document_id,
         documentTitle: doc.title,
         sourceUrl: doc.sourceUrl,

@@ -323,6 +323,8 @@ export const feedbackRating = pgEnum('feedback_rating', ['up', 'down']);
 export type StoredCitation = {
   /** The `[n]` the model saw for this passage. */
   rank: number;
+  /** Slug of the workspace the passage is from (a composite's source). Missing before composites: the answering one. */
+  workspace?: string;
   passageId: string;
   documentId: string;
   documentTitle: string;
