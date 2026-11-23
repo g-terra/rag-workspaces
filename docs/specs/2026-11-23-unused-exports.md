@@ -1,8 +1,8 @@
 ---
 title: Stop exporting helpers nothing imports
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#102"
+status: in review
 areas: [api, db]
 ---
 
