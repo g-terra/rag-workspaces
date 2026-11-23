@@ -2,7 +2,7 @@
 title: Pick a response style in the playground and workspace settings
 date: 2026-11-23
 pr: "#112"
-status: in review
+status: merged
 areas: [admin, docs]
 ---
 
