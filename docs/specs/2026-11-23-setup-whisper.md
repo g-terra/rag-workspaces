@@ -1,7 +1,7 @@
 ---
 title: Video and audio transcription in the setup wizard
 date: 2026-11-23
-pr: pending
+pr: "#76"
 status: in review
 areas: [infra, docs]
 ---
