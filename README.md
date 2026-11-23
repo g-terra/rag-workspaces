@@ -49,6 +49,9 @@ docker compose ps        # every service should say (healthy)
 | Keycloak admin console (create people here) | http://localhost:8081/admin | `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` |
 | rag-workspaces sign-in (realm `rag-workspaces`) | http://localhost:8081/realms/rag-workspaces/account | `RW_ADMIN_USERNAME` / `RW_ADMIN_PASSWORD` |
 
+After signing in, the admin UI opens the workspace you used last (or your first one); the workspace
+switcher in the sidebar changes it. The API docs are linked from the top bar of every page.
+
 `docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
 
 ## Development
@@ -66,7 +69,8 @@ pnpm smoke       # end to end on a throwaway compose stack with a stand-in model
 ```
 
 End-to-end tests drive the admin UI in a real browser against the running stack (`docker compose up -d --build`
-first). They sign in as the seeded admin from `.env`:
+first). They sign in as the seeded admin from `.env`, and create and delete their own workspaces in whatever
+stack they point at:
 
 ```bash
 pnpm --filter @rag/admin exec playwright install chromium   # once
