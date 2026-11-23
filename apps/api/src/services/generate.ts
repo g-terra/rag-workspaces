@@ -15,6 +15,7 @@ import { HttpProblem } from '../errors.js';
 import { FLOWS } from '../flows.js';
 import { normalise, resolveHits, retrieve, searchTweaks } from './passages.js';
 import { chatEndpoint, ProviderNotConfigured, type ChatEndpoint } from './providers.js';
+import { withWorkspaceKeys } from './provider-keys.js';
 
 /** The reply when nothing in the workspace is relevant enough. The model is not asked. */
 export const NOT_FOUND_TEXT = "I couldn't find anything about this in this workspace's material.";
@@ -64,6 +65,7 @@ export type GenerateConfig = Pick<
   | 'OPENAI_API_KEY'
   | 'GEMINI_API_KEY'
   | 'ANTHROPIC_API_KEY'
+  | 'SECRETS_KEY'
 >;
 
 type GenerateInput = {
@@ -135,13 +137,15 @@ export class Generator {
     };
 
     try {
-      chat = chatEndpoint(workspace.settings, config);
+      // The workspace's own provider keys, where it has saved any, over the ones in .env.
+      const keyed = await withWorkspaceKeys(db, config, workspace.id);
+      chat = chatEndpoint(workspace.settings, keyed);
       const opts = { limit: maxPassages, folderId };
       // Resolve before deciding: a hit whose document was deleted or is not ready doesn't count.
       const hits = await resolveHits(
         db,
         workspace.id,
-        await retrieve(langflow, workspace, searchQuery, config, opts),
+        await retrieve(langflow, workspace, searchQuery, keyed, opts),
       );
       if (!hits.length) {
         timeToFirstTokenMs = onToken ? elapsed() : null;

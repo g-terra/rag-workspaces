@@ -20,7 +20,7 @@ this file or delete it once the work below is finished.
 ## Architecture in one screen
 
 Full version: [docs/architecture.md](architecture.md), routes in [docs/api-schema.md](api-schema.md),
-settled choices in [docs/decisions.md](decisions.md) (22 decisions, **don't reopen them in code**; raise
+settled choices in [docs/decisions.md](decisions.md) (23 decisions, **don't reopen them in code**; raise
 them with the owner).
 
 | Part | Where | What it does |

@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { documents, folders, newId, workspaces, type Database } from '@rag/db';
+import { documents, folders, newId, providerKeys, workspaces, type Database } from '@rag/db';
 import { createTestDatabase } from '@rag/db/testing';
 import { LangflowClient } from '@rag/langflow-client';
 import { eq } from 'drizzle-orm';
@@ -10,6 +10,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../config.js';
 import { ChromaService } from './chroma.js';
 import { DocumentEvents } from './document-events.js';
+import { sealSecret } from './secrets.js';
 import { IngestProcessor, PgBossIngestQueue } from './ingest.js';
 import { UploadStorage } from './storage.js';
 import { WhisperClient } from './whisper.js';
@@ -73,6 +74,7 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
     INGEST_TIMEOUT_MS: '300',
     INGEST_TIMEOUT_MS_PER_MB: '0',
     INGEST_MAX_ATTEMPTS: '2',
+    SECRETS_KEY: 'ingest-test-secrets-key',
   });
   let root: string;
   let storage: UploadStorage;
@@ -329,6 +331,40 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
     await processor().process(id);
     expect((await get(id)).error).toBe('OPENAI_API_KEY is not set');
     expect(f.runs).toHaveLength(0);
+  });
+
+  it('a workspace with its own saved key embeds with it', async () => {
+    const ws = newId('workspace');
+    await db.insert(workspaces).values({
+      id: ws,
+      slug: 'hosted-own-key',
+      name: 'Hosted, own key',
+      settings: { embeddingProvider: 'openai', embeddingModel: 'text-embedding-3-small' },
+    });
+    await db.insert(providerKeys).values({
+      workspaceId: ws,
+      provider: 'openai',
+      sealed: sealSecret(config.SECRETS_KEY!, 'sk-workspace-own', `${ws}:openai`),
+      last4: 'own',
+      savedBy: 'admin-1',
+    });
+    const id = newId('document');
+    await db.insert(documents).values({
+      id,
+      workspaceId: ws,
+      title: 'a',
+      fileName: 'a.md',
+      type: 'md',
+      sizeBytes: 1,
+      sha256: 'own-key',
+      storagePath: `hosted-own-key/${id}.md`,
+    });
+    f.runs.length = 0;
+    await processor().process(id);
+    expect(f.runs[0]!.tweaks.Embeddings).toMatchObject({
+      base_url: 'https://api.openai.com/v1',
+      api_key: 'sk-workspace-own',
+    });
   });
 
   it('a document deleted while queued is skipped', async () => {

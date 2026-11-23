@@ -17,7 +17,8 @@ type Source = {
 export const PROVIDERS: readonly ModelProviderId[] = ['lmstudio', 'openai', 'gemini', 'anthropic'];
 
 /**
- * Asks each model provider which models it offers, with the key from the API's environment.
+ * Asks each model provider which models it offers, with the keys in the config it is given (the
+ * API's environment, or a workspace's own keys over it).
  * Every one of them answers `GET .../models` with `{ data: [{ id }] }`. The keys only go to
  * their own provider, and never into the response.
  */
@@ -31,7 +32,8 @@ export class ModelCatalog {
     return Promise.all(PROVIDERS.map((id) => this.provider(id, signal)));
   }
 
-  private async provider(id: ModelProviderId, signal: AbortSignal): Promise<ProviderStatus> {
+  /** One provider, asked with the key in this catalogue's config. */
+  async provider(id: ModelProviderId, signal: AbortSignal): Promise<ProviderStatus> {
     const source = this.source(id);
     const base = { id, embeddings: id !== 'anthropic' };
     if (!source.request) {

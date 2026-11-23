@@ -193,6 +193,8 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Encrypts provider keys saved per workspace; without it they can only come from .env.
+      SECRETS_KEY: ${SECRETS_KEY:-}
     volumes:
       - uploads:/data/uploads
     healthcheck:

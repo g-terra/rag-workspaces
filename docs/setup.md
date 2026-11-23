@@ -88,7 +88,10 @@ Put the key in `.env` and point the defaults at it, then run `docker compose up 
 | Anthropic | `ANTHROPIC_API_KEY` | `anthropic`, e.g. `claude-haiku-4-5` | none: use another provider for embeddings |
 
 Keys stay in the API. It sends them to Langflow with each run, so they never sit in Langflow's own
-environment (`poc/RESULTS.md`, F3). Each workspace can also pick its own chat model in its settings.
+environment (`poc/RESULTS.md`, F3). Each workspace can also pick its own chat model in its settings, and
+an admin can save a key for one workspace there instead of in `.env`. Saved keys are encrypted with
+`SECRETS_KEY`, which `pnpm env:init` adds to `.env`; run it again on an older install, then
+`docker compose up -d api`.
 
 Every new workspace is pinned to the embedding model that is the default when it is created. To change a
 workspace's embedding model later, reindex it (`POST /v1/workspaces/{slug}/reindex`), because vectors from
