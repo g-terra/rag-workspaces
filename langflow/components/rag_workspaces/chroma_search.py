@@ -1,9 +1,19 @@
 """Search a workspace's Chroma collection and return structured passages.
 
+Hybrid search: the question is matched by meaning (Chroma's vector search) and by its words (BM25 over the
+passages' text and file names), and the two rankings are fused with reciprocal rank fusion. Words alone find
+rare exact terms (a name, a code, a symbol) that similarity ranks low; meaning alone finds paraphrases.
+`score` stays the cosine similarity, so `min_score` means what it always did.
+
 Two outputs: `passages` (a JSON object with text, score, document_id, page,
 start_seconds, filename, chunk_index per hit) and `context` (the same passages
 formatted for a prompt, each tagged [n] so the model can cite them).
 """
+
+import math
+import re
+import time
+from collections import Counter
 
 import httpx
 
@@ -11,6 +21,74 @@ from lfx.custom.custom_component.component import Component
 from lfx.io import FloatInput, HandleInput, IntInput, MessageTextInput, Output, StrInput
 from lfx.schema.data import Data
 from lfx.schema.message import Message
+
+
+# How many candidates each ranking contributes before fusion, and RRF's k (the usual 60).
+CANDIDATES = 200
+RRF_K = 60
+# BM25 (Okapi) parameters.
+BM25_K1 = 1.5
+BM25_B = 0.75
+# A collection's keyword index is rebuilt when its passage count changes, or after this many seconds.
+INDEX_TTL_SECONDS = 120
+PAGE = 1000
+
+_WORD = re.compile(r"\w+", re.UNICODE)
+
+
+def words(text: str) -> list[str]:
+    return [w for w in _WORD.findall((text or "").lower()) if len(w) > 1]
+
+
+class KeywordIndex:
+    """BM25 over a collection's passages: postings per word, document lengths and metadata for filtering."""
+
+    def __init__(self, ids: list[str], texts: list[str], metadatas: list[dict]) -> None:
+        self.ids = ids
+        self.metadatas = metadatas
+        self.lengths = []
+        self.postings: dict[str, list[tuple[int, int]]] = {}
+        for i, (text, meta) in enumerate(zip(texts, metadatas, strict=True)):
+            counts = Counter(words(f"{(meta or {}).get('filename') or ''} {text}"))
+            self.lengths.append(sum(counts.values()))
+            for word, tf in counts.items():
+                self.postings.setdefault(word, []).append((i, tf))
+        self.average = (sum(self.lengths) / len(self.lengths)) if self.lengths else 0.0
+
+    def search(self, query: str, limit: int, folder: str | None = None) -> list[str]:
+        n = len(self.ids)
+        scores: dict[int, float] = {}
+        for word in set(words(query)):
+            posting = self.postings.get(word)
+            if not posting:
+                continue
+            idf = math.log(1 + (n - len(posting) + 0.5) / (len(posting) + 0.5))
+            for i, tf in posting:
+                norm = BM25_K1 * (1 - BM25_B + BM25_B * self.lengths[i] / (self.average or 1))
+                scores[i] = scores.get(i, 0.0) + idf * tf * (BM25_K1 + 1) / (tf + norm)
+        if folder:
+            scores = {i: v for i, v in scores.items() if (self.metadatas[i] or {}).get("folder") == folder}
+        best = sorted(scores, key=lambda i: scores[i], reverse=True)[:limit]
+        return [self.ids[i] for i in best]
+
+
+def fuse(*rankings: list[str], k: int = RRF_K) -> list[str]:
+    """Reciprocal rank fusion: each list gives 1 / (k + rank) to its ids; best total first, ties by first seen."""
+    totals: dict[str, float] = {}
+    for ranking in rankings:
+        for rank, pid in enumerate(ranking, start=1):
+            totals[pid] = totals.get(pid, 0.0) + 1.0 / (k + rank)
+    return sorted(totals, key=lambda pid: totals[pid], reverse=True)
+
+
+# Keyword indexes by (Chroma URL, collection id), kept across runs in this Langflow worker.
+_INDEXES: dict[tuple[str, str], tuple[int, float, KeywordIndex]] = {}
+
+
+def cosine(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
+    norm = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
+    return dot / norm if norm else 0.0
 
 
 class ChromaWorkspaceSearch(Component):
@@ -42,6 +120,28 @@ class ChromaWorkspaceSearch(Component):
     def _base(self) -> str:
         return f"{self.chroma_url.rstrip('/')}/api/v2/tenants/{self.tenant}/databases/{self.database}"
 
+    def _keyword_index(self, client: httpx.Client, cid: str) -> KeywordIndex:
+        """The collection's BM25 index, rebuilt when its passage count changed or it is a few minutes old."""
+        key = (self._base(), cid)
+        r = client.get(f"{self._base()}/collections/{cid}/count")
+        r.raise_for_status()
+        count = int(r.json())
+        cached = _INDEXES.get(key)
+        if cached and cached[0] == count and time.monotonic() - cached[1] < INDEX_TTL_SECONDS:
+            return cached[2]
+        ids, texts, metadatas = [], [], []
+        for offset in range(0, count, PAGE):
+            r = client.post(f"{self._base()}/collections/{cid}/get",
+                            json={"limit": PAGE, "offset": offset, "include": ["documents", "metadatas"]})
+            r.raise_for_status()
+            page = r.json()
+            ids += page["ids"]
+            texts += [d or "" for d in page["documents"]]
+            metadatas += [m or {} for m in page["metadatas"]]
+        index = KeywordIndex(ids, texts, metadatas)
+        _INDEXES[key] = (count, time.monotonic(), index)
+        return index
+
     def _search(self) -> list[dict]:
         if hasattr(self, "_cached"):
             return self._cached
@@ -52,24 +152,44 @@ class ChromaWorkspaceSearch(Component):
                 return self._cached
             r.raise_for_status()
             cid = r.json()["id"]
+            query_embedding = self.embedding.embed_query(self.search_query)
             body = {
-                "query_embeddings": [self.embedding.embed_query(self.search_query)],
-                "n_results": self.top_k,
-                "include": ["documents", "metadatas", "distances"],
+                "query_embeddings": [query_embedding],
+                "n_results": max(CANDIDATES, self.top_k),
+                "include": ["distances"],
             }
             if self.folder:
                 body["where"] = {"folder": self.folder}
             r = client.post(f"{self._base()}/collections/{cid}/query", json=body)
             r.raise_for_status()
-            res = r.json()
+            by_meaning = r.json()["ids"][0]
+            by_words = self._keyword_index(client, cid).search(
+                self.search_query, max(CANDIDATES, self.top_k), self.folder or None
+            )
+            best = fuse(by_meaning, by_words)[: self.top_k]
+            if not best:
+                self._cached = []
+                return self._cached
+            # Read the winners fresh (the keyword index may be a little old) with their vectors, so every
+            # hit gets its cosine score, also one only the keyword ranking found.
+            r = client.post(f"{self._base()}/collections/{cid}/get",
+                            json={"ids": best, "include": ["documents", "metadatas", "embeddings"]})
+            r.raise_for_status()
+            got = r.json()
+        rows = {
+            pid: (doc, meta, emb)
+            for pid, doc, meta, emb in zip(got["ids"], got["documents"], got["metadatas"], got["embeddings"], strict=True)
+        }
         passages = []
-        for rank, (pid, doc, meta, dist) in enumerate(
-            zip(res["ids"][0], res["documents"][0], res["metadatas"][0], res["distances"][0], strict=True), start=1
-        ):
+        for pid in best:
+            if pid not in rows:  # deleted since the keyword index was built
+                continue
+            doc, meta, emb = rows[pid]
             meta = meta or {}
-            score = round(1.0 - float(dist), 4)  # cosine similarity
+            score = round(cosine(query_embedding, emb), 4)
             if score < self.min_score:
                 continue
+            rank = len(passages) + 1
             passages.append({
                 "rank": rank,
                 "id": pid,

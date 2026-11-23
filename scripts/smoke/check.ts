@@ -442,6 +442,43 @@ async function main() {
     );
   });
 
+  await step(
+    'hybrid search: a rare exact word finds its passage even when the meaning points elsewhere',
+    async () => {
+      // Ten notes share four of the query's five words; one note shares only the rare fifth word. Similarity
+      // alone ranks that note last; keyword search ranks it first, and fusing the two lists keeps it.
+      const form = new FormData();
+      for (let i = 0; i < 10; i++) {
+        form.append(
+          'files',
+          new Blob([
+            `Note ${i}: gradient descent learning rate momentum, chapter ${i} of the optimisation unit.`,
+          ]),
+          `optimisation-${i}.md`,
+        );
+      }
+      form.append('files', new Blob(['The zyxquorph lemma appears only once in this course.']), 'lemma.md');
+      const { data } = (await call(token, 'POST', `/v1/workspaces/${slug}/documents`, form)) as {
+        data: { document: Doc }[];
+      };
+      await waitUntilReady(
+        token,
+        slug,
+        data.map((d) => d.document.id),
+      );
+      const lemma = data.find((d) => d.document.fileName === 'lemma.md')!.document.id;
+      const found = await call(
+        token,
+        'GET',
+        `/v1/workspaces/${slug}/passages?query=zyxquorph+momentum+momentum+momentum&limit=8&minScore=0`,
+      );
+      expect(
+        found.data.some((p: { documentId: string }) => p.documentId === lemma),
+        `the rare word's passage is not in the top 8: ${JSON.stringify(found.data.map((p: { text: string }) => p.text))}`,
+      );
+    },
+  );
+
   await step('deleted the workspace, its Chroma collection is gone', async () => {
     await call(token, 'DELETE', `/v1/workspaces/${slug}`);
     const res = await chroma(`/collections/${collection}`);
