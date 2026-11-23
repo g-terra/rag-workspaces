@@ -7,11 +7,11 @@
 // (`pnpm setup` without `run` is pnpm's own command, which sets up pnpm itself.)
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:net';
 import { Writable } from 'node:stream';
 import { createInterface, type Interface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { hostUrl, parseEnv, setEnv, splitModels } from './setup/env-file.ts';
+import { portFree } from './setup/ports.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const envPath = `${root}.env`;
@@ -92,14 +92,6 @@ function checkTools() {
   const compose = run('docker', ['compose', 'version', '--short'], { quiet: true });
   if (!compose.ok) fail('Docker Compose v2 is needed (`docker compose`).');
   ok(`Docker Compose ${compose.out}`);
-}
-
-function portFree(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const server = createServer();
-    server.once('error', () => resolve(false));
-    server.listen(port, '127.0.0.1', () => server.close(() => resolve(true)));
-  });
 }
 
 /** The program listening on a port, from lsof (macOS and most Linux), or null. */
