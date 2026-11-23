@@ -1,8 +1,8 @@
 ---
 title: let Escape close a walkthrough started from Help right away
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#125"
+status: in review
 areas: [admin]
 ---
 
