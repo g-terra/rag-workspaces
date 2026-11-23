@@ -46,7 +46,8 @@ const ConfigSchema = z.object({
   /** Most files in one upload request. */
   MAX_UPLOAD_FILES: z.coerce.number().int().positive().default(20),
 
-  // --- Defaults for new workspaces (each can override them) ---
+  // --- Defaults for new workspaces (each can override them). Chunking, top-k and minimum score are the
+  // values tuned on the OUC course material; see docs/tuning.md. ---
   /** Pinned into a workspace when it is created; changing it later needs a reindex. */
   DEFAULT_EMBEDDING_PROVIDER: z.enum(['lmstudio', 'openai', 'gemini']).default('lmstudio'),
   DEFAULT_EMBEDDING_MODEL: z.string().default('text-embedding-nomic-embed-text-v1.5'),
@@ -61,10 +62,10 @@ const ConfigSchema = z.object({
   DEFAULT_CHAT_PROVIDER: z.enum(['lmstudio', 'openai', 'anthropic', 'gemini']).default('lmstudio'),
   DEFAULT_CHAT_MODEL: z.string().default('qwen2.5-7b-instruct'),
 
-  DEFAULT_CHUNK_SIZE: z.coerce.number().int().positive().default(800),
-  DEFAULT_CHUNK_OVERLAP: z.coerce.number().int().nonnegative().default(100),
+  DEFAULT_CHUNK_SIZE: z.coerce.number().int().positive().default(1200),
+  DEFAULT_CHUNK_OVERLAP: z.coerce.number().int().nonnegative().default(200),
   /** Passages given to the model per answer, and the default `limit` of a passage search. */
-  DEFAULT_TOP_K: z.coerce.number().int().min(1).max(50).default(5),
+  DEFAULT_TOP_K: z.coerce.number().int().min(1).max(50).default(8),
   /**
    * Cosine similarity a passage needs to count as relevant. Below it, a search leaves the
    * passage out and an answer says the workspace does not cover the question.
