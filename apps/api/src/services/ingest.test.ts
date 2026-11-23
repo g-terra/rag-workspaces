@@ -169,7 +169,7 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
     expect(seen).toEqual(['processing', 'ready']);
     expect(f.runs[0]!.tweaks).toEqual({
       Loader: { file_path: `ouc/${id}.pdf`, document_id: id, filename: 'notes.pdf', folder: '' },
-      Split: { chunk_size: 500, chunk_overlap: 100 },
+      Split: { chunk_size: 500, chunk_overlap: 200 },
       // A workspace from before prefixes were pinned embeds without one, as it always did.
       Embeddings: {
         model: 'nomic',

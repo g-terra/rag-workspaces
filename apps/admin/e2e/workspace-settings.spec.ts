@@ -43,7 +43,7 @@ test('an admin changes a workspace’s name and retrieval settings, and they sti
   await expect(page.getByLabel('Chunk size')).toHaveAttribute('placeholder', /^Default: \d+$/);
   await expect(page.getByLabel('Top-k passages')).toHaveAttribute('placeholder', /^Default: \d+$/);
   await expect(page.getByLabel('Relevance threshold')).toHaveAttribute('placeholder', /^Default: 0?\.\d+$/);
-  await expect(page.getByLabel('System prompt')).toHaveAttribute('placeholder', /Cite the passages/);
+  await expect(page.getByLabel('System prompt')).toHaveAttribute('placeholder', /Cite with square brackets/);
 
   // Nothing to save until something changes.
   const saveButton = page.getByRole('button', { name: 'Save changes' });
