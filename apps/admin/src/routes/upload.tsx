@@ -1,5 +1,7 @@
+import type { Document } from '@rag/shared';
 import { Upload as UploadIcon } from 'lucide-react';
 import { Fragment, useEffect, useReducer, useRef, useState, type DragEvent } from 'react';
+import { ApiError } from '@/api/client';
 import { useAuth } from '@/auth/auth-context';
 import { sendAuthorized } from '@/auth/authorized';
 import { Notice } from '@/components/states';
@@ -8,8 +10,15 @@ import { TopBar } from '@/components/top-bar';
 import { Button } from '@/components/ui/button';
 import { ACCEPT, checkFile, uploadErrorMessage } from '@/documents/files';
 import { createLimiter } from '@/documents/queue';
-import { initialSession, rowView, sessionReducer, sessionSummary } from '@/documents/session';
+import {
+  initialSession,
+  missingFromSnapshot,
+  rowView,
+  sessionReducer,
+  sessionSummary,
+} from '@/documents/session';
 import { uploadFile } from '@/documents/upload';
+import { useDocumentEvents } from '@/documents/use-document-events';
 import { cn } from '@/lib/utils';
 import { useCurrentWorkspace } from '@/workspaces/current';
 
@@ -44,8 +53,8 @@ export function Upload() {
         <div>
           <h1 className="mb-1.5 text-2xl font-semibold tracking-tight">Upload material</h1>
           <p className="text-muted-foreground text-sm">
-            Files are stored, checked for duplicates, then queued for the Langflow ingest flow, which runs
-            them one at a time.
+            Files are stored, checked for duplicates, then run through the Langflow ingest flow one at a time.
+            Status updates live.
           </p>
         </div>
         {w.access === 'reader' ? (
@@ -64,6 +73,7 @@ export function Upload() {
 
 function Uploader({ slug }: { slug: string }) {
   const auth = useAuth();
+  const { api } = auth;
   const [session, dispatch] = useReducer(sessionReducer, initialSession);
   const [dragging, setDragging] = useState(false);
   const nextKey = useRef(0);
@@ -86,6 +96,26 @@ function Uploader({ slug }: { slug: string }) {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [busy]);
+
+  /** Fetches a document that finished or was deleted while the stream was down. */
+  async function catchUp(id: string) {
+    try {
+      const document = await api<Document>(
+        `/v1/workspaces/${encodeURIComponent(slug)}/documents/${encodeURIComponent(id)}`,
+      );
+      dispatch({ type: 'document', document });
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404)
+        dispatch({ type: 'event', event: { type: 'removed', id } });
+      // Anything else: the next snapshot tries again.
+    }
+  }
+
+  const stopped = useDocumentEvents(slug, (event) => {
+    dispatch({ type: 'event', event });
+    if (event.type === 'snapshot')
+      for (const id of missingFromSnapshot(session, event.documents)) void catchUp(id);
+  });
 
   function addFiles(list: FileList | null) {
     const files = [...(list ?? [])].map((file) => ({
@@ -123,6 +153,23 @@ function Uploader({ slug }: { slug: string }) {
         if (outcome.ok) dispatch({ type: 'uploaded', key: f.key, ...outcome.result });
         else
           dispatch({ type: 'failed', key: f.key, error: uploadErrorMessage(outcome.status, outcome.detail) });
+      });
+    }
+  }
+
+  async function retry(key: string, id: string) {
+    dispatch({ type: 'retry', key });
+    try {
+      const document = await api<Document>(
+        `/v1/workspaces/${encodeURIComponent(slug)}/documents/${encodeURIComponent(id)}/reindex`,
+        { method: 'POST' },
+      );
+      dispatch({ type: 'retried', key, document });
+    } catch (e) {
+      dispatch({
+        type: 'retryFailed',
+        key,
+        error: `Couldn't retry: ${e instanceof Error ? e.message : String(e)}`,
       });
     }
   }
@@ -186,6 +233,12 @@ function Uploader({ slug }: { slug: string }) {
         <StatusBadge tone="failed" label="Failed" />
       </div>
 
+      {stopped && (
+        <p role="alert" className="text-destructive text-sm">
+          Live updates stopped: {stopped}
+        </p>
+      )}
+
       <p className="sr-only" aria-live="polite">
         {session.rows.length > 0 && `This session: ${sessionSummary(session)}`}
       </p>
@@ -218,6 +271,11 @@ function Uploader({ slug }: { slug: string }) {
                     >
                       {v.meta}
                     </p>
+                    {v.retryError && (
+                      <p role="alert" className="text-destructive mt-0.5 text-xs">
+                        {v.retryError}
+                      </p>
+                    )}
                     {v.progress !== null && (
                       <div
                         role="progressbar"
@@ -230,6 +288,19 @@ function Uploader({ slug }: { slug: string }) {
                     )}
                   </div>
                   <StatusBadge tone={v.tone} label={v.label} />
+                  <div className="flex w-21 justify-end">
+                    {v.canRetry && v.document && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        aria-label={`Retry ${row.name}`}
+                        disabled={v.retryPending}
+                        onClick={() => void retry(row.key, v.document!.id)}
+                      >
+                        Retry
+                      </Button>
+                    )}
+                  </div>
                 </li>
               );
             })}

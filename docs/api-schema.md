@@ -117,7 +117,7 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
 | POST | `/v1/workspaces/{slug}/documents/{documentId}/reindex` | Delete its vectors and run the ingest flow again; `202`, or `409` while it is processing |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/file` | Download the original |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/transcript` *(planned)* | The timestamped transcript (video and audio only) |
-| GET | `/v1/workspaces/{slug}/documents/events` | Live status changes (server-sent events): `snapshot` on connect with every unfinished document, then `document` (the full document) on each change and `removed` (`{ id }`) on delete, so a reconnect misses nothing |
+| GET | `/v1/workspaces/{slug}/documents/events` | Live status changes (server-sent events); see below |
 
 ```json
 { "id": "doc_01J…", "workspace": "ouc", "title": "Week 3 slides",
@@ -127,6 +127,16 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
 ```
 
 `status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit return `413`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. (`folderId` on documents is planned.)
+
+The events stream (`text/event-stream`, read with `fetch` since `EventSource` can't send `Authorization`) sends:
+
+| Event | Data | When |
+|---|---|---|
+| `snapshot` | `{ "data": [Document, …] }` | Once, on connect: the **unfinished** documents only (`queued`, `transcribing`, `processing`) |
+| `document` | a `Document` | A new upload or a status change in this workspace |
+| `removed` | `{ "id": "doc_01J…" }` | A document was deleted |
+
+A document that finished or was deleted while a client was disconnected is not in the next snapshot, so a client that was following it fetches it with `GET …/documents/{documentId}` (`404` means it was deleted). Comments (`: keep-alive`) arrive every 15 seconds.
 
 ## Usage analytics
 
