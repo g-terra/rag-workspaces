@@ -58,7 +58,8 @@ built in:
 Pick one per question with `"style": "concise"` on an answer or chat message, or set a workspace default
 with `PATCH /v1/workspaces/{slug} { "settings": { "style": "academic" } }`. A request's style wins over
 the workspace's; `"style": null` asks for none. `GET /v1/styles` lists them with their full instructions.
-Choosing a style in the admin UI isn't there yet, so the playground uses the workspace default.
+In the playground, the "Response style" picker in Ask and in Chat chooses one for the next question:
+"Workspace default", "No style", or any built-in or custom style. Each answer shows the style it used.
 
 ## Conversations
 

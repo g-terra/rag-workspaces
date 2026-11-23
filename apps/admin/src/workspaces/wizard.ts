@@ -38,6 +38,8 @@ export function emptyWizard(): WizardForm {
     topK: '',
     minScore: '',
     reasoningEffort: '',
+    // Not asked for in the wizard: set a default style in the workspace's settings later.
+    style: '',
   };
 }
 
@@ -60,6 +62,7 @@ const STEP_OF: Record<ErrorField, number> = {
   chunkOverlap: 3,
   topK: 3,
   minScore: 3,
+  style: 3,
 };
 
 /** The step that shows a field, so a failed create can open the step with the problem. */

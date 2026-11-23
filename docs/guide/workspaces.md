@@ -55,6 +55,7 @@ from `.env`, and the page says what that default is.
 | Top-k passages | How many passages an answer may draw on and cite | 8 |
 | Relevance threshold | Minimum similarity (0 to 1) for a passage to count. Below it, the answer says the material doesn't cover the question | `DEFAULT_MIN_SCORE` (0.3) |
 | System prompt | The instructions the chat model gets. The box shows the default | Built in |
+| Default response style | How answers read when a question picks no style (see [Response styles](playground.md#response-styles)) | None |
 
 Chunk size and overlap apply to documents ingested after the change; reindex to apply them to the rest.
 [Tuning answer quality](../tuning.md) explains how these values were chosen and how to test your own.
