@@ -1,7 +1,7 @@
 ---
 title: Pick the reasoning effort on the workspace settings page
 date: 2026-11-23
-pr: pending
+pr: "#87"
 status: in review
 areas: [admin, docs]
 ---
