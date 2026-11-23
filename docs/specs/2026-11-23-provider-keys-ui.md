@@ -1,7 +1,7 @@
 ---
 title: add provider keys and pick hosted models in workspace settings
 date: 2026-11-23
-pr: pending
+pr: "#97"
 status: in review
 areas: [admin]
 ---
