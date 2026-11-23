@@ -67,6 +67,40 @@ the Keycloak admin console; for the people list (`GET /v1/users`, added 2026-11-
 `api-directory` client as `realm.json` describes it, with `KEYCLOAK_DIRECTORY_SECRET` from `.env` as its
 secret.
 
+## Connect an agent (MCP)
+
+`apps/mcp` is an [MCP](https://modelcontextprotocol.io) server, so Claude Desktop, Claude Code or any MCP
+client can search and ask a workspace. It runs on your machine over stdio and calls the REST API with an
+API key, so the key's role and workspaces decide what the agent sees. Its tools: `list_workspaces`,
+`list_folders`, `list_documents`, `search_passages`, `read_passage` and `ask`. None of them changes any
+material; `ask` stores an answer, like any other caller's.
+
+1. In the admin UI, "API keys", create a `reader` key for the workspaces the agent may use, and copy it.
+2. Build the server once: `pnpm install && pnpm --filter '@rag/mcp...' build`.
+3. Add it to your client. Claude Code:
+
+   ```bash
+   claude mcp add rag-workspaces --env RW_API_KEY=rw_... --env RW_API_URL=http://localhost:3000 \
+     -- node "$PWD/apps/mcp/dist/main.js"
+   ```
+
+   Claude Desktop (`claude_desktop_config.json`, use the full path to your clone):
+
+   ```json
+   {
+     "mcpServers": {
+       "rag-workspaces": {
+         "command": "node",
+         "args": ["/path/to/rag-workspaces/apps/mcp/dist/main.js"],
+         "env": { "RW_API_KEY": "rw_...", "RW_API_URL": "http://localhost:3000" }
+       }
+     }
+   }
+   ```
+
+`RW_API_URL` defaults to `http://localhost:3000`. Tool calls count toward the key's rate limits, and an API
+error (a wrong workspace, a `429`) comes back to the agent as a tool error with the API's reason.
+
 ## Development
 
 Requirements: Node 22.18+ and pnpm 10 (`corepack enable` gives you the pinned version).
@@ -98,6 +132,7 @@ pnpm --filter @rag/admin e2e                                #     against your o
 | Path | What it is |
 |---|---|
 | `apps/admin` | Admin UI (Vite + React + Tailwind + shadcn/ui), Keycloak sign-in; Playwright tests in `e2e/`: `pnpm --filter @rag/admin dev` (http://localhost:5173, forwards `/api` to the API) |
+| `apps/mcp` | MCP server over stdio for agents (see "Connect an agent"); tests run it against a fake API |
 | `apps/api` | Fastify API: `pnpm --filter @rag/api dev`, then Swagger UI at http://localhost:3000/docs |
 | `packages/config` | Shared TypeScript, ESLint and Vitest settings |
 | `packages/db` | Drizzle schema, SQL migrations (`drizzle/`) and the Postgres connection. Migrations run when the API starts |
