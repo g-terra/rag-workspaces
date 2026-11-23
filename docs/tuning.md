@@ -69,3 +69,21 @@ verdicts are one reader's. The set was also used for tuning, so differences of a
   outweigh the refusal rule. Use it with that in mind, or strengthen the rule in its instructions.
 - **Academic refusals:** they sometimes list what the passages do cover, with citations, so `grounded` says `true`.
   Don't count refusals by `grounded` for that style.
+
+### Recheck after #127
+
+#127 tightened the talkative and academic instructions and told both to cite nothing when refusing. Rerun on 2026-11-24 (local
+time) with the same settings: the same 20 questions once per style, then Kubernetes and World Cup three times each.
+
+| Style     | Correct / partial / wrong of 15 | Median answer | Average words | Kubernetes, 3 repeats                                                    | World Cup, 3 repeats                |
+| --------- | ------------------------------- | ------------- | ------------- | ------------------------------------------------------------------------ | ----------------------------------- |
+| Academic  | 14 / 1 / 0                      | 2.1 s         | 100           | Refused 3 of 3; `grounded: false` once, `true` twice                     | Refused 3 of 3; `grounded: true` 3 of 3 |
+| Talkative | 14 / 1 / 0                      | 3.2 s         | 204           | Refused once, asked for more information once, gave a RAG walk-through once; `grounded: true` 3 of 3 | Refused 3 of 3; `grounded: false`   |
+
+- **Academic still cites while refusing.** In the run of 20 it cited on Kubernetes and the World Cup, and it did so in 5 of the 6
+  repeats. It often describes what the passages do cover.
+- **Talkative still answers Kubernetes sometimes** (1 of 3 repeats as a RAG walk-through; its answer in the run of 20 refused but
+  cited). Other refusals often still add a second sentence.
+- The scores rose by one against the earlier run (academic on "How does it work?", talkative on Kubernetes), which is within noise.
+- Stronger wording alone has not fixed it here. A check on the answer, or a search that rejects passages about another topic, is
+  more likely to.
