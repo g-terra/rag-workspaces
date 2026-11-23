@@ -1,7 +1,7 @@
 ---
 title: change the embedding model from the settings page
 date: 2026-11-23
-pr: pending
+pr: "#94"
 status: in review
 areas: [admin]
 ---
