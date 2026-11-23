@@ -133,6 +133,9 @@ describe('MCP tools', () => {
     });
     expect(seen[0]).toMatchObject({ body: { question: 'What is Langflow?', style: 'concise' } });
     expect(JSON.parse(text(res))).toMatchObject({ answerId: 'ans_2', style: 'concise' });
+    // null asks for no style, even where the workspace has a default.
+    await client.callTool({ name: 'ask', arguments: { workspace: 'ouc', question: 'Plain?', style: null } });
+    expect(seen[1]).toMatchObject({ body: { question: 'Plain?', style: null } });
   });
 
   it('asks, and returns the answer with its citations', async () => {

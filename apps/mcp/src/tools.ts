@@ -175,9 +175,10 @@ export function createServer(api: RagApi, version: string): McpServer {
         folderId,
         style: z
           .string()
+          .nullable()
           .optional()
           .describe(
-            'A response style slug from list_styles, e.g. "concise". Leave out for the workspace\'s default.',
+            'A response style slug from list_styles, e.g. "concise". Leave out for the workspace\'s default; null for no style.',
           ),
       },
       // It runs a model and stores the answer, but changes no material.
