@@ -61,7 +61,7 @@ export const AskQuestion = z.object({
   maxPassages: z.number().int().min(1).max(20).optional(),
   /** Only use passages from documents in this folder. */
   folderId: z.string().min(1).optional(),
-  /** A response style slug (`GET /v1/styles`). Defaults to the workspace's `settings.style`. */
-  style: StyleSlug.optional(),
+  /** A response style slug (`GET /v1/styles`). Left out: the workspace's `settings.style`; `null`: no style. */
+  style: StyleSlug.nullable().optional(),
 });
 export type AskQuestion = z.infer<typeof AskQuestion>;

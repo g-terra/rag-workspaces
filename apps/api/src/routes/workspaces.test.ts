@@ -187,6 +187,13 @@ describe.skipIf(!url)('workspaces (against TEST_DATABASE_URL)', () => {
     expect(
       (await call('PATCH', '/v1/workspaces/ouc', 'admin', { settings: { style: null } })).json(),
     ).toMatchObject({ settings: { style: null } });
+    const made = await call('POST', '/v1/workspaces', 'admin', {
+      slug: 'styled-ok',
+      name: 'Styled',
+      settings: { style: 'tutor' },
+    });
+    expect(made.statusCode).toBe(201);
+    expect(made.json().settings.style).toBe('tutor');
     const create = await call('POST', '/v1/workspaces', 'admin', {
       slug: 'styled',
       name: 'Styled',

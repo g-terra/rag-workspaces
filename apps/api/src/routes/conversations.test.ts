@@ -203,9 +203,24 @@ describe.skipIf(!url)('conversations (against TEST_DATABASE_URL)', () => {
       ['user', null],
       ['assistant', 'concise'],
     ]);
+    runs.length = 0;
     expect(
       (await call('POST', `/conversations/${id}/messages`, { content: 'x', style: 'pirate' })).statusCode,
     ).toBe(400);
+    expect(runs).toHaveLength(0);
+    expect((await call('GET', `/conversations/${id}`)).json().messages).toHaveLength(4);
+  });
+
+  it('a failed reply still records its style', async () => {
+    const id = await start();
+    failChat = true;
+    const res = await call('POST', `/conversations/${id}/messages`, {
+      content: 'Will it fail?',
+      style: 'academic',
+    });
+    expect(res.statusCode).toBe(502);
+    const got = (await call('GET', `/conversations/${id}`)).json();
+    expect(got.messages[1]).toMatchObject({ role: 'assistant', status: 'failed', style: 'academic' });
   });
 
   /** A folder in `ouc`, made straight in the database. */
