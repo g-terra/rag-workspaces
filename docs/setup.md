@@ -158,3 +158,4 @@ existing install" says what to change by hand when that file changes.
 | Answers fail with `502` or `504` | The chat model failed or timed out; check `GET /v1/system` and LM Studio's log |
 | `429 Too Many Requests` | A rate limit (600 requests, 30 model calls a minute per person or key). Wait for `Retry-After`, or raise `RATE_LIMIT_PER_MINUTE` and `RATE_LIMIT_MODEL_PER_MINUTE` in `.env` |
 | `503` on search right after a reindex | The workspace is `reindexing`; it answers again once every document is `ready` |
+| A workspace-wide search misses passages that a search inside one folder finds | The workspace was created before the search-recall settings (2026-11-23). Reindex it once (`POST /v1/workspaces/{slug}/reindex`, no body) |

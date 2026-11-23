@@ -179,6 +179,7 @@ Rules that keep ingestion honest when things fail:
 - **Limits at the door.** Maximum file size (`MAX_UPLOAD_BYTES`, 2 GB by default so lecture videos fit; the API and the admin UI's nginx read the same value), allowed types checked by content and not only by extension, and a clear `failed` reason for scanned PDFs with no text layer (OCR is out of scope).
 - **Postgres is the source of truth.** A document is searchable only when its row is `ready`. A `pnpm doctor` command compares rows, files on the volume and vectors in Chroma and reports orphans.
 - **Changing the embedding model** means a new vector size, so workspace reindex drops and recreates the collection. The workspace shows `reindexing` and search returns 503 until it finishes.
+- **Search recall.** Each workspace collection is an HNSW index with `ef_search` 400, `ef_construction` 200 and `max_neighbors` 32 instead of Chroma's defaults (100, 100, 16), which missed about one in eight of the true top 20 on a workspace-wide search. The settings are fixed when a collection is created, so a workspace created before they were added gets them on its next reindex.
 
 ## Auth
 

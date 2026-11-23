@@ -12,6 +12,11 @@ from lfx.io import HandleInput, IntInput, Output, StrInput
 from lfx.schema.data import Data
 from lfx.schema.dataframe import DataFrame
 
+# HNSW settings for a new workspace collection. Chroma's defaults lose about one in eight of the true
+# top 20 on a workspace-wide search; these keep them all. Same values as COLLECTION_HNSW in
+# apps/api/src/services/chroma.ts (its test checks).
+COLLECTION_HNSW = {"space": "cosine", "ef_construction": 200, "ef_search": 400, "max_neighbors": 32}
+
 
 class ChromaWorkspaceUpsert(Component):
     display_name = "Chroma Workspace Upsert"
@@ -38,7 +43,7 @@ class ChromaWorkspaceUpsert(Component):
         r = client.post(f"{self._base()}/collections", json={
             "name": self.collection_name,
             "get_or_create": True,
-            "configuration": {"hnsw": {"space": "cosine"}},
+            "configuration": {"hnsw": COLLECTION_HNSW},
         })
         r.raise_for_status()
         return r.json()["id"]
