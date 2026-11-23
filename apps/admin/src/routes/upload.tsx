@@ -202,7 +202,7 @@ function Uploader({ slug }: { slug: string }) {
           <UploadIcon className="size-5" />
         </span>
         <p className="text-base font-semibold">Drop files here</p>
-        <p className="text-muted-foreground text-sm">PDF, DOCX, TXT, MD · up to 2 GB each</p>
+        <p className="text-muted-foreground text-sm">PDF, DOCX, TXT, MD, MP4, MP3, WAV · up to 2 GB each</p>
         <Button variant="outline" size="sm" onClick={() => input.current?.click()}>
           Browse files
         </Button>

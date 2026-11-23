@@ -1,4 +1,4 @@
-import type { Document } from '@rag/shared';
+import type { Document, Transcript } from '@rag/shared';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/auth/auth-context';
 import type { DocumentEvent } from './events';
@@ -89,6 +89,18 @@ export function useDownloadDocument(slug: string) {
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     },
+  });
+}
+
+/**
+ * A video or audio document's transcript. Its key sits beside the documents list, not under it, so the
+ * list's reload on every status-stream snapshot doesn't fetch a long transcript again.
+ */
+export function useTranscript(slug: string, documentId: string) {
+  const { api } = useAuth();
+  return useQuery({
+    queryKey: ['workspaces', slug, 'transcripts', documentId],
+    queryFn: () => api<Transcript>(`${documentsPath(slug)}/${encodeURIComponent(documentId)}/transcript`),
   });
 }
 

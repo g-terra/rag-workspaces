@@ -119,3 +119,41 @@ test('lists documents live, downloads, reindexes and deletes one', async ({ page
   await page.getByRole('link', { name: 'Upload files' }).click();
   await expect(page.getByRole('heading', { name: 'Upload material' })).toBeVisible();
 });
+
+test('a recording shows its transcript, with the time each line starts', async ({ page }) => {
+  await signIn(page, '/workspaces');
+  const headers = await bearer(page);
+  expect((await page.request.post('/api/v1/workspaces', { headers, data: ws })).status()).toBe(201);
+  // A valid, silent WAV; the stack's stand-in Whisper answers any file with the same two segments.
+  const wav = Buffer.alloc(44 + 1600);
+  wav.write('RIFF', 0, 'latin1');
+  wav.writeUInt32LE(wav.length - 8, 4);
+  wav.write('WAVEfmt ', 8, 'latin1');
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(8000, 24);
+  wav.writeUInt32LE(16000, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write('data', 36, 'latin1');
+  wav.writeUInt32LE(1600, 40);
+  const upload = await page.request.post(`/api/v1/workspaces/${ws.slug}/documents`, {
+    headers,
+    multipart: { files: { name: 'lecture.wav', mimeType: 'audio/wav', buffer: wav } },
+  });
+  expect(upload.status()).toBe(201);
+
+  await page.goto(`/w/${ws.slug}/documents`);
+  const row = page.getByTestId('document-row').filter({ hasText: 'lecture' });
+  await expect(row.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  await row.click();
+  const transcript = page
+    .getByRole('complementary', { name: 'Selected document' })
+    .getByRole('region', { name: 'Transcript' });
+  await expect(transcript.getByRole('heading', { name: 'Transcript · en' })).toBeVisible();
+  await expect(transcript.getByRole('listitem').nth(1)).toContainText('0:03');
+  await expect(transcript.getByRole('listitem').nth(1)).toContainText(
+    'Chroma stores embeddings with metadata.',
+  );
+});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { answerMeta, answerParts, formatDuration, passageWhere } from './answer';
+import { answerMeta, answerParts, clock, formatDuration, passageWhere } from './answer';
 
 describe('answerParts', () => {
   it('reads the fullwidth 【n】 some models (gpt-oss) write, with or without a †locator', () => {
@@ -123,12 +123,29 @@ describe('formatDuration', () => {
 
 describe('passageWhere', () => {
   it('names the document and its page', () => {
-    expect(passageWhere({ documentTitle: 'Week 3 slides', page: 12, chunkIndex: 4 })).toBe(
-      'Week 3 slides · page 12',
-    );
+    expect(
+      passageWhere({ documentTitle: 'Week 3 slides', page: 12, startSeconds: null, chunkIndex: 4 }),
+    ).toBe('Week 3 slides · page 12');
   });
 
   it('falls back to the passage number when there are no pages', () => {
-    expect(passageWhere({ documentTitle: 'notes', page: null, chunkIndex: 4 })).toBe('notes · passage 5');
+    expect(passageWhere({ documentTitle: 'notes', page: null, startSeconds: null, chunkIndex: 4 })).toBe(
+      'notes · passage 5',
+    );
+  });
+
+  it('gives the time a passage from a recording starts at', () => {
+    expect(passageWhere({ documentTitle: 'Lecture 3', page: null, startSeconds: 754.2, chunkIndex: 9 })).toBe(
+      'Lecture 3 · at 12:34',
+    );
+  });
+});
+
+describe('clock', () => {
+  it('reads seconds as m:ss, or h:mm:ss past an hour', () => {
+    expect(clock(0)).toBe('0:00');
+    expect(clock(5.9)).toBe('0:05');
+    expect(clock(754.2)).toBe('12:34');
+    expect(clock(3723)).toBe('1:02:03');
   });
 });

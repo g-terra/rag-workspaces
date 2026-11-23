@@ -1,17 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { checkFile, formatBytes, statusLabel, uploadErrorMessage } from './files';
+import { checkFile, formatBytes, isMedia, statusLabel, uploadErrorMessage } from './files';
 
 describe('checkFile', () => {
-  it('accepts PDF, DOCX, TXT and MD, whatever the case of the extension', () => {
-    for (const name of ['a.pdf', 'b.DOCX', 'notes.txt', 'README.Md'])
+  it('accepts PDF, DOCX, TXT, MD, MP4, MP3 and WAV, whatever the case of the extension', () => {
+    for (const name of ['a.pdf', 'b.DOCX', 'notes.txt', 'README.Md', 'week1.mp4', 'talk.MP3', 'clip.wav'])
       expect(checkFile({ name, size: 10 })).toBeNull();
   });
 
   it('refuses other types and names without an extension', () => {
     expect(checkFile({ name: 'slides.pptx', size: 10 })).toBe(
-      'Not a supported file. Use PDF, DOCX, TXT or MD.',
+      'Not a supported file. Use PDF, DOCX, TXT, MD, MP4, MP3 or WAV.',
     );
-    expect(checkFile({ name: 'Makefile', size: 10 })).toBe('Not a supported file. Use PDF, DOCX, TXT or MD.');
+    expect(checkFile({ name: 'Makefile', size: 10 })).toBe(
+      'Not a supported file. Use PDF, DOCX, TXT, MD, MP4, MP3 or WAV.',
+    );
   });
 
   it('refuses empty files and files over 2 GB', () => {
@@ -30,7 +32,15 @@ describe('uploadErrorMessage', () => {
       'Too large: "a.pdf" is larger than the upload limit of 500 MB.',
     );
     expect(uploadErrorMessage(413, '')).toBe('Too large: the limit is 2 GB per file.');
-    expect(uploadErrorMessage(415, 'x')).toBe('Not a supported file. Use PDF, DOCX, TXT or MD.');
+    expect(uploadErrorMessage(415, '')).toBe(
+      'Not a supported file. Use PDF, DOCX, TXT, MD, MP4, MP3 or WAV.',
+    );
+  });
+
+  it("shows the API's reason for a 415, which says when video needs the video profile", () => {
+    const detail =
+      '"week1.mp4" is video or audio, which needs the video profile (docs/setup.md, "Video and audio").';
+    expect(uploadErrorMessage(415, detail)).toBe(detail);
   });
 
   it('explains a refused role and a network failure', () => {
@@ -60,5 +70,12 @@ describe('statusLabel', () => {
     expect(
       ['queued', 'transcribing', 'processing', 'ready', 'failed'].map((s) => statusLabel(s as never)),
     ).toEqual(['Queued', 'Transcribing', 'Processing', 'Ready', 'Failed']);
+  });
+});
+
+describe('isMedia', () => {
+  it('is true for the types Whisper transcribes', () => {
+    expect((['mp4', 'mp3', 'wav'] as const).every(isMedia)).toBe(true);
+    expect((['pdf', 'docx', 'txt', 'md'] as const).some(isMedia)).toBe(false);
   });
 });

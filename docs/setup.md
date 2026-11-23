@@ -128,6 +128,8 @@ WHISPER_URL=http://whisper:9000
   more accurate and slower than `base`; `tiny` is quicker and rougher.
 - A file shows `transcribing`, then `processing`, then `ready`. The transcript is kept next to the file, so a
   reindex or retry doesn't transcribe again. `GET …/documents/{id}/transcript` returns it with timings.
+- In the admin UI, "Upload" takes MP4, MP3 and WAV, and a ready recording's panel in "Documents" shows its
+  transcript with the time each line starts. Sources in the playground say `at 12:34` instead of a page.
 - Search results and citations from a recording carry `startSeconds`, the second their passage starts at
   (`page` stays `null`), so you can jump to that moment.
 - Without the profile, video and audio uploads are refused with `415` and a message pointing here.
