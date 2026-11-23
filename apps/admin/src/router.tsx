@@ -7,6 +7,7 @@ import { RootRedirect } from '@/routes/root-redirect';
 import { SignIn } from '@/routes/sign-in';
 import { WorkspaceHome } from '@/routes/workspace-home';
 import { WorkspaceLayout } from '@/routes/workspace-layout';
+import { Conversations } from '@/routes/conversations';
 import { Documents } from '@/routes/documents';
 import { Playground } from '@/routes/playground';
 import { Upload } from '@/routes/upload';
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
               { path: 'upload', element: <Upload /> },
               { path: 'documents', element: <Documents /> },
               { path: 'playground', element: <Playground /> },
+              { path: 'conversations', element: <Conversations /> },
               { path: 'usage', element: <Usage /> },
               { path: 'settings', element: <WorkspaceSettings /> },
             ],

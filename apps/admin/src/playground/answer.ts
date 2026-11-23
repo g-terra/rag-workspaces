@@ -1,5 +1,8 @@
 import type { Answer, Passage } from '@rag/shared';
 
+/** Why a reply has no text: nothing in the workspace was relevant enough, so no model was called. */
+export const NOT_GROUNDED = 'Nothing in this workspace was close enough to that, so no reply was generated.';
+
 /** A piece of an answer: text to show, or the `[n]` marker of a citation to open. */
 export type AnswerPart = { text: string } | { rank: number };
 

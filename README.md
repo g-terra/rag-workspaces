@@ -91,9 +91,10 @@ and admins upload files from "Upload" in the sidebar and watch each one through 
 "Documents" lists everything in the workspace, live, with download for everyone and reindex and delete for
 editors and admins. "Playground" asks the workspace a question and streams the answer back word by word,
 the way an agent would through the API; it also searches its passages with their scores and no model call
-at all, and holds a conversation where a follow-up is answered from the thread. Admins manage API keys for
-agents and scripts under "API keys": a new key's secret is shown once, with a `curl` example to try it.
-"Usage" charts requests, latency, top questions, cited documents and the raw request log — for one
+at all, and holds a conversation where a follow-up is answered from the thread. "Conversations" lists your
+conversations with the workspace and opens one in full, to read, carry on or delete. Admins manage API
+keys for agents and scripts under "API keys": a new key's secret is shown once, with a `curl` example to
+try it. "Usage" charts requests, latency, top questions, cited documents and the raw request log — for one
 workspace (editors and admins) or across all of them (admins). "Settings" (admins) changes a workspace's
 name, description, chat model and retrieval settings, with the providers and models read from
 `GET /v1/system`; it is also where you grant and remove other people's access to the workspace, start a
