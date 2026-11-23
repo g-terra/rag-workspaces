@@ -11,6 +11,7 @@ import { streamGeneration } from './streaming.js';
 import type { AnswerService } from '../services/answers.js';
 import { canSee, toApiAnswer } from '../services/answers.js';
 import { flowProblem } from '../services/flow-errors.js';
+import { answerUsage } from '../usage/details.js';
 
 export type AnswerRoutesOptions = { db: Database; answers: AnswerService };
 
@@ -51,6 +52,7 @@ export const answerRoutes: FastifyPluginAsyncZod<AnswerRoutesOptions> = async (a
 
       if (!wantsEventStream(req)) {
         const { answer, error } = await service.ask(input);
+        req.usage = answerUsage(answer);
         if (error) {
           req.log.warn({ err: error, answerId: answer.id }, 'answer failed');
           throw flowProblem(error, 'Answering');
@@ -63,6 +65,7 @@ export const answerRoutes: FastifyPluginAsyncZod<AnswerRoutesOptions> = async (a
         idKey: 'answerId',
         run: async (hooks) => {
           const { answer, error } = await service.ask({ ...input, ...hooks });
+          req.usage = answerUsage(answer);
           return { result: toApiAnswer(answer, workspace.slug), error };
         },
       });

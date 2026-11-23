@@ -282,3 +282,45 @@ export const messages = pgTable(
 );
 
 export type Message = typeof messages.$inferSelect;
+
+/**
+ * The usage log: one row per `/v1` request, written after the response. No foreign keys, so
+ * rows outlive deleted workspaces and revoked keys (analytics keep their history).
+ * Asking routes add what was asked and how it went; `question` is cleared after the
+ * retention period (USAGE_QUESTION_RETENTION_DAYS) while the rest stays for counts.
+ */
+export const apiRequests = pgTable(
+  'api_requests',
+  {
+    id: bigint({ mode: 'number' }).primaryKey().generatedAlwaysAsIdentity(),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    requestId: text().notNull(),
+    method: text().notNull(),
+    /** The route pattern (`/v1/workspaces/:slug/answers`), so requests group by endpoint. */
+    route: text().notNull(),
+    statusCode: integer().notNull(),
+    latencyMs: integer().notNull(),
+    /** From the `:slug` in the path; `workspaceId` is null when no such workspace existed. */
+    workspaceSlug: text(),
+    workspaceId: text(),
+    callerKind: callerKind(),
+    callerId: text(),
+    // --- Asking routes only ---
+    question: text(),
+    answerId: text(),
+    messageId: text(),
+    model: text(),
+    grounded: boolean(),
+    promptTokens: integer(),
+    completionTokens: integer(),
+    timeToFirstTokenMs: integer(),
+    citedDocumentIds: text().array(),
+  },
+  (t) => [
+    index('api_requests_created_idx').on(t.createdAt),
+    index('api_requests_workspace_created_idx').on(t.workspaceId, t.createdAt),
+    index('api_requests_caller_created_idx').on(t.callerKind, t.callerId, t.createdAt),
+  ],
+);
+
+export type NewApiRequest = typeof apiRequests.$inferInsert;
