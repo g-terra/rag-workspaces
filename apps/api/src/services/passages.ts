@@ -43,7 +43,7 @@ type RetrievalConfig = Pick<
   'DEFAULT_TOP_K' | 'DEFAULT_MIN_SCORE' | 'LMSTUDIO_BASE_URL' | 'OPENAI_API_KEY' | 'GEMINI_API_KEY'
 >;
 
-export type SearchOptions = { limit?: number; minScore?: number };
+export type SearchOptions = { limit?: number; minScore?: number; folderId?: string };
 
 /**
  * The tweaks that turn a question into passages: which embedding model to use (the one the
@@ -61,7 +61,8 @@ export function searchTweaks(workspace: Workspace, config: RetrievalConfig, opts
       collection_name: ChromaService.collectionName(workspace.slug),
       top_k: limit,
       min_score: minScore,
-      folder: '',
+      // Passages carry their document's folder id (written at ingestion, updated on a move).
+      folder: opts.folderId ?? '',
     },
   };
 }

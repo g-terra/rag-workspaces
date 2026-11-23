@@ -14,11 +14,13 @@ import { auth } from './auth/plugin.js';
 import type { Authenticator } from './auth/principal.js';
 import type { Config } from './config.js';
 import { errorHandler, notFoundHandler } from './errors.js';
+import { rateLimits } from './rate-limit.js';
 import type { ReadinessCheck } from './readiness.js';
 import { answerRoutes } from './routes/answers.js';
 import { apiKeyRoutes } from './routes/api-keys.js';
 import { conversationRoutes } from './routes/conversations.js';
 import { documentRoutes } from './routes/documents.js';
+import { folderRoutes } from './routes/folders.js';
 import { healthRoutes } from './routes/health.js';
 import { systemRoutes } from './routes/system.js';
 import { meRoutes } from './routes/me.js';
@@ -148,6 +150,7 @@ export async function buildApp({
   app.get('/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 
   await app.register(auth, { authenticators });
+  await app.register(rateLimits, { config });
   const usageLog = usage ?? (db ? new UsageLog(db, app.log) : undefined);
   if (usageLog) await app.register(usageLogging, { usage: usageLog });
   await app.register(healthRoutes, { checks, timeoutMs: config.READY_TIMEOUT_MS });
@@ -157,6 +160,7 @@ export async function buildApp({
   if (db) {
     await app.register(workspaceRoutes, { db, chroma, storage, queue, events, config });
     await app.register(documentRoutes, { db, storage, chroma, queue, events, config });
+    await app.register(folderRoutes, { db, chroma, events });
     await app.register(apiKeyRoutes, { db });
     await app.register(usageRoutes, { db });
     if (langflow) {
