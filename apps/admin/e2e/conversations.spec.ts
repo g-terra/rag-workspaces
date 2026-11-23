@@ -53,12 +53,13 @@ test('lists conversations, opens one, carries it on and deletes it', async ({ pa
   await page.getByLabel('Message').fill('What is retrieval-augmented generation?');
   await page.getByRole('button', { name: 'Send' }).click();
   await expect(page.getByTestId('reply')).not.toBeEmpty({ timeout: 60_000 });
-  const conversationId = (await page.getByTestId('conversation-id').textContent())!;
-  await page.getByTestId('conversation-id').click();
+  const conversationId = (await page.getByTestId('conversation-link').getAttribute('data-conversation-id'))!;
+  await page.getByTestId('conversation-link').click();
 
   // The conversation is open, both sides of the turn are stored, and the reply kept its sources.
   await expect(page.getByRole('heading', { name: 'Conversations', exact: true })).toBeVisible();
   await expect(page.getByTestId('conversation')).toHaveCount(1);
+  await expect(page.getByText(/cnv_/)).toHaveCount(0);
   await expect(page.getByRole('heading', { name: /retrieval/i }).first()).toBeVisible();
   await expect(page.getByTestId('stored-reply')).toHaveCount(1);
   await expect(page.getByRole('complementary', { name: 'Sources' }).getByTestId('source')).toHaveCount(1);

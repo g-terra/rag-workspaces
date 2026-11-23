@@ -71,10 +71,7 @@ export function Conversations() {
                 )}
               >
                 <span className="truncate text-[13px] font-semibold">{conversationName(c)}</span>
-                <span className="text-muted-foreground flex gap-2 text-xs">
-                  <span className="truncate font-mono">{c.id}</span>
-                  <span className="flex-none">{formatRelative(c.updatedAt)}</span>
-                </span>
+                <span className="text-muted-foreground text-xs">{formatRelative(c.updatedAt)}</span>
               </button>
             ))}
             {list.hasNextPage && (
@@ -136,10 +133,7 @@ function Thread({ slug, id, onDeleted }: { slug: string; id: string; onDeleted()
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="truncate text-lg font-semibold">{conversationName(stored.data)}</h2>
-          <p className="text-muted-foreground text-xs">
-            <span className="font-mono">{stored.data.id}</span> · started{' '}
-            {formatRelative(stored.data.createdAt)}
-          </p>
+          <p className="text-muted-foreground text-xs">Started {formatRelative(stored.data.createdAt)}</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
           <Trash2 /> Delete
