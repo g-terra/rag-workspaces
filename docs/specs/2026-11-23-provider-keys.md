@@ -2,7 +2,7 @@
 title: save hosted provider keys per workspace, encrypted
 date: 2026-11-23
 pr: "#95"
-status: in review
+status: merged
 areas: [api, db, docs, infra]
 ---
 
