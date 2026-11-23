@@ -1,8 +1,8 @@
 """Search a workspace's Chroma collection and return structured passages.
 
 Two outputs: `passages` (a JSON object with text, score, document_id, page,
-filename, chunk_index per hit) and `context` (the same passages formatted for a
-prompt, each tagged [n] so the model can cite them).
+start_seconds, filename, chunk_index per hit) and `context` (the same passages
+formatted for a prompt, each tagged [n] so the model can cite them).
 """
 
 import httpx
@@ -79,6 +79,7 @@ class ChromaWorkspaceSearch(Component):
                 "filename": meta.get("filename"),
                 "folder": meta.get("folder"),
                 "page": meta.get("page"),
+                "start_seconds": meta.get("start_seconds"),
                 "chunk_index": meta.get("chunk_index"),
             })
         self._cached = passages
@@ -96,7 +97,14 @@ class ChromaWorkspaceSearch(Component):
             where = p["filename"] or p["document_id"]
             if p.get("page"):
                 where += f", page {p['page']}"
+            elif p.get("start_seconds") is not None:
+                where += f", at {clock(p['start_seconds'])}"
             blocks.append(f"[{p['rank']}] ({where})\n{p['text']}")
         return Message(text="\n\n".join(blocks) if blocks else "No relevant passages found.")
 
 
+def clock(seconds: float) -> str:
+    """12:34, or 1:02:03 past an hour: how a person reads a time in a recording."""
+    m, s = divmod(int(seconds), 60)
+    h, m = divmod(m, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"

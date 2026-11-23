@@ -8,6 +8,8 @@ export const Citation = z.object({
   documentId: z.string(),
   documentTitle: z.string(),
   page: z.number().int().nullable(),
+  /** For a video or audio transcript, the second the passage starts at; otherwise `null`. */
+  startSeconds: z.number().nullable(),
   /** The start of the passage, for a preview; fetch the passage for all of it. */
   snippet: z.string(),
   score: z.number(),

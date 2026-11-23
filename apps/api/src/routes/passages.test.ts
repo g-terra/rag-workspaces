@@ -37,7 +37,7 @@ describe.skipIf(!url)('passages (against TEST_DATABASE_URL)', () => {
           const i = Number(id.split(':')[1]);
           return i < 2
             ? { document_id: docId, chunk_index: i, page: i + 1 }
-            : { document_id: docId, chunk_index: i };
+            : { document_id: docId, chunk_index: i, start_seconds: 42.5 };
         }),
       });
     }
@@ -150,6 +150,7 @@ describe.skipIf(!url)('passages (against TEST_DATABASE_URL)', () => {
         documentId: docId,
         documentTitle: 'Week 3 slides',
         page: 2,
+        startSeconds: null,
         chunkIndex: 1,
         text: 'RAG retrieves',
         score: 0.83,
@@ -163,6 +164,24 @@ describe.skipIf(!url)('passages (against TEST_DATABASE_URL)', () => {
       folder: '',
     });
     expect(runs[0]!.tweaks.Embeddings).toMatchObject({ model: 'nomic' });
+  });
+
+  it('a passage from a transcript says the second it starts at', async () => {
+    langflowReply = () =>
+      flowOutput([
+        {
+          rank: 1,
+          id: `${docId}:1`,
+          text: 'At this point',
+          score: 0.8,
+          document_id: docId,
+          page: null,
+          chunk_index: 1,
+          start_seconds: 754.2,
+        },
+      ]);
+    const res = await get('/v1/workspaces/ouc/passages?query=when');
+    expect(res.json().data[0]).toMatchObject({ page: null, startSeconds: 754.2 });
   });
 
   /** A folder in `ouc`, made straight in the database. */
@@ -258,7 +277,8 @@ describe.skipIf(!url)('passages (against TEST_DATABASE_URL)', () => {
       documentTitle: 'Week 3 slides',
     });
     expect(body.previous).toMatchObject({ chunkIndex: 0, page: 1 });
-    expect(body.next).toMatchObject({ chunkIndex: 2, page: null });
+    expect(body.previous.startSeconds).toBeNull();
+    expect(body.next).toMatchObject({ chunkIndex: 2, page: null, startSeconds: 42.5 });
     expect(chromaGets[0]).toEqual([`${docId}:0`, `${docId}:1`, `${docId}:2`]);
   });
 

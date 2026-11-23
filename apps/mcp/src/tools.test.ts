@@ -103,6 +103,7 @@ describe('MCP tools', () => {
             documentId: 'doc_1',
             documentTitle: 'Week 1',
             page: 3,
+            startSeconds: null,
             snippet: 'Langflow…',
             score: 0.9,
           },
@@ -123,7 +124,16 @@ describe('MCP tools', () => {
       answerId: 'ans_1',
       grounded: true,
       text: 'Langflow builds flows [1].',
-      citations: [{ rank: 1, passageId: 'psg_1', documentTitle: 'Week 1', page: 3, snippet: 'Langflow…' }],
+      citations: [
+        {
+          rank: 1,
+          passageId: 'psg_1',
+          documentTitle: 'Week 1',
+          page: 3,
+          startSeconds: null,
+          snippet: 'Langflow…',
+        },
+      ],
       model: 'qwen3-8b',
     });
   });

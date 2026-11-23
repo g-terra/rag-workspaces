@@ -105,7 +105,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 { "id": "ans_01J…", "workspace": "ouc", "question": "…", "text": "Retrieval-augmented generation combines …",
   "status": "complete", "grounded": true,
   "citations": [ { "rank": 1, "passageId": "psg_01J…", "documentId": "doc_01J…", "documentTitle": "Week 3 slides",
-                   "page": 12, "snippet": "RAG retrieves relevant passages …", "score": 0.83 } ],
+                   "page": 12, "startSeconds": null, "snippet": "RAG retrieves relevant passages …", "score": 0.83 } ],
   "provider": "lmstudio", "model": "qwen2.5-7b-instruct",
   "usage": { "promptTokens": 1840, "completionTokens": 212 },
   "latencyMs": 2310, "timeToFirstTokenMs": null, "error": null, "feedback": null, "createdAt": "…" }
@@ -113,7 +113,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 
 `folderId` (optional) uses only passages from that folder's documents; a folder that isn't in the workspace is `404`, here and on passages and messages.
 
-- Citations are the passages that were given to the model, in rank order; `rank` is the `[n]` the text may cite. `startSeconds` will join them with audio *(planned)*; a citation's `documentId` leads to its folder.
+- Citations are the passages that were given to the model, in rank order; `rank` is the `[n]` the text may cite. `page` is set for PDFs and `startSeconds` (the second the passage starts at) for video and audio, otherwise each is `null`; passages carry the same two fields; a citation's `documentId` leads to its folder.
 - Every answer is stored, failures too (`status: "failed"` with `error`), so usage counts them; the caller still gets the error status.
 - An answer, and a conversation, is visible only to the person or key that created it, and to admins; anyone else gets `404`.
 - When nothing in the workspace scores above `minScore`, the answer is still `201` with `"grounded": false`, a fixed "not found in this workspace" text and empty citations; the chat model is not called.

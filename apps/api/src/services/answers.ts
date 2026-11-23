@@ -2,7 +2,7 @@ import { answers, newId, type Answer as AnswerRow, type Database, type Workspace
 import type { LangflowClient } from '@rag/langflow-client';
 import type { Answer } from '@rag/shared';
 import type { Principal } from '../auth/principal.js';
-import { Generator, type GenerateConfig } from './generate.js';
+import { Generator, withStartSeconds, type GenerateConfig } from './generate.js';
 
 export { DEFAULT_SYSTEM_PROMPT, NOT_FOUND_TEXT } from './generate.js';
 
@@ -71,7 +71,7 @@ export function toApiAnswer(a: AnswerRow, slug: string): Answer {
     text: a.text,
     status: a.status,
     grounded: a.grounded,
-    citations: a.citations,
+    citations: a.citations.map(withStartSeconds),
     provider: a.provider,
     model: a.model,
     usage: { promptTokens: a.promptTokens, completionTokens: a.completionTokens },

@@ -35,7 +35,7 @@ const slugPath = (slug: string) => `/v1/workspaces/${encodeURIComponent(slug)}`;
 
 /**
  * Tools over the REST API that change no material, so an `rw_` key with the `reader` role is enough. Each
- * tool returns what the agent needs to cite: passage ids, document titles and pages.
+ * tool returns what the agent needs to cite: passage ids, document titles, and pages or start times.
  */
 export function createServer(api: RagApi, version: string): McpServer {
   const server = new McpServer({ name: 'rag-workspaces', version });
@@ -177,6 +177,7 @@ export function createServer(api: RagApi, version: string): McpServer {
             passageId: c.passageId,
             documentTitle: c.documentTitle,
             page: c.page,
+            startSeconds: c.startSeconds,
             snippet: c.snippet,
           })),
           model: a.model,
