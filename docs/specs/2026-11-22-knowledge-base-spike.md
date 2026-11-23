@@ -2,7 +2,7 @@
 title: spike Langflow's native knowledge bases as a Chroma replacement
 date: 2026-11-22
 pr: "#31"
-status: in review
+status: merged
 areas: [flows, infra]
 ---
 

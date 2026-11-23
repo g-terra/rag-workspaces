@@ -2,7 +2,7 @@
 title: Compose smoke test for the ingestion path
 date: 2026-11-22
 pr: '#34'
-status: in review
+status: merged
 areas: [ci, infra]
 ---
 

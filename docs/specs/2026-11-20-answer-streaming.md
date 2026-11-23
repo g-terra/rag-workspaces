@@ -2,7 +2,7 @@
 title: Stream answers token by token
 date: 2026-11-20
 pr: '#20'
-status: in review
+status: merged
 areas: [api, langflow-client]
 ---
 
