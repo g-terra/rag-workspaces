@@ -1,5 +1,6 @@
-import type { Workspace } from '@rag/db';
+import { responseStyles, type Database, type ResponseStyleRow, type Workspace } from '@rag/db';
 import type { ResponseStyle } from '@rag/shared';
+import { asc, eq } from 'drizzle-orm';
 import { HttpProblem } from '../errors.js';
 
 /**
@@ -47,21 +48,44 @@ export const BUILT_IN_STYLES: readonly ResponseStyle[] = [
   },
 ];
 
+export const isBuiltIn = (slug: string) => BUILT_IN_STYLES.some((s) => s.slug === slug);
+
+export function toApiStyle(row: ResponseStyleRow): ResponseStyle {
+  const { slug, name, description, instructions } = row;
+  return { slug, name, description, instructions, builtIn: false };
+}
+
+/** Every style: the built-ins first, then custom ones by name. */
+export async function listStyles(db: Database): Promise<ResponseStyle[]> {
+  const custom = await db.select().from(responseStyles).orderBy(asc(responseStyles.name));
+  return [...BUILT_IN_STYLES, ...custom.map(toApiStyle)];
+}
+
 /** The style with this slug. Unknown → `400`, so a typo shows instead of silently changing the answer. */
-export function findStyle(slug: string): ResponseStyle {
-  const style = BUILT_IN_STYLES.find((s) => s.slug === slug);
-  if (!style) throw new HttpProblem(400, `No response style "${slug}". GET /v1/styles lists them.`);
-  return style;
+export async function findStyle(db: Database, slug: string): Promise<ResponseStyle> {
+  const builtIn = BUILT_IN_STYLES.find((s) => s.slug === slug);
+  if (builtIn) return builtIn;
+  const [row] = await db.select().from(responseStyles).where(eq(responseStyles.slug, slug));
+  if (!row) throw new HttpProblem(400, `No response style "${slug}". GET /v1/styles lists them.`);
+  return toApiStyle(row);
 }
 
 /**
  * The style for one request: the one it names (`null`: none), else the workspace's default, else none.
  * A default that no longer resolves is ignored rather than turned into a `400` the caller did not cause.
  */
-export function styleFor(requested: string | null | undefined, workspace: Workspace): ResponseStyle | null {
-  if (requested !== undefined) return requested === null ? null : findStyle(requested);
+export async function styleFor(
+  db: Database,
+  requested: string | null | undefined,
+  workspace: Workspace,
+): Promise<ResponseStyle | null> {
+  if (requested !== undefined) return requested === null ? null : findStyle(db, requested);
   const fallback = workspace.settings.style;
-  return (fallback && BUILT_IN_STYLES.find((s) => s.slug === fallback)) || null;
+  if (!fallback) return null;
+  return findStyle(db, fallback).catch((err: unknown) => {
+    if (err instanceof HttpProblem) return null;
+    throw err;
+  });
 }
 
 /**

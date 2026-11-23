@@ -115,7 +115,7 @@ and the sources' `minScore` are the knobs.
   passage routes on a composite; 400 for unknown, composite or repeated
   sources. Next PR: `Citation.workspace` and `ScoredPassage.workspace` (source slug).
 - **Configuration**: None.
-- **Data**: migration `0011_composite_workspaces.sql`: enum `workspace_kind`, column `workspaces.kind`,
+- **Data**: migration `0013_composite_workspaces.sql`: enum `workspace_kind`, column `workspaces.kind`,
   table `composite_sources`.
 - **Langflow**: None in this PR. Next PR: flow `rw-generate` (nodes `ChatInput`, `Prompt`, `LLM`,
   `ChatOutput-answer`).

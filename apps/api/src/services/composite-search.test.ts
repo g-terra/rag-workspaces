@@ -8,6 +8,7 @@ const hit = (workspace: string, rank: number, score: number, over: Partial<Sourc
   id: `psg_${workspace}_${rank}`,
   documentId: `doc_${workspace}`,
   documentTitle: `${workspace}.pdf`,
+  sourceUrl: null,
   page: null,
   startSeconds: null,
   chunkIndex: rank,

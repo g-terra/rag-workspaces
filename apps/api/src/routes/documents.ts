@@ -26,7 +26,7 @@ import type { IngestQueue } from '../services/ingest-queue.js';
 import { requireFolder } from '../services/folders.js';
 import { finishReindexIfDone } from '../services/reindex.js';
 import type { UploadStorage } from '../services/storage.js';
-import { FileTooLarge, detectType, isMedia } from '../services/storage.js';
+import { FileTooLarge, detectType, isMedia, type FileType } from '../services/storage.js';
 
 export type DocumentRoutesOptions = {
   db: Database;
@@ -64,6 +64,8 @@ const MIME: Record<DocumentRow['type'], string> = {
   mp4: 'video/mp4',
   mp3: 'audio/mpeg',
   wav: 'audio/wav',
+  // A website page is stored as the Markdown it was turned into.
+  web: 'text/markdown; charset=utf-8',
 };
 
 export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = async (app, opts) => {
@@ -94,6 +96,8 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
     error: d.error,
     passageCount: d.passageCount,
     tags: d.tags,
+    siteId: d.siteId,
+    sourceUrl: d.sourceUrl,
     createdAt: d.createdAt.toISOString(),
     updatedAt: d.updatedAt.toISOString(),
   });
@@ -134,7 +138,7 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
       // Stage every file first, so one bad file rejects the whole request and nothing is half-kept.
       const staged: {
         fileName: string;
-        type: DocumentRow['type'];
+        type: FileType;
         file: Awaited<ReturnType<UploadStorage['stage']>>;
       }[] = [];
       try {
@@ -194,7 +198,13 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
         const [existing] = await db
           .select()
           .from(documents)
-          .where(and(eq(documents.workspaceId, workspace.id), eq(documents.sha256, s.file.sha256)));
+          .where(
+            and(
+              eq(documents.workspaceId, workspace.id),
+              eq(documents.sha256, s.file.sha256),
+              isNull(documents.siteId),
+            ),
+          );
         if (existing) {
           await storage.discard(s.file);
           results.push({ document: toApi(existing, workspace.slug), duplicate: true });
@@ -228,7 +238,13 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
           const [winner] = await db
             .select()
             .from(documents)
-            .where(and(eq(documents.workspaceId, workspace.id), eq(documents.sha256, s.file.sha256)));
+            .where(
+              and(
+                eq(documents.workspaceId, workspace.id),
+                eq(documents.sha256, s.file.sha256),
+                isNull(documents.siteId),
+              ),
+            );
           results.push({ document: toApi(winner!, workspace.slug), duplicate: true });
           continue;
         }

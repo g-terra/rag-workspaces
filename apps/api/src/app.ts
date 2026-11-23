@@ -23,6 +23,7 @@ import { documentRoutes } from './routes/documents.js';
 import { folderRoutes } from './routes/folders.js';
 import { healthRoutes } from './routes/health.js';
 import { providerRoutes } from './routes/providers.js';
+import { siteRoutes } from './routes/sites.js';
 import { styleRoutes } from './routes/styles.js';
 import { systemRoutes } from './routes/system.js';
 import { meRoutes } from './routes/me.js';
@@ -37,6 +38,7 @@ import { DocumentEvents } from './services/document-events.js';
 import type { KeySource } from './services/langflow.js';
 import { ModelCatalog } from './services/models.js';
 import { KeycloakDirectory } from './services/people.js';
+import type { CrawlQueue } from './services/crawl.js';
 import { noopQueue, type IngestQueue } from './services/ingest-queue.js';
 import { UploadStorage } from './services/storage.js';
 import { UsageLog, usageLogging } from './usage/log.js';
@@ -54,6 +56,8 @@ export type AppDeps = {
   storage?: UploadStorage;
   /** Where new uploads are queued for ingestion. */
   queue?: IngestQueue;
+  /** Where imported websites are queued for crawling. */
+  crawls?: CrawlQueue;
   /** Document status changes, for the live status stream. */
   events?: DocumentEvents;
   /** The people list behind `GET /v1/users`. Defaults to Keycloak's admin API as `api-directory`. */
@@ -84,6 +88,7 @@ export async function buildApp({
   chroma = new ChromaService(config),
   storage = new UploadStorage(config.UPLOADS_DIR, config.MAX_UPLOAD_BYTES),
   queue = noopQueue,
+  crawls = { enqueue: async () => {} },
   events = new DocumentEvents(),
   directory = new KeycloakDirectory({
     baseUrl: config.KEYCLOAK_INTERNAL_URL,
@@ -133,6 +138,7 @@ export async function buildApp({
         { name: 'users', description: 'People in Keycloak, to grant workspace access (admins only)' },
         { name: 'workspaces', description: 'Isolated groups of material, and who can use them' },
         { name: 'documents', description: 'Files in a workspace and their ingestion status' },
+        { name: 'sites', description: 'Documentation websites imported into a workspace, page by page' },
         { name: 'answers', description: 'Ask a question, get a cited answer, rate it' },
         { name: 'conversations', description: 'Chat with history; each reply is cited like an answer' },
         {
@@ -164,14 +170,15 @@ export async function buildApp({
   if (usageLog) await app.register(usageLogging, { usage: usageLog });
   await app.register(healthRoutes, { checks, timeoutMs: config.READY_TIMEOUT_MS });
   await app.register(meRoutes);
-  await app.register(styleRoutes);
   await app.register(systemRoutes, { checks, models, langflowKey, config });
   await app.register(userRoutes, { directory });
   if (db) {
     await app.register(workspaceRoutes, { db, chroma, storage, queue, events, config });
     await app.register(documentRoutes, { db, storage, chroma, queue, events, config });
     await app.register(folderRoutes, { db, chroma, events });
+    await app.register(siteRoutes, { db, chroma, storage, events, crawls });
     await app.register(apiKeyRoutes, { db });
+    await app.register(styleRoutes, { db });
     await app.register(providerRoutes, { db, config, fetchFn: providerFetch });
     await app.register(usageRoutes, { db });
     if (langflow) {

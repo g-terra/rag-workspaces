@@ -28,6 +28,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Workspace | `/v1/workspaces` | admin creates; members and keys see their own |
 | Folder | `/v1/workspaces/{slug}/folders` | reader to list, editor to change |
 | Document | `/v1/workspaces/{slug}/documents` | editor to change, reader to list |
+| Site (imported website) | `/v1/workspaces/{slug}/sites` | editor to change, reader to list |
 | Passage | `/v1/workspaces/{slug}/passages` | reader |
 | Answer (+ feedback) | `/v1/workspaces/{slug}/answers` | reader; an answer is visible only to whoever asked and to admins |
 | Conversation (+ messages) | `/v1/workspaces/{slug}/conversations` | reader; a conversation is visible only to whoever started it and to admins |
@@ -37,7 +38,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Provider key | `/v1/workspaces/{slug}/providers`, `/v1/providers/{provider}/models` | admin |
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
-| Response style | `/v1/styles` | anyone authenticated |
+| Response style | `/v1/styles` | anyone authenticated to list; admins create, change and delete custom ones |
 
 Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down. The admin UI's workspace Settings screen reads it for its provider and model pickers, and shows `defaults.workspace` (from `DEFAULT_CHUNK_SIZE`, `DEFAULT_CHUNK_OVERLAP`, `DEFAULT_TOP_K`, `DEFAULT_MIN_SCORE` and the built-in system prompt) as the value an empty setting uses.
 
@@ -167,7 +168,7 @@ A hosted provider's key can be saved for one workspace from the admin UI, and th
 { "id": "ans_01J…", "workspace": "ouc", "question": "…", "text": "Retrieval-augmented generation combines …",
   "status": "complete", "grounded": true,
   "citations": [ { "rank": 1, "workspace": "ouc", "passageId": "psg_01J…", "documentId": "doc_01J…", "documentTitle": "Week 3 slides",
-                   "page": 12, "startSeconds": null, "snippet": "RAG retrieves relevant passages …", "score": 0.83 } ],
+                   "sourceUrl": null, "page": 12, "startSeconds": null, "snippet": "RAG retrieves relevant passages …", "score": 0.83 } ],
   "provider": "lmstudio", "model": "openai/gpt-oss-20b", "style": "academic",
   "usage": { "promptTokens": 1840, "completionTokens": 212 },
   "latencyMs": 2310, "timeToFirstTokenMs": null, "error": null, "feedback": null, "createdAt": "…" }
@@ -175,7 +176,7 @@ A hosted provider's key can be saved for one workspace from the admin UI, and th
 
 `folderId` (optional) uses only passages from that folder's documents; a folder that isn't in the workspace is `404`, here and on passages and messages.
 
-- Citations are the passages that were given to the model, in rank order; `rank` is the `[n]` the text may cite. `page` is set for PDFs and `startSeconds` (the second the passage starts at) for video and audio, otherwise each is `null`; passages carry the same two fields; a citation's `documentId` leads to its folder.
+- Citations are the passages that were given to the model, in rank order; `rank` is the `[n]` the text may cite. `page` is set for PDFs and `startSeconds` (the second the passage starts at) for video and audio, otherwise each is `null`; passages carry the same two fields; a citation's `documentId` leads to its folder. `sourceUrl` is the page's address for a passage from an imported website (a `web` document), so a client can link the citation to the page; it is `null` for uploads. Passages carry it too.
 - Every answer is stored, failures too (`status: "failed"` with `error`), so usage counts them; the caller still gets the error status.
 - An answer, and a conversation, is visible only to the person or key that created it, and to admins; anyone else gets `404`.
 - When nothing in the workspace scores above `minScore`, the answer is still `201` with `"grounded": false`, a fixed "not found in this workspace" text and empty citations; the chat model is not called.
@@ -191,6 +192,15 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
 
 `GET /v1/styles` lists the styles an answer can be written in, to any signed-in person or API key (instructions included): `{ "data": [{ "slug": "academic", "name": "Academic", "description": "…", "instructions": "…", "builtIn": true }] }`. Four are built in: `academic`, `talkative`, `concise` and `tutor`. A style changes tone, length and format only. Its instructions are added after the workspace's system prompt, behind a header that repeats the built-in prompt's grounding rules (cite with `[n]`, use only the passages, complete lists, say only that the material does not cover it), so no style can switch citations or refusals off. A workspace with its own system prompt gets only "every rule above still applies", so its rules are not mixed with the built-in ones. The fixed "not found" reply is the same in every style.
 
+| Method | Path | Does |
+|---|---|---|
+| GET | `/v1/styles` | Built-in styles, then custom ones by name |
+| POST | `/v1/styles` | Admins: create a custom style, `{ "slug", "name", "description", "instructions" }` (instructions up to 2,000 characters). A taken slug, built-ins included, is `409` |
+| PATCH | `/v1/styles/{slug}` | Admins: change `name`, `description` or `instructions`. Built-ins are `403` |
+| DELETE | `/v1/styles/{slug}` | Admins: `204`; `409` while a workspace uses it as `settings.style`. Built-ins are `403` |
+
+Custom styles are shared by every workspace. Answers keep the slug of the style they used, even after it is changed or deleted.
+
 ## Material
 
 | Method | Path | Does |
@@ -204,15 +214,18 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/file` | Download the original |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/transcript` | The timed transcript of a video or audio file: `{ "language": "en", "segments": [{ "start": 0, "end": 4.3, "text": "…" }] }` (seconds). `404` for other types and until it is transcribed |
 | GET | `/v1/workspaces/{slug}/documents/events` | Live status changes (server-sent events); see below |
+| GET, POST | `/v1/workspaces/{slug}/sites` | List imported websites; import one (`{ "url", "folderId"?, "maxPages"?, "maxDepth"?, "excludePaths"? }`, `202`, the crawl runs in the background; `409` for a start URL the workspace already has) |
+| GET, PATCH, DELETE | `/v1/workspaces/{slug}/sites/{siteId}` | Read with its crawl counters; change limits or folder (a folder change moves the existing pages; `409` while crawling); remove it with all its pages (`409` while crawling or while a page is processing) |
+| POST | `/v1/workspaces/{slug}/sites/{siteId}/crawl` | Crawl again: changed pages are re-ingested, new ones added, gone ones removed; `202`, or `409` while queued or crawling |
 
 ```json
 { "id": "doc_01J…", "workspace": "ouc", "folderId": "fld_01J…", "title": "Week 3 slides",
   "fileName": "week3.pdf", "type": "pdf", "sizeBytes": 2483011, "sha256": "9f2c…",
   "status": "processing", "attempts": 1, "error": null, "passageCount": null,
-  "tags": ["rag"], "createdAt": "…", "updatedAt": "…" }
+  "tags": ["rag"], "siteId": null, "sourceUrl": null, "createdAt": "…", "updatedAt": "…" }
 ```
 
-`type` is `pdf`, `docx`, `txt`, `md`, or with the video profile `mp4`, `mp3` or `wav` (without it those get `415`). `status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit (`MAX_UPLOAD_BYTES`, 2 GB by default) return `413` with the limit in `detail`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. `folderId` is `null` for a document at the top level.
+`type` is `pdf`, `docx`, `txt`, `md`, or with the video profile `mp4`, `mp3` or `wav` (without it those get `415`); `web` is a page of an imported website, with `siteId` and `sourceUrl` (the page's address) set, and stored as the Markdown it was turned into. `status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit (`MAX_UPLOAD_BYTES`, 2 GB by default) return `413` with the limit in `detail`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. `folderId` is `null` for a document at the top level.
 
 The events stream (`text/event-stream`, read with `fetch` since `EventSource` can't send `Authorization`) sends:
 
@@ -223,6 +236,34 @@ The events stream (`text/event-stream`, read with `fetch` since `EventSource` ca
 | `removed` | `{ "id": "doc_01J…" }` | A document was deleted |
 
 A document that finished or was deleted while a client was disconnected is not in the next snapshot, so a client that was following it fetches it with `GET …/documents/{documentId}` (`404` means it was deleted). Comments (`: keep-alive`) arrive every 15 seconds.
+
+### Imported websites
+
+A site is a documentation website crawled into the workspace, one document per page
+(docs/specs/2026-11-23-docs-website-import.md). Its **scope** is the start URL's directory (`https://auth0.com/docs`
+gives `https://auth0.com/docs/`): only pages on that host under that path are fetched, minus `excludePaths` (path
+prefixes such as translations, `/docs/fr-ca/`). The crawl honours robots.txt, starts from the sitemap when there is
+one, waits `CRAWL_DELAY_MS` (1 s by default, longer if robots.txt asks) between requests, and stops after `maxPages`
+(default 1000, at most 10,000) pages or `maxDepth` (default 10, at most 20) links from the start. When the site
+publishes `llms.txt`, each page's own Markdown (`<page>.md`) is used. Fetching goes through Langflow (`rw-fetch`),
+whose SSRF guard refuses private addresses.
+
+```json
+{ "id": "site_01J…", "workspace": "auth0", "folderId": null, "startUrl": "https://auth0.com/docs",
+  "scope": "https://auth0.com/docs/", "excludePaths": ["/docs/fr-ca/", "/docs/ja-jp/", "/docs/ko-kr/"],
+  "maxPages": 1000, "maxDepth": 10, "status": "crawling",
+  "pages": { "found": 2311, "fetched": 340, "new": 338, "changed": 0, "unchanged": 0, "removed": 0, "failed": 2 },
+  "documentCount": 338, "lastError": "https://auth0.com/docs/x: HTTP 500", "crawledAt": null,
+  "createdAt": "…", "updatedAt": "…" }
+```
+
+`status` is `queued`, `crawling`, `ready` or `failed` (`lastError` says why: the start URL answered 404, robots.txt
+disallows it, Langflow could not be reached). Pages appear in the documents list as they are found and are ingested
+like uploads, so the events stream shows their progress. Crawling again fetches every page the site has (even pages
+nothing links to any more) and re-ingests only pages whose content changed. It leaves a page alone while it is
+being ingested, and removes a page only when it answers 404 or 410, robots.txt now disallows it, or `excludePaths`
+now leaves it out; a page that errors or lies beyond `maxPages` keeps what it had. Pages are deduplicated within
+their site, not against uploads. The start URL must not carry a user name or password.
 
 ## Usage analytics
 

@@ -25,6 +25,8 @@ function doc(over: Partial<Document> = {}): Document {
     error: null,
     passageCount: null,
     tags: [],
+    siteId: null,
+    sourceUrl: null,
     createdAt: '2026-11-22T10:00:00.000Z',
     updatedAt: '2026-11-22T10:00:00.000Z',
     ...over,

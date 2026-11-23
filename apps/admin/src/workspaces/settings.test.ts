@@ -195,6 +195,13 @@ describe('validateSettings', () => {
     });
   });
 
+  it('sends a picked default response style, and null when it goes back to none', () => {
+    expect(ok({ ...formFor(workspace()), style: 'academic' })).toEqual({ settings: { style: 'academic' } });
+    const set = workspace({ settings: { ...workspace().settings, style: 'tutor' } });
+    expect(formFor(set).style).toBe('tutor');
+    expect(ok({ ...formFor(set), style: '' }, set)).toEqual({ settings: { style: null } });
+  });
+
   it('refuses an overlap that is not smaller than the chunk size', () => {
     expect(errors({ ...formFor(workspace()), chunkSize: '400', chunkOverlap: '400' })).toEqual({
       chunkOverlap: 'Use less than the chunk size (400).',
