@@ -14,18 +14,22 @@ describe('checkFile', () => {
     expect(checkFile({ name: 'Makefile', size: 10 })).toBe('Not a supported file. Use PDF, DOCX, TXT or MD.');
   });
 
-  it('refuses empty files and files over 200 MB', () => {
+  it('refuses empty files and files over 2 GB', () => {
     expect(checkFile({ name: 'a.md', size: 0 })).toBe('The file is empty.');
-    expect(checkFile({ name: 'a.pdf', size: 200 * 1024 * 1024 })).toBeNull();
-    expect(checkFile({ name: 'a.pdf', size: 200 * 1024 * 1024 + 1 })).toBe(
-      'Too large: the limit is 200 MB per file.',
+    expect(checkFile({ name: 'a.pdf', size: 2 * 1024 ** 3 })).toBeNull();
+    expect(checkFile({ name: 'a.pdf', size: 2 * 1024 ** 3 + 1 })).toBe(
+      'Too large: the limit is 2 GB per file.',
     );
   });
 });
 
 describe('uploadErrorMessage', () => {
   it('puts 413 and 415 in words', () => {
-    expect(uploadErrorMessage(413, 'x')).toBe('Too large: the limit is 200 MB per file.');
+    // The server's own limit may be lower than the default, so its words win.
+    expect(uploadErrorMessage(413, '"a.pdf" is larger than the upload limit of 500 MB.')).toBe(
+      'Too large: "a.pdf" is larger than the upload limit of 500 MB.',
+    );
+    expect(uploadErrorMessage(413, '')).toBe('Too large: the limit is 2 GB per file.');
     expect(uploadErrorMessage(415, 'x')).toBe('Not a supported file. Use PDF, DOCX, TXT or MD.');
   });
 

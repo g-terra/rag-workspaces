@@ -159,6 +159,8 @@ services:
       # Per person or API key, per minute: all /v1 requests, and those that run a model. 0 is off.
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-600}
       RATE_LIMIT_MODEL_PER_MINUTE: ${RATE_LIMIT_MODEL_PER_MINUTE:-30}
+      # Largest upload in bytes, 2 GB by default; the web service gets the same value.
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-2147483648}
       USAGE_QUESTION_RETENTION_DAYS: ${USAGE_QUESTION_RETENTION_DAYS:-90}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
@@ -184,6 +186,8 @@ services:
     depends_on:
       api: { condition: service_healthy }
     ports: ['127.0.0.1:${WEB_PORT:-8080}:8080']
+    environment:
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-2147483648}
     healthcheck:
       <<: *healthcheck
       test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:8080/']

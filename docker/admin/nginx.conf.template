@@ -1,12 +1,14 @@
 # Serves the admin UI and forwards /api/* to the API, so the browser only ever
 # talks to one origin (no CORS) and the API stays reachable for scripts on :3000.
+# A template: the nginx image fills in ${MAX_UPLOAD_BYTES} from the environment when it starts, and
+# leaves nginx's own variables ($host, $uri) alone because they aren't set in the environment.
 server {
   listen 8080;
   server_name _;
   root /usr/share/nginx/html;
 
-  # Uploads go through here too (M1); keep in step with the API's upload limit.
-  client_max_body_size 200m;
+  # Uploads go through here too: the same limit as the API (compose passes MAX_UPLOAD_BYTES to both).
+  client_max_body_size ${MAX_UPLOAD_BYTES};
 
   location /api/ {
     proxy_pass http://api:3000/;
@@ -16,6 +18,8 @@ server {
     proxy_set_header X-Forwarded-Proto $scheme;
     # Streamed answers and ingestion status are server-sent events: don't buffer them.
     proxy_buffering off;
+    # Pass uploads straight on instead of first writing them to a temp file here (videos can be 2 GB).
+    proxy_request_buffering off;
     proxy_read_timeout 1h;
   }
 
