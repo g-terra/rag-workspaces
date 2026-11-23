@@ -17,6 +17,8 @@
     "format:check": "prettier --check .",
     "prepare": "husky || true",
     "env:init": "node scripts/env-init.ts",
+    "setup": "node scripts/setup.ts",
+    "test:scripts": "node --test \"scripts/**/*.test.ts\"",
     "smoke": "node scripts/smoke/run.ts",
     "e2e": "node scripts/smoke/e2e.ts"
   },

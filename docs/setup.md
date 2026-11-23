@@ -18,10 +18,24 @@ together, most of it Keycloak and Langflow. The models LM Studio loads come on t
 
 ## 1. Start the stack
 
+The quick way is the setup wizard, which does steps 1 and 2 for you:
+
 ```bash
 git clone https://github.com/g-terra/rag-workspaces.git
 cd rag-workspaces
 pnpm install             # tools, plus the commit-message hook
+pnpm run setup           # not `pnpm setup`, which is pnpm's own command
+```
+
+It checks Node and Docker, checks the ports are free (naming the program that holds one), writes `.env`,
+asks for the chat and embedding provider and model (listing the models LM Studio has loaded, or asking for
+a hosted provider's key without showing it), starts the stack, waits for the API and prints where to sign
+in. Run it again at any time to change the models or fix a broken setup: it keeps every secret and offers
+the current values as defaults. `pnpm run setup --yes` asks nothing and keeps what `.env` has.
+
+By hand, the same is:
+
+```bash
 pnpm env:init            # writes .env with fresh random passwords and keys
 docker compose up -d     # the first start pulls about 2 GB of images and takes a few minutes
 docker compose ps        # wait until every service says (healthy)
@@ -98,7 +112,7 @@ Claude Code and other MCP clients.
 | To | Run |
 |---|---|
 | Stop, keeping your data | `docker compose down` |
-| Update | `git pull`, `pnpm env:init`, `docker compose up -d --build` (migrations run when the API starts) |
+| Update | `git pull`, then `pnpm run setup --yes`, or `pnpm env:init` and `docker compose up -d --build` (migrations run when the API starts) |
 | Delete everything | `docker compose down -v` |
 
 Keycloak reads `docker/keycloak/realm.json` only into an empty database, so the README's "Updating an

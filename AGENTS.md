@@ -79,16 +79,18 @@ package and caches the results.
 
 ```sh
 pnpm install          # dependencies, plus the commit-message hook
+pnpm run setup        # guided setup: .env, models, start the stack (`--yes` for no questions)
 pnpm format:check     # Prettier (pnpm format to fix)
 pnpm lint             # ESLint
 pnpm typecheck        # tsc --noEmit
 pnpm test             # Vitest
+pnpm test:scripts     # node:test for scripts/ (no package of their own)
 pnpm build
 pnpm smoke            # whole compose stack + stand-in model, end to end (Docker, ~5 min)
 pnpm e2e              # admin UI Playwright tests on that same stack (Docker + Chromium)
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same five checks on every pull request. Run them before you
+CI (`.github/workflows/ci.yml`) runs the same six checks on every pull request. Run them before you
 push. The smoke test (`.github/workflows/smoke.yml`) runs on pull requests that touch the stack
 (`apps/api`, `packages`, `flows`, `langflow`, `docker`, the compose files) and nightly on `main`; run
 it locally before pushing such a change. `pnpm smoke --keep` leaves its stack running on ports 13000

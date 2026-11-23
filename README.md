@@ -52,6 +52,14 @@ for scripts and agents calling the API are in [docs/api.md](docs/api.md).
 Requirements: Docker with Compose, about 6 GB of free RAM for the containers, and LM Studio on the host (from M1).
 
 ```bash
+pnpm install
+pnpm run setup           # checks the machine, writes .env, picks the models, starts the stack
+```
+
+`pnpm run setup` asks a few questions and can be run again at any time; it keeps your secrets (`--yes` takes
+the defaults without asking). By hand, the same is:
+
+```bash
 pnpm env:init            # once: writes .env with fresh random secrets (or: node scripts/env-init.ts)
 docker compose up -d     # first start pulls about 2 GB of images and takes a few minutes
 docker compose ps        # every service should say (healthy)
