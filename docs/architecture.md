@@ -94,7 +94,7 @@ The provider is a setting, not code. LM Studio is the default and needs no key.
 - **A hosted provider sends that workspace's passages and questions to the provider.** The workspace settings screen says so in plain words, and a workspace on LM Studio stays fully local.
 - How the flows switch provider was settled by the M0 spike (`poc/RESULTS.md` F7): one custom "Workspace Chat Model" node builds the right LangChain client for `lmstudio`, `openai`, `anthropic` or `gemini`. The API reads provider keys from `.env` and sends provider, model, key and base URL as tweaks on that node, so keys never sit in Langflow's environment (Langflow 1.13 refuses to send environment keys to non-OpenAI hosts, F3).
 
-Published ports: only `web` (8080), `api` (3000), `keycloak` (8081) and `langflow` (7860) are published, all bound to `127.0.0.1` by default. `postgres`, `chroma` and `whisper` are reachable only on the compose network. Every service has a healthcheck, and `api` waits for postgres, chroma, langflow and keycloak to be healthy before it starts.
+Published ports: only `proxy` (80), `web` (8080), `api` (3000), `keycloak` (8081) and `langflow` (7860) are published, all bound to `127.0.0.1` by default. `proxy` is Caddy giving the stack local names over plain HTTP: `rag.localhost` (admin UI), `api.rag.localhost`, `auth.rag.localhost` (Keycloak, and the token issuer by default) and `langflow.rag.localhost`. Browsers resolve `*.localhost` to the machine itself, so no hosts file or DNS is needed; the direct ports stay as a fallback, and the realm accepts sign-ins from `http://localhost:<WEB_PORT>` too. `postgres`, `chroma` and `whisper` are reachable only on the compose network. Every service has a healthcheck, and `api` waits for postgres, chroma, langflow and keycloak to be healthy before it starts.
 
 Footprint: Keycloak and Langflow each want roughly 1 to 2 GB of RAM on top of the models LM Studio loads. `docs/setup.md` states a minimum (16 GB recommended) and which services can be left out.
 
@@ -105,7 +105,7 @@ Easy start:
 pnpm env:init                          # writes .env with fresh secrets
 docker compose up -d --build           # core stack
 docker compose --profile video up -d   # plus video transcription (M5, not built yet)
-# Admin UI http://localhost:8080 · Swagger http://localhost:3000/docs · Langflow http://localhost:7860
+# Admin UI http://rag.localhost · Swagger http://api.rag.localhost/docs · Langflow http://langflow.rag.localhost
 ```
 
 ## Workspaces
