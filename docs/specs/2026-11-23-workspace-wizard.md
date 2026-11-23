@@ -2,7 +2,7 @@
 title: set up a new workspace step by step
 date: 2026-11-23
 pr: "#98"
-status: merged
+status: superseded by 2026-11-23-wizard-steps.md
 areas: [admin, api, docs]
 ---
 
