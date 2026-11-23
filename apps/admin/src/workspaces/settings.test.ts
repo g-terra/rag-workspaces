@@ -25,6 +25,8 @@ const workspace = (over: Partial<Workspace> = {}): Workspace => ({
   slug: 'ouc',
   name: 'OUC study material',
   description: 'MSc modules',
+  kind: 'standard',
+  sources: null,
   status: 'active',
   access: 'admin',
   createdAt: '2026-11-01T00:00:00.000Z',

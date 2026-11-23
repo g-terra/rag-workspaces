@@ -1,6 +1,7 @@
 import {
   apiKeys,
   apiKeyWorkspaces,
+  compositeSources,
   newId,
   workspaceMembers,
   workspaces,
@@ -29,6 +30,7 @@ import { ChromaService } from '../services/chroma.js';
 import type { DocumentEvents } from '../services/document-events.js';
 import type { IngestQueue } from '../services/ingest-queue.js';
 import { startReindex } from '../services/reindex.js';
+import { requireStandard, setSources, sourcesOf } from '../services/composites.js';
 import { embeddingPrefixes } from '../services/providers.js';
 import type { UploadStorage } from '../services/storage.js';
 import { findStyle } from '../services/styles.js';
@@ -54,7 +56,9 @@ const SlugParams = z.object({ slug: WorkspaceSlug });
 const MemberParams = SlugParams.extend({ userId: z.string().min(1).max(100) });
 const common = { tags: ['workspaces'], security: [{ bearerAuth: [] }] };
 
-const UNSET: Omit<WorkspaceSettings, 'embeddingProvider' | 'embeddingModel'> = {
+const UNSET: WorkspaceSettings = {
+  embeddingProvider: null,
+  embeddingModel: null,
   embeddingPrefixes: null,
   chatProvider: null,
   chatModel: null,
@@ -71,11 +75,13 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
   app,
   { db, chroma, storage, queue, events, config },
 ) => {
-  const toApi = (w: WorkspaceRow, access: Access): Workspace => ({
+  const toApi = (w: WorkspaceRow, access: Access, sources: WorkspaceRow[]): Workspace => ({
     id: w.id,
     slug: w.slug,
     name: w.name,
     description: w.description,
+    kind: w.kind,
+    sources: w.kind === 'composite' ? sources.map((s) => s.slug) : null,
     status: w.status,
     settings: { ...UNSET, ...w.settings } as WorkspaceSettings,
     access,
@@ -92,10 +98,13 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
     async (req) => {
       const p = req.principal!;
       const rows = await db.select().from(workspaces).orderBy(asc(workspaces.slug));
+      const links = await db.select().from(compositeSources).orderBy(asc(compositeSources.position));
+      const byId = new Map(rows.map((w) => [w.id, w]));
       const visible = [];
       for (const w of rows) {
         const access = await accessTo(db, p, w);
-        if (access) visible.push(toApi(w, access));
+        const sources = links.filter((l) => l.compositeId === w.id).map((l) => byId.get(l.sourceId)!);
+        if (access) visible.push(toApi(w, access, sources));
       }
       return { data: visible, nextCursor: null };
     },
@@ -110,33 +119,50 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
         summary: 'Create a workspace',
         description:
           'Creates the workspace and its Chroma collection (`ws_<slug>`). The slug never changes. ' +
-          'The embedding provider and model are pinned now, from the request or the defaults in `.env`.',
+          'The embedding provider and model are pinned now, from the request or the defaults in `.env`. ' +
+          'With `kind: "composite"` and `sources` (two to ten standard workspaces) it holds no documents and ' +
+          'no collection, and answers from its sources instead; embedding, chunking and `minScore` are theirs.',
         body: CreateWorkspace,
         response: { 201: Workspace },
       },
     },
     async (req, reply) => {
       const admin = currentUser(req);
-      const { slug, name, description, settings = {} } = req.body;
+      const { slug, name, description, kind = 'standard', sources, settings = {} } = req.body;
       if (settings.style) findStyle(settings.style);
       const [taken] = await db
         .select({ id: workspaces.id })
         .from(workspaces)
         .where(eq(workspaces.slug, slug));
       if (taken) throw new HttpProblem(409, `The slug "${slug}" is taken.`);
+      const composite = kind === 'composite';
       const embeddingModel = settings.embeddingModel ?? config.DEFAULT_EMBEDDING_MODEL;
-      const pinned = {
-        ...settings,
-        embeddingProvider: settings.embeddingProvider ?? config.DEFAULT_EMBEDDING_PROVIDER,
-        embeddingModel,
-        embeddingPrefixes: embeddingPrefixes(embeddingModel, config),
-      };
-      // Collection first: if Chroma is down nothing is half-created in Postgres.
-      await chroma.ensureCollection(ChromaService.collectionName(slug));
-      const [row] = await db
-        .insert(workspaces)
-        .values({ id: newId('workspace'), slug, name, description: description ?? null, settings: pinned })
-        .returning()
+      const pinned = composite
+        ? { ...settings, embeddingPrefixes: undefined }
+        : {
+            ...settings,
+            embeddingProvider: settings.embeddingProvider ?? config.DEFAULT_EMBEDDING_PROVIDER,
+            embeddingModel,
+            embeddingPrefixes: embeddingPrefixes(embeddingModel, config),
+          };
+      // Collection first: if Chroma is down nothing is half-created in Postgres. A composite has none.
+      if (!composite) await chroma.ensureCollection(ChromaService.collectionName(slug));
+      const created = await db
+        .transaction(async (tx) => {
+          const [row] = await tx
+            .insert(workspaces)
+            .values({
+              id: newId('workspace'),
+              slug,
+              name,
+              kind,
+              description: description ?? null,
+              settings: pinned as WorkspaceRow['settings'],
+            })
+            .returning();
+          if (composite) await setSources(tx, row!, sources!);
+          return { row: row!, sources: await sourcesOf(tx, row!) };
+        })
         .catch((err: unknown) => {
           // Two creates racing for one slug: the second loses at the unique index.
           if (
@@ -146,8 +172,8 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
             throw new HttpProblem(409, `The slug "${slug}" is taken.`);
           throw err;
         });
-      req.log.info({ workspace: slug, by: admin.id }, 'workspace created');
-      return reply.status(201).send(toApi(row!, 'admin'));
+      req.log.info({ workspace: slug, kind, by: admin.id }, 'workspace created');
+      return reply.status(201).send(toApi(created.row, 'admin', created.sources));
     },
   );
 
@@ -156,7 +182,7 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
     { schema: { ...common, summary: 'One workspace', params: SlugParams, response: { 200: Workspace } } },
     async (req) => {
       const { workspace, access } = await requireWorkspace(db, req.principal, req.params.slug, 'reader');
-      return toApi(workspace, access);
+      return toApi(workspace, access, await sourcesOf(db, workspace));
     },
   );
 
@@ -167,7 +193,9 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
         ...common,
         summary: 'Update name, description or settings',
         description:
-          'Settings are merged: send only what changes; `null` returns a setting to the global default.',
+          'Settings are merged: send only what changes; `null` returns a setting to the global default. ' +
+          "`sources` replaces a composite's sources (refused for a standard workspace, and so are chunking " +
+          'and `minScore` for a composite).',
         params: SlugParams,
         body: UpdateWorkspace,
         response: { 200: Workspace },
@@ -175,15 +203,28 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
     },
     async (req) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'admin');
-      if (req.body.settings?.style) findStyle(req.body.settings.style);
+      const { sources, settings } = req.body;
+      if (settings?.style) findStyle(settings.style);
+      if (workspace.kind === 'standard' && sources)
+        throw new HttpProblem(
+          400,
+          `"${workspace.slug}" is a standard workspace: only a composite has sources.`,
+        );
+      const own = (['chunkSize', 'chunkOverlap', 'minScore'] as const).find(
+        (k) => workspace.kind === 'composite' && settings?.[k] != null,
+      );
+      if (own) throw new HttpProblem(400, `A composite has no ${own}: each source uses its own.`);
       const set: Partial<typeof workspaces.$inferInsert> = {};
       if (req.body.name !== undefined) set.name = req.body.name;
       if (req.body.description !== undefined) set.description = req.body.description;
-      if (req.body.settings) set.settings = { ...workspace.settings, ...req.body.settings };
-      const [row] = Object.keys(set).length
-        ? await db.update(workspaces).set(set).where(eq(workspaces.id, workspace.id)).returning()
-        : [workspace];
-      return toApi(row!, 'admin');
+      if (settings) set.settings = { ...workspace.settings, ...settings };
+      return db.transaction(async (tx) => {
+        const [row] = Object.keys(set).length
+          ? await tx.update(workspaces).set(set).where(eq(workspaces.id, workspace.id)).returning()
+          : [workspace];
+        if (sources) await setSources(tx, workspace, sources);
+        return toApi(row!, 'admin', await sourcesOf(tx, row!));
+      });
     },
   );
 
@@ -207,12 +248,13 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
     },
     async (req, reply) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'admin');
+      requireStandard(workspace);
       const row = await startReindex({ db, chroma, queue, events, config }, workspace, req.body ?? {});
       req.log.info(
         { workspace: workspace.slug, by: req.principal?.id, embeddingModel: row.settings.embeddingModel },
         'workspace reindex started',
       );
-      return reply.status(202).send(toApi(row, 'admin'));
+      return reply.status(202).send(toApi(row, 'admin', []));
     },
   );
 
@@ -253,13 +295,15 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
         }
         await tx.delete(workspaces).where(eq(workspaces.id, workspace.id));
       });
-      try {
-        await chroma.deleteCollection(ChromaService.collectionName(workspace.slug));
-      } catch (err) {
-        // The workspace is gone either way; a leftover collection is harmless and `pnpm doctor` reports it.
-        req.log.warn({ err, workspace: workspace.slug }, 'could not delete the Chroma collection');
+      if (workspace.kind === 'standard') {
+        try {
+          await chroma.deleteCollection(ChromaService.collectionName(workspace.slug));
+        } catch (err) {
+          // The workspace is gone either way; a leftover collection is harmless and `pnpm doctor` reports it.
+          req.log.warn({ err, workspace: workspace.slug }, 'could not delete the Chroma collection');
+        }
+        await storage.removeWorkspace(workspace.slug);
       }
-      await storage.removeWorkspace(workspace.slug);
       req.log.info({ workspace: workspace.slug, by: req.principal?.id }, 'workspace deleted');
       return reply.status(204).send(null);
     },

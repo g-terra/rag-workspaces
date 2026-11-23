@@ -32,7 +32,11 @@ export function ReindexDialog({
   system?: SystemStatus;
   onOpenChange(open: boolean): void;
 }) {
-  const pinned = workspace.settings;
+  // Only a standard workspace has an embedding model (and this dialog); a composite's sources do.
+  const pinned = {
+    embeddingProvider: workspace.settings.embeddingProvider ?? 'lmstudio',
+    embeddingModel: workspace.settings.embeddingModel ?? '',
+  };
   const [provider, setProvider] = useState<EmbeddingProvider>(pinned.embeddingProvider);
   const [model, setModel] = useState(pinned.embeddingModel);
   const reindex = useReindexWorkspace(workspace.slug);

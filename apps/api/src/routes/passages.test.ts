@@ -303,4 +303,15 @@ describe.skipIf(!url)('passages (against TEST_DATABASE_URL)', () => {
     expect(p2.json()).toMatchObject({ data: [{ chunkIndex: 2 }], nextCursor: null });
     expect((await get(`/v1/workspaces/ouc/documents/${goneId}/passages`)).statusCode).toBe(404);
   });
+
+  it('a composite has no document passages of its own: 409', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/workspaces',
+      headers: { authorization: auth.admin },
+      payload: { slug: 'mix', name: 'Mix', kind: 'composite', sources: ['ouc', 'personal'] },
+    });
+    expect(res.statusCode).toBe(201);
+    expect((await get(`/v1/workspaces/mix/documents/${docId}/passages`, 'admin')).statusCode).toBe(409);
+  });
 });

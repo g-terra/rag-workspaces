@@ -3,6 +3,7 @@ import { Folder, FolderInput, WorkspaceSlug, page } from '@rag/shared';
 import { and, asc, count, eq, inArray } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { standardOnly } from '../services/composites.js';
 import { requireWorkspace } from '../auth/access.js';
 import { HttpProblem } from '../errors.js';
 import { ChromaService } from '../services/chroma.js';
@@ -22,6 +23,8 @@ export const folderRoutes: FastifyPluginAsyncZod<FolderRoutesOptions> = async (
   app,
   { db, chroma, events },
 ) => {
+  // A composite has no folders: its sources do.
+  app.addHook('preHandler', standardOnly(db));
   const toApi = (f: FolderRow, slug: string, documentCount: number): Folder => ({
     id: f.id,
     workspace: slug,

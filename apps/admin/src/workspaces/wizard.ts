@@ -106,6 +106,8 @@ const BLANK: Workspace = {
   slug: '',
   name: '',
   description: null,
+  kind: 'standard',
+  sources: null,
   status: 'active',
   access: 'admin',
   createdAt: '',
