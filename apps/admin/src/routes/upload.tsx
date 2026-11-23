@@ -10,6 +10,14 @@ import { StatusBadge } from '@/components/status-badge';
 import { TopBar } from '@/components/top-bar';
 import { Button } from '@/components/ui/button';
 import { ACCEPT, checkFile, uploadErrorMessage } from '@/documents/files';
+import {
+  filesFromInput,
+  planUpload,
+  skippedSummary,
+  walkEntries,
+  type EntryLike,
+  type PickedFile,
+} from '@/documents/folder-upload';
 import { createLimiter } from '@/documents/queue';
 import {
   initialSession,
@@ -54,8 +62,8 @@ export function Upload() {
         <div>
           <h1 className="mb-1.5 text-2xl font-semibold tracking-tight">Upload material</h1>
           <p className="text-muted-foreground text-sm">
-            Files are stored, checked for duplicates, then run through the Langflow ingest flow one at a time.
-            Status updates live.
+            Add files or whole folders. Files are stored, checked for duplicates, then run through the
+            Langflow ingest flow one at a time. Status updates live.
           </p>
         </div>
         {w.access === 'reader' ? (
@@ -79,6 +87,8 @@ function Uploader({ slug }: { slug: string }) {
   const [dragging, setDragging] = useState(false);
   const nextKey = useRef(0);
   const input = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
+  const [skipped, setSkipped] = useState<string | null>(null);
   const [queue] = useState(() => createLimiter(PARALLEL_UPLOADS));
   const abort = useRef(new AbortController());
 
@@ -118,9 +128,13 @@ function Uploader({ slug }: { slug: string }) {
       for (const id of missingFromSnapshot(session, event.documents)) void catchUp(id);
   });
 
-  function addFiles(list: FileList | null) {
-    const files = [...(list ?? [])].map((file) => ({
+  /** Queues what was picked or dropped; inside folders, unsupported files are only counted. */
+  function addFiles(picked: PickedFile[]) {
+    const plan = planUpload(picked);
+    setSkipped(skippedSummary(plan.skipped));
+    const files = plan.files.map(({ file, path }) => ({
       file,
+      path,
       key: String(nextKey.current++),
       error: checkFile(file),
     }));
@@ -129,7 +143,7 @@ function Uploader({ slug }: { slug: string }) {
       type: 'added',
       files: files.map((f) => ({
         key: f.key,
-        name: f.file.name,
+        name: f.path,
         sizeBytes: f.file.size,
         error: f.error ?? undefined,
       })),
@@ -178,7 +192,15 @@ function Uploader({ slug }: { slug: string }) {
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setDragging(false);
-    addFiles(e.dataTransfer.files);
+    // The item list empties once this handler returns, so take the entries now and walk them after.
+    const entries = [...e.dataTransfer.items]
+      .map((item) => item.webkitGetAsEntry?.() as EntryLike | null | undefined)
+      .filter((entry): entry is EntryLike => !!entry);
+    if (!entries.length) {
+      addFiles(filesFromInput(e.dataTransfer.files));
+      return;
+    }
+    void walkEntries(entries).then(addFiles);
   };
 
   return (
@@ -201,11 +223,16 @@ function Uploader({ slug }: { slug: string }) {
         <span className="bg-background inline-flex size-12 items-center justify-center rounded-xl border">
           <UploadIcon className="size-5" />
         </span>
-        <p className="text-base font-semibold">Drop files here</p>
+        <p className="text-base font-semibold">Drop files or folders here</p>
         <p className="text-muted-foreground text-sm">PDF, DOCX, TXT, MD, MP4, MP3, WAV · up to 2 GB each</p>
-        <Button variant="outline" size="sm" onClick={() => input.current?.click()}>
-          Browse files
-        </Button>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => input.current?.click()}>
+            Browse files
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => folderInput.current?.click()}>
+            Browse folder
+          </Button>
+        </div>
         <input
           ref={input}
           type="file"
@@ -215,8 +242,21 @@ function Uploader({ slug }: { slug: string }) {
           className="sr-only"
           tabIndex={-1}
           onChange={(e) => {
-            addFiles(e.target.files);
+            addFiles(filesFromInput(e.target.files ?? []));
             // Lets the same file be chosen again, to see it skipped as a duplicate.
+            e.target.value = '';
+          }}
+        />
+        <input
+          ref={folderInput}
+          type="file"
+          // Picks a folder: the browser gives every file under it, with its path inside it.
+          {...{ webkitdirectory: '' }}
+          aria-label="Choose a folder to upload"
+          className="sr-only"
+          tabIndex={-1}
+          onChange={(e) => {
+            addFiles(filesFromInput(e.target.files ?? []));
             e.target.value = '';
           }}
         />
@@ -233,6 +273,12 @@ function Uploader({ slug }: { slug: string }) {
         <span>or</span>
         <StatusBadge tone="failed" label="Failed" />
       </div>
+
+      {skipped && (
+        <p role="status" className="text-muted-foreground text-sm">
+          {skipped}
+        </p>
+      )}
 
       {stopped && (
         <p role="alert" className="text-destructive text-sm">
@@ -266,7 +312,9 @@ function Uploader({ slug }: { slug: string }) {
                     {ext.slice(0, 4)}
                   </span>
                   <div className="min-w-0 flex-[1_1_260px]">
-                    <p className="truncate text-sm font-medium">{row.name}</p>
+                    <p className="truncate text-sm font-medium" title={row.name}>
+                      {row.name}
+                    </p>
                     <p
                       className={cn(
                         'mt-0.5 text-xs',

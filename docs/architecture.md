@@ -12,7 +12,7 @@ rag-workspaces is a general tool; its first use is the COS512 Langflow assignmen
 4. A resource-oriented REST API documented with OpenAPI/Swagger ([schema](api-schema.md)).
 5. Keycloak login for people, workspace-scoped API keys for agents and scripts.
 6. Usage analytics per workspace, per key and per user.
-7. Admin UI with drag-and-drop upload and live ingestion progress.
+7. Admin UI with drag-and-drop upload of files or whole folders, and live ingestion progress.
 8. Provider as a setting: LM Studio on the host by default; OpenAI, Google Gemini, Anthropic or any OpenAI-compatible endpoint by config, globally or per workspace.
 9. Tests at every layer, running in CI.
 10. A submittable assignment early: the brief is fully covered once the API, flows, analytics, tests and docs exist (milestone M2 in the [work breakdown](work-breakdown.md)). The admin UI, video and the rest build on top and must not put the hand-in at risk.
