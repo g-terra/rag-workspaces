@@ -17,7 +17,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Lists | `?limit=20&cursor=…` returns `{ "data": [...], "nextCursor": "…" | null }` |
 | Errors | RFC 9457 problem JSON: `{ "type", "title", "status", "detail", "requestId" }`; validation errors add `errors: [{ "path", "message" }]`. See [errors](#errors) |
 | Roles | One global role, `admin`. Inside a workspace, people and keys are `reader` or `editor` |
-| Rate limits *(planned)* | Per key and per user; `429` with `Retry-After` and `RateLimit-*` headers |
+| Rate limits | Per person and per API key, per minute: every `/v1` request counts against `RATE_LIMIT_PER_MINUTE` (600), and search, answers and chat messages also against `RATE_LIMIT_MODEL_PER_MINUTE` (30). Responses carry `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset` (seconds) for the tighter one; over it, `429` with `Retry-After` |
 | Streaming | `Accept: text/event-stream` on answers and messages streams `token`, `citations`, `done`, `error` events |
 | Tracing | Every response has `X-Request-Id`, also stored in the usage log |
 
@@ -33,11 +33,27 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Conversation (+ messages) | `/v1/workspaces/{slug}/conversations` | reader; a conversation is visible only to whoever started it and to admins |
 | Usage | `/v1/usage`, `/v1/workspaces/{slug}/usage` | admin (global), editor (own workspace) |
 | User | `/v1/users` | admin |
-| System *(planned)* | `/v1/system` | admin |
+| System | `/v1/system` | admin |
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
 
-Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow, Keycloak and the model provider, including whether the configured models are available.
+Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down.
+
+```json
+// GET /v1/system → 200 (admin only)
+{ "version": "0.4.0", "status": "degraded",
+  "services": [{ "name": "postgres", "ok": true, "latencyMs": 2, "error": null },
+               { "name": "langflow", "ok": false, "latencyMs": 15, "error": "flows missing in Langflow: rw-chat" }],
+  "langflowKey": "auto",
+  "providers": [{ "id": "lmstudio", "configured": true, "reachable": true, "error": null, "embeddings": true,
+                  "models": ["qwen2.5-7b-instruct", "text-embedding-nomic-embed-text-v1.5"] },
+                { "id": "openai", "configured": false, "reachable": null, "error": "OPENAI_API_KEY is not set",
+                  "embeddings": true, "models": [] }],
+  "defaults": { "chat": { "provider": "lmstudio", "model": "qwen2.5-7b-instruct", "available": true },
+                "embedding": { "provider": "lmstudio", "model": "text-embedding-nomic-embed-text-v1.5", "available": true } } }
+```
+
+`providers` always lists `lmstudio`, `openai`, `gemini` and `anthropic`; a hosted one is asked only when its key is set, and keys are never returned. `langflowKey` is `auto` (minted at start), `env` (`LANGFLOW_API_KEY`) or `none` (not yet). `/ready` does not ask the model providers, so a stopped LM Studio shows here but doesn't make the API unready.
 
 ## Workspaces
 
@@ -62,7 +78,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 ```
 
 - `slug` is 3 to 40 characters, lowercase letters, digits and hyphens, and cannot be changed after creation (the collection and the upload folder are named after it). A taken slug returns `409`.
-- `chatProvider` and `embeddingProvider` are one of the providers configured in `.env`: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the configured providers and their models; choosing one that is not configured returns `422`. Provider keys are never accepted or returned by the API.
+- `chatProvider` and `embeddingProvider` are one of the providers configured in `.env`: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the providers and the models each offers; choosing one whose key is not set returns `422`. Provider keys are never accepted or returned by the API.
 - `null` settings use the global defaults from `.env`. `embeddingProvider` and `embeddingModel` are the exception: they are filled in from the default when the workspace is created and are never `null` afterwards, so a later change to `.env` cannot silently break search in existing workspaces. `PATCH` refuses to change them (`400`); change them with workspace reindex, since vectors from two models can't be compared.
 - `chunkSize` and `chunkOverlap` apply to documents ingested after the change; reindex applies them to everything.
 - `status` is `active` or `reindexing`. While reindexing, passage search and reads, answers and chat messages return `503` with `Retry-After: 30`; the document list still works, so progress can be watched (each document goes `queued`, `processing`, `ready`).
@@ -187,7 +203,7 @@ Question text is kept for a configurable time (`USAGE_QUESTION_RETENTION_DAYS`, 
 | 404 | No such resource, or a workspace the caller has no access to |
 | 409 | Slug already taken; deleting or reindexing a document while it is processing; reindexing a workspace that is already reindexing; changing a revoked API key |
 | 413, 415 | File too large; file type not supported |
-| 429 | Rate limit |
+| 429 | Over a rate limit; `Retry-After` says how many seconds to wait |
 | 502, 504 | Langflow failed (or the model returned an empty answer) or timed out |
 | 503 | Langflow not ready yet (with `Retry-After`) or unreachable; a provider key missing; Keycloak unreachable; workspace reindexing |
 

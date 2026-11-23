@@ -24,7 +24,7 @@ as a stack of PRs), and each change has a spec in [docs/specs/](specs/) saying w
 
 | Built | Not built yet |
 |---|---|
-| Compose stack, `pnpm env:init`, API skeleton, readiness, `GET /v1/users` | `GET /v1/system`, rate limits |
+| Compose stack, `pnpm env:init`, API skeleton, readiness, `GET /v1/users`, `GET /v1/system`, rate limits | (all built) |
 | Keycloak auth, API keys, workspaces and workspace reindex, members, isolation | Folders, document `PATCH` |
 | Upload, dedupe, pg-boss ingestion, SSE status | Whisper and the `video` profile, transcripts |
 | Passages, answers (+ streaming, feedback), conversations (`rw-chat`) | Workspace `stats`, per-key request counts |
@@ -189,7 +189,7 @@ Rules that keep ingestion honest when things fail:
 - **The API** accepts `Authorization: Bearer <token or key>`. Anything starting with `rw_` is looked up as an API key; anything else must be a JWT verified against Keycloak's JWKS (issuer, audience, expiry).
 - **Issuer URL.** The browser reaches Keycloak at `localhost`, the API reaches it at `keycloak:8080`, and tokens carry the browser's URL as issuer. Keycloak gets a fixed public hostname, and the API fetches keys from the internal URL while checking the issuer against the public one. This is a common first-day failure, so the compose smoke test logs in for real.
 - **Streaming and auth.** The browser's `EventSource` cannot send an `Authorization` header, so the admin UI reads server-sent events with `fetch`.
-- **Rate limits.** Per key and per user, with `429` and `Retry-After`. Generous defaults; the point is that a looping agent cannot starve the one local model.
+- **Rate limits.** Per key and per person, in one-minute windows kept in the API's memory (`apps/api/src/rate-limit.ts`): 600 requests, of which 30 may run a model (search, answers, chat messages). Over a limit the API answers `429` with `Retry-After`. Generous defaults; the point is that a looping agent cannot starve the one local model.
 
 ## Trust boundaries
 
@@ -242,7 +242,7 @@ docker-compose.yml, turbo.json, pnpm-workspace.yaml, .env.example
 | AI flows | Langflow (ingest, retrieve, answer, chat), flow JSON versioned in `flows/` |
 | Vector DB | ChromaDB, one collection per workspace, reached from Langflow through our own components over Chroma's REST API |
 | Models | LM Studio on the host by default; OpenAI, Gemini, Anthropic (chat only) or any OpenAI-compatible endpoint as a setting, per workspace if wanted |
-| Auth | Keycloak (OIDC) for people, hashed API keys for agents, `@fastify/rate-limit` |
+| Auth | Keycloak (OIDC) for people, hashed API keys for agents, a small in-memory rate limiter |
 | Queue | pg-boss on Postgres (no Redis); live status from an in-process event emitter, since there is one API process |
 | App DB | Postgres + Drizzle ORM |
 | Transcription | faster-whisper ASR service + ffmpeg (optional profile) |

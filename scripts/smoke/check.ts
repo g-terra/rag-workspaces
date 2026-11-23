@@ -184,12 +184,36 @@ async function main() {
     const me = await call(token, 'GET', '/v1/me');
     expect(me.isAdmin === true, `expected isAdmin true, got ${JSON.stringify(me)}`);
   });
+  await step('responses carry the rate limit headers', async () => {
+    const res = await fetch(`${API}/v1/me`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    const limit = res.headers.get('ratelimit-limit');
+    expect(limit === '600' && res.headers.get('ratelimit-remaining'), `RateLimit-Limit: ${limit}`);
+  });
   await step('GET /v1/users lists the admin, read through the api-directory service account', async () => {
     const { data } = (await call(token, 'GET', `/v1/users?search=${env.RW_ADMIN_USERNAME}`)) as {
       data: { username: string; isAdmin: boolean }[];
     };
     const admin = data.find((u) => u.username === env.RW_ADMIN_USERNAME);
     expect(admin?.isAdmin === true, `expected the admin with isAdmin true, got ${JSON.stringify(data)}`);
+  });
+
+  await step('GET /v1/system: every service up, the stand-in lists the embedding model', async () => {
+    const system = await call(token, 'GET', '/v1/system');
+    const down = system.services.filter((s: { ok: boolean }) => !s.ok);
+    expect(!down.length, `services down: ${JSON.stringify(down)}`);
+    expect(system.langflowKey === 'auto', `expected a minted Langflow key, got ${system.langflowKey}`);
+    const lm = system.providers.find((p: { id: string }) => p.id === 'lmstudio');
+    expect(
+      lm?.reachable && lm.models.includes('standin-embed-a'),
+      `LM Studio stand-in: ${JSON.stringify(lm)}`,
+    );
+    expect(
+      system.defaults.embedding.available,
+      `embedding default: ${JSON.stringify(system.defaults.embedding)}`,
+    );
   });
 
   const slug = `smoke-${Date.now()}`;
