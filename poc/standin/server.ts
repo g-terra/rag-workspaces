@@ -7,6 +7,7 @@
 // - POST /v1/chat/completions: builds an "answer" from the prompt, and streams it
 //   word by word (SSE) when stream=true, with a delay so streaming is observable.
 // - POST /v1/messages: the same, in Anthropic's Messages API shape (incl. streaming).
+// - POST /asr: stands in for the Whisper ASR service; any file gets the same two timed segments.
 // - GET /_log: every request seen (path, model, stream flag), so the POC can
 //   prove which model name a Langflow tweak actually sent.
 //
@@ -80,6 +81,19 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
     if (req.method === 'GET' && url.pathname === '/_log') return send(res, 200, log);
     if (req.method === 'DELETE' && url.pathname === '/_log') { log.length = 0; return send(res, 200, { ok: true }); }
+    if (req.method === 'POST' && url.pathname === '/asr') {
+      let bytes = 0;
+      for await (const c of req) bytes += (c as Buffer).length;
+      log.push({ at: new Date().toISOString(), path: url.pathname, inputs: bytes });
+      return send(res, 200, {
+        language: 'en',
+        text: 'Welcome to the lecture on vector databases. Chroma stores embeddings with metadata.',
+        segments: [
+          { id: 0, start: 0, end: 3.2, text: ' Welcome to the lecture on vector databases.' },
+          { id: 1, start: 3.2, end: 7.5, text: ' Chroma stores embeddings with metadata.' },
+        ],
+      });
+    }
     if (req.method === 'GET' && url.pathname === '/v1/models') {
       return send(res, 200, { object: 'list', data: [
         { id: 'standin-embed-a', object: 'model' }, { id: 'standin-embed-b', object: 'model' },

@@ -9,6 +9,8 @@ import { ChromaService } from './services/chroma.js';
 import { DocumentEvents } from './services/document-events.js';
 import { IngestProcessor, PgBossIngestQueue } from './services/ingest.js';
 import { LangflowService } from './services/langflow.js';
+import { UploadStorage } from './services/storage.js';
+import { WhisperClient } from './services/whisper.js';
 import { UsageLog } from './usage/log.js';
 
 const config = loadConfig();
@@ -25,11 +27,14 @@ const database = createDb(config.DATABASE_URL);
 const langflow = new LangflowService({ config, log: logger.child({ component: 'langflow' }) });
 
 const chroma = new ChromaService(config);
+const storage = new UploadStorage(config.UPLOADS_DIR, config.MAX_UPLOAD_BYTES);
 const events = new DocumentEvents();
 const queue = new PgBossIngestQueue(
   config.DATABASE_URL,
   new IngestProcessor({
     db: database.db,
+    storage,
+    ...(config.WHISPER_URL ? { whisper: new WhisperClient(config.WHISPER_URL) } : {}),
     langflow: langflow.client,
     chroma,
     events,
@@ -49,6 +54,7 @@ const app = await buildApp({
   db: database.db,
   langflow: langflow.client,
   chroma,
+  storage,
   queue,
   events,
   authenticators: [

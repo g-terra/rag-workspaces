@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { WorkspaceSlug } from './common.js';
 
-export const DocumentType = z.enum(['pdf', 'docx', 'txt', 'md']);
+export const DocumentType = z.enum(['pdf', 'docx', 'txt', 'md', 'mp4', 'mp3', 'wav']);
 export const DocumentStatus = z.enum(['queued', 'transcribing', 'processing', 'ready', 'failed']);
 
 export const Document = z.object({
@@ -64,3 +64,18 @@ export type Folder = z.infer<typeof Folder>;
 /** Create or rename. Names are unique in a workspace, ignoring case. */
 export const FolderInput = z.object({ name: z.string().trim().min(1).max(100) }).strict();
 export type FolderInput = z.infer<typeof FolderInput>;
+
+/** `GET …/documents/{id}/transcript`: what Whisper heard in a video or audio file, as timed segments. */
+export const Transcript = z.object({
+  /** The language Whisper detected, e.g. `en`. */
+  language: z.string().nullable(),
+  segments: z.array(
+    z.object({
+      /** Seconds from the start, to one decimal. */
+      start: z.number(),
+      end: z.number(),
+      text: z.string(),
+    }),
+  ),
+});
+export type Transcript = z.infer<typeof Transcript>;

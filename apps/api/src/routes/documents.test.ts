@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { documents } from '@rag/db';
@@ -35,6 +35,9 @@ describe.skipIf(!url)('documents (against TEST_DATABASE_URL)', () => {
   const auth = { admin: '', reader: '', editor: '', stranger: '' };
   let chromaDown = false;
 
+  // Routes read WHISPER_URL per request, so a test can switch the video profile on.
+  const config = loadConfig({ NODE_ENV: 'test', MAX_UPLOAD_BYTES: '200000' });
+
   beforeAll(async () => {
     t = await createTestDatabase(url!);
     root = await mkdtemp(path.join(tmpdir(), 'uploads-'));
@@ -51,7 +54,7 @@ describe.skipIf(!url)('documents (against TEST_DATABASE_URL)', () => {
       return new Response(JSON.stringify({ id: 'cid' }), { status: 200 });
     }) as typeof fetch;
     app = await buildApp({
-      config: loadConfig({ NODE_ENV: 'test', MAX_UPLOAD_BYTES: '200000' }),
+      config,
       db: t.db,
       chroma: new ChromaService({ CHROMA_URL: 'http://chroma:8000' }, chromaFetch),
       storage: new UploadStorage(root, 200_000),
@@ -327,6 +330,37 @@ describe.skipIf(!url)('documents (against TEST_DATABASE_URL)', () => {
       ).statusCode,
     ).toBe(404);
     expect(await readdir(path.join(root, 'ouc'))).not.toContain(`${doc.id}.txt`);
+  });
+
+  it('video and audio need the video profile; with it they are stored, with a transcript route', async () => {
+    const wav = Buffer.concat([Buffer.from('RIFF\x24\x08\x00\x00WAVEfmt ', 'latin1'), Buffer.alloc(64)]);
+    const off = await upload([{ name: 'memo.wav', content: wav }]);
+    expect(off.statusCode).toBe(415);
+    expect(off.json().detail).toContain('video profile');
+
+    config.WHISPER_URL = 'http://whisper:9000';
+    try {
+      const res = await upload([{ name: 'memo.wav', content: wav }]);
+      expect(res.statusCode).toBe(201);
+      const doc = res.json().data[0].document;
+      expect(doc).toMatchObject({ type: 'wav', fileName: 'memo.wav', status: 'queued' });
+      // Not transcribed yet.
+      expect((await get(`/v1/workspaces/ouc/documents/${doc.id}/transcript`, 'reader')).statusCode).toBe(404);
+
+      const transcript = { language: 'en', segments: [{ start: 0, end: 2.5, text: 'Hello.' }] };
+      await writeFile(path.join(root, 'ouc', `${doc.id}.wav.transcript.json`), JSON.stringify(transcript));
+      const read = await get(`/v1/workspaces/ouc/documents/${doc.id}/transcript`, 'reader');
+      expect(read.statusCode).toBe(200);
+      expect(read.json()).toEqual(transcript);
+      const file = await get(`/v1/workspaces/ouc/documents/${doc.id}/file`, 'reader');
+      expect(file.headers['content-type']).toBe('audio/wav');
+
+      expect((await del(`/v1/workspaces/ouc/documents/${doc.id}`)).statusCode).toBe(204);
+      const left = await readdir(path.join(root, 'ouc'));
+      expect(left.filter((f) => f.startsWith(doc.id))).toEqual([]);
+    } finally {
+      config.WHISPER_URL = undefined;
+    }
   });
 
   it('400 for an empty file', async () => {

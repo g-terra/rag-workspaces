@@ -16,6 +16,8 @@ import type { DocumentEvents } from './document-events.js';
 import type { IngestQueue } from './ingest-queue.js';
 import { embeddingEndpoint } from './providers.js';
 import { finishReindexIfDone } from './reindex.js';
+import { isMedia, transcriptPath, type UploadStorage } from './storage.js';
+import type { WhisperClient } from './whisper.js';
 
 type IngestConfig = Pick<
   Config,
@@ -31,6 +33,9 @@ type IngestConfig = Pick<
 
 export type IngestDeps = {
   db: Database;
+  storage: UploadStorage;
+  /** Set when the video profile is on (`WHISPER_URL`); video and audio fail without it. */
+  whisper?: WhisperClient;
   langflow: LangflowClient;
   chroma: ChromaService;
   events: DocumentEvents;
@@ -59,6 +64,9 @@ type IngestResult = { document_id: string; chunks: number; pages: number | null 
  *   workspace reindex that sends the document back to `queued` mid-run wins: the stale run
  *   leaves the row alone and the queued job ingests it again into the new collection.
  * - The last document of a reindexing workspace to finish puts the workspace back to `active`.
+ * - Video and audio are `transcribing` first: Whisper's transcript is saved next to the file and
+ *   the flow ingests that instead, so passages carry start times. A transcript already on disk
+ *   (a retry, a reindex) is reused, since Whisper is the slow part.
  */
 export class IngestProcessor {
   constructor(private readonly deps: IngestDeps) {}
@@ -84,10 +92,15 @@ export class IngestProcessor {
     const { document, workspace } = row;
     const attempt = document.attempts + 1;
     // The claimed row, not the one read above: a move to another folder may have landed between.
-    const claimed = await this.update(document.id, { status: 'processing', attempts: attempt, error: null });
+    const media = isMedia(document.type);
+    const claimed = await this.update(document.id, {
+      status: media ? 'transcribing' : 'processing',
+      attempts: attempt,
+      error: null,
+    });
     if (!claimed) return 'gone';
     seen.workspaceId = workspace.id;
-    const claim = { attempts: attempt };
+    const claim = { attempts: attempt, status: 'processing' as const };
 
     const collection = ChromaService.collectionName(workspace.slug);
     const settings = workspace.settings;
@@ -95,6 +108,12 @@ export class IngestProcessor {
       config.INGEST_TIMEOUT_MS + Math.ceil(document.sizeBytes / 1_048_576) * config.INGEST_TIMEOUT_MS_PER_MB;
     try {
       const embeddings = embeddingEndpoint(settings.embeddingProvider ?? 'lmstudio', config);
+      let filePath = document.storagePath;
+      if (media) {
+        filePath = await this.transcribe(document, AbortSignal.timeout(timeoutMs));
+        if (!(await this.update(document.id, { status: 'processing' }, { ...claim, status: 'transcribing' })))
+          return 'gone';
+      }
       await chroma.deleteDocumentVectors(collection, document.id);
       const run = await langflow.run(
         FLOWS.ingest,
@@ -102,7 +121,7 @@ export class IngestProcessor {
           session_id: `ingest-${document.id}-${attempt}`,
           tweaks: {
             Loader: {
-              file_path: document.storagePath,
+              file_path: filePath,
               document_id: document.id,
               filename: document.fileName,
               // Passages carry the folder id, so searches can be limited to one folder.
@@ -145,11 +164,35 @@ export class IngestProcessor {
         log.warn({ documentId, err: cleanupErr }, 'could not remove vectors of a failed run');
       });
       // Superseded (a workspace reindex requeued it) or deleted: the row is not ours to fail.
-      if (!(await this.update(document.id, { status: last ? 'failed' : 'queued', error: reason }, claim)))
+      const failed = { status: last ? ('failed' as const) : ('queued' as const), error: reason };
+      if (
+        !(await this.update(document.id, failed, claim)) &&
+        !(media && (await this.update(document.id, failed, { ...claim, status: 'transcribing' })))
+      )
         return 'gone';
       log.warn({ documentId, attempt, last, reason }, 'ingestion failed');
       return last ? 'failed' : 'retry';
     }
+  }
+
+  /** The transcript's path on the uploads volume, asking Whisper for it unless it is there already. */
+  private async transcribe(document: Document, signal: AbortSignal): Promise<string> {
+    const { storage, whisper, log } = this.deps;
+    if (await storage.exists(transcriptPath(document.storagePath)))
+      return transcriptPath(document.storagePath);
+    if (!whisper)
+      throw new Error('Video and audio need the video profile (WHISPER_URL is not set); see docs/setup.md.');
+    const started = Date.now();
+    const transcript = await whisper.transcribe(
+      storage.absolute(document.storagePath),
+      document.fileName,
+      signal,
+    );
+    log.info(
+      { documentId: document.id, segments: transcript.segments.length, ms: Date.now() - started },
+      'transcribed',
+    );
+    return storage.writeTranscript(document.storagePath, transcript);
   }
 
   /**
@@ -180,11 +223,15 @@ export class IngestProcessor {
 
   /**
    * Returns the updated row, or undefined when the document was deleted meanwhile. With a
-   * `claim`, only the run's own row is updated: still `processing`, at the attempt it took.
+   * `claim`, only the run's own row is updated: still in the claimed status, at the attempt it took.
    */
-  private async update(id: string, set: Partial<Document>, claim?: { attempts: number }) {
+  private async update(
+    id: string,
+    set: Partial<Document>,
+    claim?: { attempts: number; status: 'processing' | 'transcribing' },
+  ) {
     const where = claim
-      ? and(eq(documents.id, id), eq(documents.status, 'processing'), eq(documents.attempts, claim.attempts))
+      ? and(eq(documents.id, id), eq(documents.status, claim.status), eq(documents.attempts, claim.attempts))
       : eq(documents.id, id);
     const [doc] = await this.deps.db.update(documents).set(set).where(where).returning();
     if (doc) this.deps.events.emit({ workspaceId: doc.workspaceId, document: doc });

@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { documents, folders, newId, workspaces, type Database } from '@rag/db';
 import { createTestDatabase } from '@rag/db/testing';
 import { LangflowClient } from '@rag/langflow-client';
@@ -8,6 +11,8 @@ import { loadConfig } from '../config.js';
 import { ChromaService } from './chroma.js';
 import { DocumentEvents } from './document-events.js';
 import { IngestProcessor, PgBossIngestQueue } from './ingest.js';
+import { UploadStorage } from './storage.js';
+import { WhisperClient } from './whisper.js';
 
 const url = process.env.TEST_DATABASE_URL;
 const log = pino({ level: 'silent' });
@@ -69,10 +74,39 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
     INGEST_TIMEOUT_MS_PER_MB: '0',
     INGEST_MAX_ATTEMPTS: '2',
   });
-  const processor = () =>
-    new IngestProcessor({ db, langflow: f.langflow, chroma: f.chroma, events, config, log });
+  let root: string;
+  let storage: UploadStorage;
+  /** Files sent to the fake Whisper, and what it answers. */
+  const heard: string[] = [];
+  let whisperAnswer: () => Response = () =>
+    Response.json({
+      language: 'en',
+      segments: [
+        { start: 0, end: 4.26, text: ' Welcome to week three.', tokens: [1, 2] },
+        { start: 4.26, end: 9.81, text: ' Today: retrieval-augmented generation.', tokens: [3] },
+      ],
+    });
+  const whisper = new WhisperClient('http://whisper:9000/', (async (input, init) => {
+    const file = (init?.body as FormData).get('audio_file') as File;
+    heard.push(`${String(input)} ${file.name} ${file.size}`);
+    return whisperAnswer();
+  }) as typeof fetch);
+  const processor = (opts: { whisper?: WhisperClient } = { whisper }) =>
+    new IngestProcessor({
+      db,
+      storage,
+      langflow: f.langflow,
+      chroma: f.chroma,
+      events,
+      config,
+      log,
+      ...opts,
+    });
 
   beforeAll(async () => {
+    root = await mkdtemp(path.join(tmpdir(), 'ingest-'));
+    await mkdir(path.join(root, 'ouc'));
+    storage = new UploadStorage(root, 1_000_000);
     t = await createTestDatabase(url!);
     db = t.db;
     workspaceId = newId('workspace');
@@ -83,13 +117,17 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
       settings: { embeddingProvider: 'lmstudio', embeddingModel: 'nomic', chunkSize: 500 },
     });
   });
-  afterAll(() => t.drop());
+  afterAll(async () => {
+    await t.drop();
+    await rm(root, { recursive: true, force: true });
+  });
   beforeEach(() => {
     f.calls.length = 0;
     f.runs.length = 0;
     f.set('ok');
     f.during(undefined);
     seen.length = 0;
+    heard.length = 0;
   });
 
   async function newDocument() {
@@ -106,6 +144,22 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
     });
     return id;
   }
+  /** A video on disk and in the table, as an upload leaves it. */
+  async function newVideo() {
+    const id = newId('document');
+    await writeFile(path.join(root, 'ouc', `${id}.mp4`), Buffer.alloc(2048));
+    await db.insert(documents).values({
+      id,
+      workspaceId,
+      title: 'lecture',
+      fileName: 'lecture.mp4',
+      type: 'mp4',
+      sizeBytes: 2048,
+      sha256: id,
+      storagePath: `ouc/${id}.mp4`,
+    });
+    return id;
+  }
   const get = async (id: string) => (await db.select().from(documents).where(eq(documents.id, id)))[0]!;
 
   it('runs the flow with the workspace settings and marks the document ready', async () => {
@@ -119,6 +173,56 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
       Embeddings: { model: 'nomic', base_url: 'http://host.docker.internal:1234/v1', api_key: 'lm-studio' },
       Upsert: { collection_name: 'ws_ouc', document_id: id },
     });
+  });
+
+  it('transcribes a video first, saves the transcript and ingests that instead', async () => {
+    const id = await newVideo();
+    expect(await processor().process(id)).toBe('ready');
+    expect(seen).toEqual(['transcribing', 'processing', 'ready']);
+    expect(heard).toEqual([
+      'http://whisper:9000/asr?task=transcribe&output=json&encode=true lecture.mp4 2048',
+    ]);
+    expect(f.runs[0]!.tweaks.Loader).toMatchObject({
+      file_path: `ouc/${id}.mp4.transcript.json`,
+      filename: 'lecture.mp4',
+    });
+    const saved = JSON.parse(await readFile(path.join(root, 'ouc', `${id}.mp4.transcript.json`), 'utf8'));
+    expect(saved).toEqual({
+      language: 'en',
+      segments: [
+        { start: 0, end: 4.3, text: 'Welcome to week three.' },
+        { start: 4.3, end: 9.8, text: 'Today: retrieval-augmented generation.' },
+      ],
+    });
+  });
+
+  it('reuses a saved transcript on the next run (a retry or a reindex)', async () => {
+    const id = await newVideo();
+    await processor().process(id);
+    heard.length = 0;
+    await db.update(documents).set({ status: 'queued' }).where(eq(documents.id, id));
+    expect(await processor().process(id)).toBe('ready');
+    expect(heard).toEqual([]);
+  });
+
+  it('a Whisper failure, or no Whisper at all, goes back to queued with the reason', async () => {
+    whisperAnswer = () => new Response('CUDA out of memory', { status: 500 });
+    const id = await newVideo();
+    expect(await processor().process(id)).toBe('retry');
+    expect(await get(id)).toMatchObject({
+      status: 'queued',
+      error: 'Transcription failed: HTTP 500 CUDA out of memory',
+    });
+    expect(f.runs).toEqual([]);
+    whisperAnswer = () => Response.json({ language: 'en', segments: [] });
+
+    const silent = await newVideo();
+    await processor().process(silent);
+    expect((await get(silent)).error).toBe('No speech was found in this file.');
+
+    const off = await newVideo();
+    await processor({}).process(off);
+    expect((await get(off)).error).toMatch(/need the video profile/);
   });
 
   it("passes the document's folder to the loader, so its passages carry it", async () => {
