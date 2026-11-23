@@ -1,7 +1,7 @@
 import type { Document } from '@rag/shared';
 import { Search, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { ErrorState, Loading, Notice } from '@/components/states';
 import { StatusBadge } from '@/components/status-badge';
 import { TopBar } from '@/components/top-bar';
@@ -40,7 +40,11 @@ function Library() {
   const documents = useLiveDocuments(w.slug);
   const [tab, setTab] = useState<StatusTab>('all');
   const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The selected document lives in the URL (`?doc=<id>`), so a citation in the playground can link
+  // straight to one and a reloaded or shared link still shows the same document.
+  const [params, setParams] = useSearchParams();
+  const selectedId = params.get('doc');
+  const setSelectedId = (id: string) => setParams({ doc: id }, { replace: true });
   const list = documents.data ?? [];
   const shown = filterDocuments(list, tab, search);
   const selected = list.find((d) => d.id === selectedId) ?? null;

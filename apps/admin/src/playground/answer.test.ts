@@ -1,5 +1,57 @@
 import { describe, expect, it } from 'vitest';
-import { answerMeta, formatDuration } from './answer';
+import { answerMeta, answerParts, formatDuration, passageWhere } from './answer';
+
+describe('answerParts', () => {
+  it('leaves text without markers alone', () => {
+    expect(answerParts('RAG retrieves passages.', [1, 2])).toEqual([{ text: 'RAG retrieves passages.' }]);
+  });
+
+  it('turns a cited [n] into a marker between the text around it', () => {
+    expect(answerParts('It retrieves [1] then generates.', [1])).toEqual([
+      { text: 'It retrieves ' },
+      { rank: 1 },
+      { text: ' then generates.' },
+    ]);
+  });
+
+  it('turns a comma list into one marker per rank', () => {
+    expect(answerParts('Both say so [1, 2].', [1, 2])).toEqual([
+      { text: 'Both say so ' },
+      { rank: 1 },
+      { rank: 2 },
+      { text: '.' },
+    ]);
+  });
+
+  it('reads a two-digit rank', () => {
+    expect(answerParts('See [12].', [12])).toEqual([{ text: 'See ' }, { rank: 12 }, { text: '.' }]);
+  });
+
+  it('leaves a rank with no citation as text', () => {
+    expect(answerParts('See [9] and [1].', [1])).toEqual([
+      { text: 'See [9] and ' },
+      { rank: 1 },
+      { text: '.' },
+    ]);
+    expect(answerParts('Both [1, 9].', [1])).toEqual([{ text: 'Both [1, 9].' }]);
+  });
+
+  it('leaves a subscript in code alone, even when its number is a rank', () => {
+    expect(answerParts('Read items[1] to get the second element [1].', [1])).toEqual([
+      { text: 'Read items[1] to get the second element ' },
+      { rank: 1 },
+      { text: '.' },
+    ]);
+  });
+
+  it('keeps markers that follow each other', () => {
+    expect(answerParts('Sources [1][2]', [1, 2])).toEqual([{ text: 'Sources ' }, { rank: 1 }, { rank: 2 }]);
+  });
+
+  it('has no parts for an empty answer', () => {
+    expect(answerParts('', [1])).toEqual([]);
+  });
+});
 
 describe('answerMeta', () => {
   const meta = { latencyMs: 2310, model: 'a-model', provider: 'lmstudio', usage: { promptTokens: 1840, completionTokens: 212 } }; // prettier-ignore
@@ -41,5 +93,17 @@ describe('formatDuration', () => {
   it('carries the rounded seconds into the next minute', () => {
     expect(formatDuration(119_600)).toBe('2 min 0 s');
     expect(formatDuration(59_950)).toBe('1 min 0 s');
+  });
+});
+
+describe('passageWhere', () => {
+  it('names the document and its page', () => {
+    expect(passageWhere({ documentTitle: 'Week 3 slides', page: 12, chunkIndex: 4 })).toBe(
+      'Week 3 slides · page 12',
+    );
+  });
+
+  it('falls back to the passage number when there are no pages', () => {
+    expect(passageWhere({ documentTitle: 'notes', page: null, chunkIndex: 4 })).toBe('notes · passage 5');
   });
 });

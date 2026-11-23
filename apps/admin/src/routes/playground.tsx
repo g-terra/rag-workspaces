@@ -1,11 +1,13 @@
+import type { Citation } from '@rag/shared';
 import { Search, Sparkles, SquareIcon, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Notice } from '@/components/states';
 import { TopBar } from '@/components/top-bar';
 import { Button } from '@/components/ui/button';
-import { answerMeta } from '@/playground/answer';
+import { answerMeta, answerParts } from '@/playground/answer';
 import { answerFailure, type AnswerError } from '@/playground/failure';
+import { PassageDialog } from '@/playground/passage-dialog';
 import { useAsk } from '@/playground/use-ask';
 import { useCurrentWorkspace } from '@/workspaces/current';
 
@@ -25,7 +27,9 @@ function Ask() {
   const ask = useAsk(w.slug);
   const [question, setQuestion] = useState('');
   const [maxPassages, setMaxPassages] = useState(DEFAULT_PASSAGES);
+  const [openPassage, setOpenPassage] = useState<string | null>(null);
   const streaming = ask.status === 'streaming';
+  const citations = ask.answer?.citations ?? [];
   const submit = () => {
     if (question.trim()) ask.ask(question.trim(), maxPassages);
   };
@@ -90,27 +94,97 @@ function Ask() {
           <NotFound slug={w.slug} question={ask.question} />
         ) : (
           (streaming || ask.text !== '' || ask.status === 'stopped') && (
-            <div className="bg-card flex flex-col gap-4 rounded-xl border p-5">
-              {ask.answer && (
-                <div className="text-muted-foreground flex flex-wrap justify-between gap-2 text-xs">
-                  <span className="font-mono">{ask.answer.id}</span>
-                  <span data-testid="answer-meta">{answerMeta(ask.answer)}</span>
-                </div>
-              )}
-              <p data-testid="answer" className="text-[15px] leading-relaxed whitespace-pre-wrap">
-                {ask.text}
-                {streaming && <span className="bg-foreground ml-0.5 inline-block h-4 w-1.5 animate-pulse" />}
-              </p>
-              {ask.status === 'stopped' && (
-                <p className="text-muted-foreground border-t pt-3 text-[13px]">
-                  Stopped. What had arrived is above; the API still stored the whole answer.
+            <div className="flex flex-wrap items-start gap-4">
+              <div className="bg-card flex min-w-0 flex-[999_1_460px] flex-col gap-4 rounded-xl border p-5">
+                {ask.answer && (
+                  <div className="text-muted-foreground flex flex-wrap justify-between gap-2 text-xs">
+                    <span className="font-mono">{ask.answer.id}</span>
+                    <span data-testid="answer-meta">{answerMeta(ask.answer)}</span>
+                  </div>
+                )}
+                <p data-testid="answer" className="text-[15px] leading-relaxed whitespace-pre-wrap">
+                  {answerParts(
+                    ask.text,
+                    citations.map((c) => c.rank),
+                  ).map((part, i) =>
+                    'rank' in part ? (
+                      <CitationMarker
+                        key={i}
+                        rank={part.rank}
+                        onOpen={() => setOpenPassage(passageOfRank(citations, part.rank))}
+                      />
+                    ) : (
+                      <span key={i}>{part.text}</span>
+                    ),
+                  )}
+                  {streaming && (
+                    <span className="bg-foreground ml-0.5 inline-block h-4 w-1.5 animate-pulse" />
+                  )}
                 </p>
-              )}
+                {ask.status === 'stopped' && (
+                  <p className="text-muted-foreground border-t pt-3 text-[13px]">
+                    Stopped. What had arrived is above; the API still stored the whole answer.
+                  </p>
+                )}
+              </div>
+              {citations.length > 0 && <Sources citations={citations} onOpen={setOpenPassage} />}
             </div>
           )
         )}
+
+        <PassageDialog slug={w.slug} passageId={openPassage} onClose={() => setOpenPassage(null)} />
       </div>
     </>
+  );
+}
+
+/** The passage a `[n]` marker points at; null when the answer cites a rank it did not send. */
+function passageOfRank(citations: Citation[], rank: number): string | null {
+  return citations.find((c) => c.rank === rank)?.passageId ?? null;
+}
+
+/** The `[n]` in the text: opens the passage it points at. */
+function CitationMarker({ rank, onOpen }: { rank: number; onOpen(): void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`Source ${rank}`}
+      className="mx-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded border border-indigo-200 bg-indigo-50 px-1.5 align-[1px] text-[11px] font-semibold text-indigo-800 hover:bg-indigo-100"
+    >
+      {rank}
+    </button>
+  );
+}
+
+/** The passages the model was given, best first, each opening its full text. */
+function Sources({ citations, onOpen }: { citations: Citation[]; onOpen(passageId: string): void }) {
+  return (
+    <aside aria-label="Sources" className="flex max-w-95 flex-[1_1_300px] flex-col gap-2.5">
+      <p className="text-[13px] font-semibold">
+        Sources{' '}
+        <span className="text-muted-foreground font-normal">· {citations.length} given to the model</span>
+      </p>
+      {citations.map((c) => (
+        <button
+          key={c.passageId}
+          type="button"
+          data-testid="source"
+          onClick={() => onOpen(c.passageId)}
+          className="bg-card hover:border-ring flex w-full flex-col gap-1.5 rounded-xl border p-3 text-left"
+        >
+          <span className="flex w-full items-center gap-2">
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-indigo-200 bg-indigo-50 px-1.5 text-[11px] font-semibold text-indigo-800">
+              {c.rank}
+            </span>
+            <span className="flex-1 truncate text-[13px] font-semibold">{c.documentTitle}</span>
+            <span className="text-muted-foreground font-mono text-xs">{c.score.toFixed(2)}</span>
+          </span>
+          {c.page !== null && <span className="text-muted-foreground text-xs">page {c.page}</span>}
+          <span className="text-[13px] leading-snug">“{c.snippet}”</span>
+        </button>
+      ))}
+    </aside>
   );
 }
 
