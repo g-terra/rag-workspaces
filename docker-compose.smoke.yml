@@ -8,6 +8,8 @@ services:
     command: ['node', '/standin/server.ts']
     environment:
       STANDIN_TOKEN_DELAY_MS: '0'
+    # Published so the checks can read what the model was sent (GET /_log).
+    ports: ['127.0.0.1:${STANDIN_PORT:-11234}:1234']
     volumes:
       - ./poc/standin:/standin:ro
     healthcheck:

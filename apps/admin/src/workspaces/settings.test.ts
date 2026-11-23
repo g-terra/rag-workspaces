@@ -32,6 +32,7 @@ const workspace = (over: Partial<Workspace> = {}): Workspace => ({
     chatModel: null,
     embeddingProvider: 'lmstudio',
     embeddingModel: 'embed-small',
+    embeddingPrefixes: null,
     systemPrompt: null,
     chunkSize: 800,
     chunkOverlap: 100,

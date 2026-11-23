@@ -135,6 +135,9 @@ export class IngestProcessor {
               model: settings.embeddingModel,
               base_url: embeddings.baseUrl,
               api_key: embeddings.apiKey,
+              // Pinned with the model; a workspace from before prefixes keeps embedding without them.
+              document_prefix: settings.embeddingPrefixes?.document ?? '',
+              query_prefix: settings.embeddingPrefixes?.query ?? '',
             },
             Upsert: { collection_name: collection, document_id: document.id },
           },

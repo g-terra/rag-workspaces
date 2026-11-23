@@ -11,6 +11,7 @@ const env = smokeEnv();
 const API = env.PUBLIC_API_URL!;
 const KEYCLOAK = env.KEYCLOAK_PUBLIC_URL!;
 const CHROMA = `http://127.0.0.1:${env.CHROMA_PORT}/api/v2/tenants/default_tenant/databases/default_database`;
+const STANDIN = `http://127.0.0.1:${env.STANDIN_PORT}`;
 const READY_TIMEOUT_MS = 5 * 60_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 const repoRoot = new URL('../../', import.meta.url);
@@ -411,6 +412,43 @@ async function main() {
           p.documentId === doc!.id && typeof p.startSeconds === 'number',
       ),
       `search did not find the transcript with its start time: ${JSON.stringify(found.data)}`,
+    );
+  });
+
+  await step('embedding prefixes: pinned on the workspace and put before documents and queries', async () => {
+    // EMBEDDING_PREFIXES in the smoke env gives the stand-in's model "passage: " and "query: ".
+    const ws = await call(token, 'GET', `/v1/workspaces/${slug}`);
+    expect(
+      ws.settings.embeddingPrefixes?.document === 'passage: ' &&
+        ws.settings.embeddingPrefixes?.query === 'query: ',
+      `pinned prefixes: ${JSON.stringify(ws.settings.embeddingPrefixes)}`,
+    );
+    await fetch(`${STANDIN}/_log`, { method: 'DELETE' });
+    await call(
+      token,
+      'POST',
+      `/v1/workspaces/${slug}/documents`,
+      (() => {
+        const form = new FormData();
+        form.append(
+          'files',
+          new Blob(['Prefixes tell the embedding model what a text is for.']),
+          'prefixes.md',
+        );
+        return form;
+      })(),
+    ).then(({ data }) => waitUntilReady(token, slug, [data[0].document.id]));
+    await call(token, 'GET', `/v1/workspaces/${slug}/passages?query=what+are+prefixes+for`);
+    const seen = ((await (await fetch(`${STANDIN}/_log`)).json()) as { path: string; starts?: string[] }[])
+      .filter((e) => e.path === '/v1/embeddings')
+      .flatMap((e) => e.starts ?? []);
+    expect(
+      seen.some((t) => t.startsWith('passage: Prefixes tell')),
+      `no document embedded with its prefix: ${JSON.stringify(seen)}`,
+    );
+    expect(
+      seen.some((t) => t.startsWith('query: what are prefixes for')),
+      `no query embedded with its prefix: ${JSON.stringify(seen)}`,
     );
   });
 

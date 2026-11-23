@@ -2,6 +2,33 @@ import type { Config } from '../config.js';
 
 export type EmbeddingEndpoint = { baseUrl: string; apiKey: string };
 
+/** Text put before each document and each query before they are embedded. */
+export type EmbeddingPrefixes = { document: string; query: string };
+
+/**
+ * Task prefixes some embedding models were trained with; without them their search is weaker. Matched
+ * against the model id, which differs between servers (LM Studio adds `text-embedding-`).
+ * - nomic-embed-text: `search_document: ` and `search_query: ` (its model card).
+ * - Qwen3-Embedding: an instruction on queries only, in its `Instruct: …\nQuery:` format.
+ */
+const KNOWN_PREFIXES: [RegExp, EmbeddingPrefixes][] = [
+  [/nomic-embed-text/i, { document: 'search_document: ', query: 'search_query: ' }],
+  [
+    /qwen3-embedding/i,
+    { document: '', query: 'Instruct: Given a question, retrieve passages that answer the question\nQuery:' },
+  ],
+];
+
+/** The prefixes for an embedding model: `EMBEDDING_PREFIXES` first, then the built-in ones, else none. */
+export function embeddingPrefixes(
+  model: string,
+  config: Pick<Config, 'EMBEDDING_PREFIXES'>,
+): EmbeddingPrefixes {
+  const configured = config.EMBEDDING_PREFIXES[model];
+  if (configured) return configured;
+  return KNOWN_PREFIXES.find(([pattern]) => pattern.test(model))?.[1] ?? { document: '', query: '' };
+}
+
 /** Thrown when a workspace names a provider whose key is not set in `.env`. */
 export class ProviderNotConfigured extends Error {}
 

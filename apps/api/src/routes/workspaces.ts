@@ -29,6 +29,7 @@ import { ChromaService } from '../services/chroma.js';
 import type { DocumentEvents } from '../services/document-events.js';
 import type { IngestQueue } from '../services/ingest-queue.js';
 import { startReindex } from '../services/reindex.js';
+import { embeddingPrefixes } from '../services/providers.js';
 import type { UploadStorage } from '../services/storage.js';
 
 export type WorkspaceRoutesOptions = {
@@ -41,6 +42,7 @@ export type WorkspaceRoutesOptions = {
     Config,
     | 'DEFAULT_EMBEDDING_PROVIDER'
     | 'DEFAULT_EMBEDDING_MODEL'
+    | 'EMBEDDING_PREFIXES'
     | 'LMSTUDIO_BASE_URL'
     | 'OPENAI_API_KEY'
     | 'GEMINI_API_KEY'
@@ -52,6 +54,7 @@ const MemberParams = SlugParams.extend({ userId: z.string().min(1).max(100) });
 const common = { tags: ['workspaces'], security: [{ bearerAuth: [] }] };
 
 const UNSET: Omit<WorkspaceSettings, 'embeddingProvider' | 'embeddingModel'> = {
+  embeddingPrefixes: null,
   chatProvider: null,
   chatModel: null,
   systemPrompt: null,
@@ -117,10 +120,12 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
         .from(workspaces)
         .where(eq(workspaces.slug, slug));
       if (taken) throw new HttpProblem(409, `The slug "${slug}" is taken.`);
+      const embeddingModel = settings.embeddingModel ?? config.DEFAULT_EMBEDDING_MODEL;
       const pinned = {
         ...settings,
         embeddingProvider: settings.embeddingProvider ?? config.DEFAULT_EMBEDDING_PROVIDER,
-        embeddingModel: settings.embeddingModel ?? config.DEFAULT_EMBEDDING_MODEL,
+        embeddingModel,
+        embeddingPrefixes: embeddingPrefixes(embeddingModel, config),
       };
       // Collection first: if Chroma is down nothing is half-created in Postgres.
       await chroma.ensureCollection(ChromaService.collectionName(slug));

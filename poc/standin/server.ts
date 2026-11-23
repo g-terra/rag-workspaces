@@ -114,7 +114,8 @@ const server = createServer(async (req, res) => {
         log.push({ at: new Date().toISOString(), path: url.pathname, model: body.model, error });
         return send(res, 400, { error: { message: error } });
       }
-      log.push({ at: new Date().toISOString(), path: url.pathname, model: body.model, inputs: inputs.length });
+      log.push({ at: new Date().toISOString(), path: url.pathname, model: body.model, inputs: inputs.length,
+        starts: (inputs as string[]).map((t) => t.slice(0, 40)) });
       return send(res, 200, {
         object: 'list', model: body.model,
         data: inputs.map((t, index) => ({ object: 'embedding', index, embedding: embed(t as string) })),

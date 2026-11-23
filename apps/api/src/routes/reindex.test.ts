@@ -160,6 +160,28 @@ describe.skipIf(!url)('workspace reindex (against TEST_DATABASE_URL)', () => {
     expect(res.json().settings).toMatchObject({
       embeddingProvider: 'lmstudio',
       embeddingModel: 'text-embedding-qwen3-embedding-4b',
+      embeddingPrefixes: {
+        document: '',
+        query: 'Instruct: Given a question, retrieve passages that answer the question\nQuery:',
+      },
+    });
+  });
+
+  it('a workspace from before prefixes existed gets them pinned on its next reindex', async () => {
+    await workspace('rx-legacy', 1);
+    const [ws] = await t.db.select().from(workspaces).where(eq(workspaces.slug, 'rx-legacy'));
+    await t.db
+      .update(workspaces)
+      .set({
+        settings: { embeddingProvider: 'lmstudio', embeddingModel: 'text-embedding-nomic-embed-text-v1.5' },
+      })
+      .where(eq(workspaces.id, ws!.id));
+    const before = await call('GET', '/v1/workspaces/rx-legacy', 'admin');
+    expect(before.json().settings.embeddingPrefixes).toBeNull();
+    const res = await call('POST', '/v1/workspaces/rx-legacy/reindex', 'admin');
+    expect(res.json().settings.embeddingPrefixes).toEqual({
+      document: 'search_document: ',
+      query: 'search_query: ',
     });
   });
 
