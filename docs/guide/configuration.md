@@ -73,6 +73,12 @@ Over a rate limit the API answers `429` with `Retry-After`.
 | `WHISPER_URL` | unset | `http://whisper:9000` to transcribe MP4, MP3 and WAV uploads |
 | `WHISPER_MODEL` | `base` | `tiny`, `base`, `small`, `medium` or `large-v3`: bigger is slower and more accurate |
 
+## Documentation websites
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `CRAWL_ALLOWED_HOSTS` | empty | Private hosts an imported website may be on, comma-separated. Langflow refuses private and internal addresses otherwise. Run `docker compose up -d langflow` after changing it |
+
 ## Internals
 
 | Variable | Default | Meaning |
