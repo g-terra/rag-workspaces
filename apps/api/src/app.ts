@@ -20,6 +20,7 @@ import { answerRoutes } from './routes/answers.js';
 import { apiKeyRoutes } from './routes/api-keys.js';
 import { conversationRoutes } from './routes/conversations.js';
 import { documentRoutes } from './routes/documents.js';
+import { folderRoutes } from './routes/folders.js';
 import { healthRoutes } from './routes/health.js';
 import { systemRoutes } from './routes/system.js';
 import { meRoutes } from './routes/me.js';
@@ -159,6 +160,7 @@ export async function buildApp({
   if (db) {
     await app.register(workspaceRoutes, { db, chroma, storage, queue, events, config });
     await app.register(documentRoutes, { db, storage, chroma, queue, events, config });
+    await app.register(folderRoutes, { db, chroma, events });
     await app.register(apiKeyRoutes, { db });
     await app.register(usageRoutes, { db });
     if (langflow) {
