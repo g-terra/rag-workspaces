@@ -176,7 +176,7 @@ Question text is kept for a configurable time (`USAGE_QUESTION_RETENTION_DAYS`, 
 
 | Method | Path | Does |
 |---|---|---|
-| GET, POST | `/v1/api-keys` | List keys (last used; request count planned); create one |
+| GET, POST | `/v1/api-keys` | List keys (last used; request count planned); create one. The admin UI's "API keys" page drives these |
 | GET, PATCH, DELETE | `/v1/api-keys/{keyId}` | Read; rename, change workspaces or expiry (the role can't change: `400`); revoke (the key stays listed with `revokedAt`) |
 | GET | `/v1/me` | The signed-in user or the key, with roles and workspaces |
 | GET | `/v1/users?search=…&limit=…&cursor=…` | People in Keycloak (id, username, name, email, admin or not, enabled), read-only, so an admin can grant access before someone's first login. Admins only; `503` when Keycloak can't be reached or the people list isn't set up |

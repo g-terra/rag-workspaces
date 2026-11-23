@@ -89,7 +89,8 @@ After signing in, the admin UI opens the workspace you used last (or your first 
 switcher in the sidebar changes it. Admins create workspaces from "All workspaces" or the switcher. Editors
 and admins upload files from "Upload" in the sidebar and watch each one through ingestion live.
 "Documents" lists everything in the workspace, live, with download for everyone and reindex and delete for
-editors and admins. The API docs are linked from the top bar of every page.
+editors and admins. Admins manage API keys for agents and scripts under "API keys": a new key's secret is
+shown once, with a `curl` example to try it. The API docs are linked from the top bar of every page.
 
 `docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
 
