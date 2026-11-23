@@ -14,6 +14,7 @@ import { Upload } from '@/routes/upload';
 import { Workspaces } from '@/routes/workspaces';
 import { ApiKeys } from '@/routes/api-keys';
 import { Usage } from '@/routes/usage';
+import { System } from '@/routes/system';
 import { WorkspaceSettings } from '@/routes/workspace-settings';
 
 export const router = createBrowserRouter([
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
           { path: 'workspaces', element: <Workspaces /> },
           { path: 'api-keys', element: <ApiKeys /> },
           { path: 'usage', element: <Usage /> },
+          { path: 'system', element: <System /> },
           {
             path: 'w/:slug',
             element: <WorkspaceLayout />,

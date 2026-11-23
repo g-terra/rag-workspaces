@@ -93,6 +93,24 @@ test('uploads files and follows them live to Ready; a second copy is skipped', a
   await expect(page.getByRole('heading', { name: /This session · 2 ready, 0 in progress/ })).toBeVisible();
 });
 
+test('uploads a whole folder, subfolders included, and skips what it cannot index', async ({ page }) => {
+  await signIn(page, '/workspaces');
+  const created = await page.request.post('/api/v1/workspaces', { headers: await bearer(page), data: ws });
+  expect(created.status()).toBe(201);
+  await page.goto(`/w/${ws.slug}/upload`);
+  await expect(page.getByRole('heading', { name: 'Upload material' })).toBeVisible();
+
+  // Browse folder: course/ holds overview.md, slides.pptx and week-1/reading.txt.
+  await page.getByLabel('Choose a folder to upload').setInputFiles(path.join(fixtures, 'course'));
+  for (const name of ['course/overview.md', 'course/week-1/reading.txt']) {
+    const row = page.getByTestId('upload-row').filter({ hasText: name });
+    await expect(row.getByTestId('status')).toHaveText('Ready', { timeout: 60_000 });
+  }
+  // The slides get no row, only the summary.
+  await expect(page.getByTestId('upload-row')).toHaveCount(2);
+  await expect(page.getByText("Skipped 1 file that can't be indexed: 1 .pptx.")).toBeVisible();
+});
+
 test('sends at most three files at once; the rest wait their turn', async ({ page }) => {
   await signIn(page, '/workspaces');
   const created = await page.request.post('/api/v1/workspaces', { headers: await bearer(page), data: ws });

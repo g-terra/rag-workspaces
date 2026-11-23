@@ -1,0 +1,1 @@
+Week 1 reading. Vector search compares embeddings by cosine similarity to find the passages closest in meaning to a question.

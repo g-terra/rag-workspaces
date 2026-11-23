@@ -27,24 +27,6 @@ The assignment brief's example endpoints map to these routes (no aliases, decisi
 - [Work breakdown](docs/work-breakdown.md): milestones and the four workstreams
 - [Decisions](docs/decisions.md): what is settled, what is open, and why
 
-## Commits and releases
-
-Commit messages follow [Conventional Commits](https://www.conventionalcommits.org): `type(scope): summary`,
-for example `feat(api): stream answers` or `fix(admin): keep the upload list sorted`. `pnpm install` sets up a
-Git hook that checks each message, and CI checks pull request commits and titles. Types: `feat`, `fix`,
-`perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`, `style`, `revert`; add `!` (`feat(api)!: …`) for a
-breaking change.
-
-Versions follow [semantic versioning](https://semver.org) and are picked from those messages by
-[release-please](https://github.com/googleapis/release-please) (`.github/workflows/release.yml`):
-
-1. Every push to `main` updates a release pull request (`chore(main): release x.y.z`) with the next version
-   and `CHANGELOG.md`. `fix` bumps the patch version; `feat` and breaking changes bump the minor version
-   while we are below 1.0.
-2. Merging it tags `vX.Y.Z`, creates the GitHub release, sets that version in the API's `package.json` (shown
-   in Swagger), and publishes `ghcr.io/g-terra/rag-workspaces-api` and `-admin` tagged `X.Y.Z`,
-   `X.Y` and `latest`.
-
 ## Run the stack
 
 The step-by-step guide, with model setup and troubleshooting, is [docs/setup.md](docs/setup.md). Examples
@@ -84,7 +66,8 @@ browser or tool doesn't open them (some Safari versions, older curl), add this l
 ```
 
 If port 80 is taken, set `PROXY_PORT` in `.env` (for example `8088`) and add the port to `KEYCLOAK_PUBLIC_URL`,
-`ADMIN_UI_URL` and `PUBLIC_API_URL` (`http://rag.localhost:8088`), then `docker compose up -d --build`. The
+`ADMIN_UI_URL`, `PUBLIC_API_URL` and `LANGFLOW_PUBLIC_URL` (`http://rag.localhost:8088`,
+`http://langflow.rag.localhost:8088`), then `docker compose up -d --build`. The
 "Also at" ports keep working either way; Keycloak's pages always show at `KEYCLOAK_PUBLIC_URL`.
 
 After signing in, the admin UI opens the workspace you used last (or your first one); the workspace
@@ -101,7 +84,11 @@ workspace (editors and admins) or across all of them (admins). "Settings" (admin
 name, description, chat model, reasoning effort and retrieval settings, with the providers and models read from
 `GET /v1/system`; it is also where you grant and remove other people's access to the workspace, start a
 reindex (the only way to change the embedding model) and delete the workspace. The API docs are linked
-from the top bar of every page.
+from the top bar of every page. The sidebar shows the release the UI was built from. "System" (admins) shows
+whether the stack is healthy, refreshed every 30 seconds: Postgres, ChromaDB, Langflow and Keycloak with
+their latency or error, each model provider and how many models it offers, and whether the default chat and
+embedding models are available (from `GET /v1/system`). It also links to the Langflow editor, the Keycloak
+admin console (sign in there with `KEYCLOAK_ADMIN` from `.env`, not your app login) and the Swagger docs.
 
 `docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
 
@@ -114,6 +101,8 @@ the stack's data) and `docker compose up -d --build`. To keep your data instead,
 the Keycloak admin console; for the people list (`GET /v1/users`, added 2026-11-23) that means creating the
 `api-directory` client as `realm.json` describes it, with `KEYCLOAK_DIRECTORY_SECRET` from `.env` as its
 secret.
+For the sign-in page styled like the admin UI (added 2026-11-23), run `docker compose up -d` so Keycloak
+mounts the theme, then pick `rag-workspaces` as the login theme under Realm settings > Themes.
 
 An install from before the local names (2026-11-23) keeps its `localhost` URLs, because `pnpm env:init`
 never changes existing values, and keeps working as before. To move it to the names:
@@ -159,47 +148,7 @@ changes any material; `ask` stores an answer, like any other caller's, and takes
 `RW_API_URL` defaults to `http://localhost:3000`, the API's own port; `http://api.rag.localhost` works too. Tool calls count toward the key's rate limits, and an API
 error (a wrong workspace, a `429`) comes back to the agent as a tool error with the API's reason.
 
-## Development
+## Contributing
 
-Requirements: Node 22.18+ and pnpm 10 (`corepack enable` gives you the pinned version).
-
-```bash
-pnpm install
-pnpm build       # build every package (Turborepo caches the results)
-pnpm test        # Vitest in every package (database tests run when TEST_DATABASE_URL is set)
-pnpm lint        # ESLint
-pnpm typecheck   # tsc --noEmit
-pnpm format      # Prettier
-pnpm smoke       # end to end on a throwaway compose stack with a stand-in model (needs Docker)
-pnpm e2e         # the admin UI's Playwright tests on that same throwaway stack (needs Docker)
-```
-
-End-to-end tests drive the admin UI in a real browser. `pnpm e2e` starts the throwaway smoke stack, runs
-them against it and removes it again (`--keep` leaves it running; other arguments go to Playwright, e.g.
-`pnpm e2e upload.spec.ts`). CI runs the same command on pull requests that touch the admin UI or the stack.
-To run them against your own running stack instead (`docker compose up -d --build` first), where they sign
-in as the seeded admin from `.env` and create and delete their own workspaces:
-
-```bash
-pnpm --filter @rag/admin exec playwright install chromium   # once
-pnpm e2e                                                    # on the throwaway smoke stack
-set -a; source .env; set +a                                 # or: RW_ADMIN_USERNAME / RW_ADMIN_PASSWORD
-pnpm --filter @rag/admin e2e                                #     against your own stack
-```
-
-| Path | What it is |
-|---|---|
-| `apps/admin` | Admin UI (Vite + React + Tailwind + shadcn/ui), Keycloak sign-in; Playwright tests in `e2e/`: `pnpm --filter @rag/admin dev` (http://localhost:5173, forwards `/api` to the API) |
-| `apps/mcp` | MCP server over stdio for agents (see "Connect an agent"); tests run it against a fake API |
-| `apps/api` | Fastify API: `pnpm --filter @rag/api dev`, then Swagger UI at http://localhost:3000/docs |
-| `packages/config` | Shared TypeScript, ESLint and Vitest settings |
-| `packages/db` | Drizzle schema, SQL migrations (`drizzle/`) and the Postgres connection. Migrations run when the API starts |
-| `scripts/smoke` | The compose smoke test: `stack.ts up` and `down` run the stack as project `rag-workspaces-smoke` with `docker-compose.smoke.yml`, `check.ts` the checks, `e2e.ts` the admin UI's Playwright tests on the same stack (`pnpm e2e`) |
-| `packages/langflow-client` | Typed client for Langflow's login, API key, flow and run/stream endpoints |
-| `packages/shared` | zod schemas shared by the API and the admin UI (the API contract) |
-| `docker-compose.yml`, `docker/` | The stack, the API image, the Postgres init script and the Keycloak realm |
-| `langflow/components/` | Custom Langflow components (Python, run inside Langflow), from the POC |
-| `flows/` | Langflow flows, imported on every Langflow start |
-| `poc/` | The Langflow proof of concept (see `poc/RESULTS.md`) |
-
-CI (`.github/workflows/ci.yml`) runs format check, lint, typecheck, tests and build on every pull request.
+Dev setup, the workflow every change follows, commit and release rules, the test suites and what a pull
+request needs are in [CONTRIBUTING.md](CONTRIBUTING.md).
