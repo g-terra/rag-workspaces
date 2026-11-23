@@ -30,11 +30,11 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["${RW_ADMIN_UI_URL}/*", "http://localhost:5173/*"],
-      "webOrigins": ["${RW_ADMIN_UI_URL}", "http://localhost:5173"],
+      "redirectUris": ["${RW_ADMIN_UI_URL}/*", "${RW_ADMIN_UI_FALLBACK_URL}/*", "http://localhost:5173/*"],
+      "webOrigins": ["${RW_ADMIN_UI_URL}", "${RW_ADMIN_UI_FALLBACK_URL}", "http://localhost:5173"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "${RW_ADMIN_UI_URL}/*##http://localhost:5173/*"
+        "post.logout.redirect.uris": "${RW_ADMIN_UI_URL}/*##${RW_ADMIN_UI_FALLBACK_URL}/*##http://localhost:5173/*"
       },
       "protocolMappers": [
         {
