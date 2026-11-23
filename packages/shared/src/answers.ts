@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { WorkspaceSlug } from './common.js';
+import { StyleSlug } from './styles.js';
 
 /** A passage the model was given, in rank order. `rank` is the `[n]` it may cite in the text. */
 export const Citation = z.object({
@@ -43,6 +44,8 @@ export const Answer = z.object({
   citations: z.array(Citation),
   provider: z.string().nullable(),
   model: z.string().nullable(),
+  /** The response style the answer was written in, or `null` for none. */
+  style: StyleSlug.nullable(),
   usage: Usage,
   latencyMs: z.number().int(),
   timeToFirstTokenMs: z.number().int().nullable(),
@@ -58,5 +61,7 @@ export const AskQuestion = z.object({
   maxPassages: z.number().int().min(1).max(20).optional(),
   /** Only use passages from documents in this folder. */
   folderId: z.string().min(1).optional(),
+  /** A response style slug (`GET /v1/styles`). Defaults to the workspace's `settings.style`. */
+  style: StyleSlug.optional(),
 });
 export type AskQuestion = z.infer<typeof AskQuestion>;

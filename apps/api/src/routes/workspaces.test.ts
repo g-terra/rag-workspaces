@@ -175,6 +175,27 @@ describe.skipIf(!url)('workspaces (against TEST_DATABASE_URL)', () => {
     ).toMatchObject({ settings: { reasoningEffort: null } });
   });
 
+  it('a default response style must be a known one, on PATCH and on create; null clears it', async () => {
+    expect((await call('GET', '/v1/workspaces/ouc', 'admin')).json().settings.style).toBeNull();
+    expect(
+      (await call('PATCH', '/v1/workspaces/ouc', 'admin', { settings: { style: 'academic' } })).json(),
+    ).toMatchObject({ settings: { style: 'academic' } });
+    const bad = await call('PATCH', '/v1/workspaces/ouc', 'admin', { settings: { style: 'pirate' } });
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().detail).toContain('pirate');
+    expect((await call('GET', '/v1/workspaces/ouc', 'admin')).json().settings.style).toBe('academic');
+    expect(
+      (await call('PATCH', '/v1/workspaces/ouc', 'admin', { settings: { style: null } })).json(),
+    ).toMatchObject({ settings: { style: null } });
+    const create = await call('POST', '/v1/workspaces', 'admin', {
+      slug: 'styled',
+      name: 'Styled',
+      settings: { style: 'pirate' },
+    });
+    expect(create.statusCode).toBe(400);
+    expect((await call('GET', '/v1/workspaces/styled', 'admin')).statusCode).toBe(404);
+  });
+
   it('PATCH cannot change the pinned embedding provider or model', async () => {
     for (const settings of [{ embeddingProvider: 'openai' }, { embeddingModel: 'other' }]) {
       const res = await call('PATCH', '/v1/workspaces/ouc', 'admin', { settings });

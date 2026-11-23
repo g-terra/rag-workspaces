@@ -169,6 +169,45 @@ describe.skipIf(!url)('conversations (against TEST_DATABASE_URL)', () => {
     });
   });
 
+  it("a message's style, else the workspace default, shapes and is stored on the reply only", async () => {
+    const id = await start();
+    const res = await call('POST', `/conversations/${id}/messages`, {
+      content: 'Explain chunks',
+      style: 'tutor',
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().style).toBe('tutor');
+    const llm = runs.find((r) => r.flow === 'rw-chat')!.body.tweaks.LLM!;
+    expect(String(llm.system_message)).toContain('Response style: Tutor.');
+
+    const setDefault = (style: string | null) =>
+      app.inject({
+        method: 'PATCH',
+        url: '/v1/workspaces/ouc',
+        headers: { authorization: auth.admin },
+        payload: { settings: { style } },
+      });
+    await setDefault('concise');
+    try {
+      expect(
+        (await call('POST', `/conversations/${id}/messages`, { content: 'And overlap?' })).json().style,
+      ).toBe('concise');
+    } finally {
+      await setDefault(null);
+    }
+
+    const got = (await call('GET', `/conversations/${id}`)).json();
+    expect(got.messages.map((m: { role: string; style: string | null }) => [m.role, m.style])).toEqual([
+      ['user', null],
+      ['assistant', 'tutor'],
+      ['user', null],
+      ['assistant', 'concise'],
+    ]);
+    expect(
+      (await call('POST', `/conversations/${id}/messages`, { content: 'x', style: 'pirate' })).statusCode,
+    ).toBe(400);
+  });
+
   /** A folder in `ouc`, made straight in the database. */
   async function oucFolder() {
     const [ws] = await t.db.select().from(workspaces).where(eq(workspaces.slug, 'ouc'));

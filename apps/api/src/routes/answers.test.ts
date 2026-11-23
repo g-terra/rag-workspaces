@@ -83,6 +83,8 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
         DEFAULT_CHAT_MODEL: 'qwen-test',
         SECRETS_KEY: 'answers-test-secrets-key',
         DEFAULT_TOP_K: '4',
+        // More model calls than one minute's default limit (30) happen in this file.
+        RATE_LIMIT_MODEL_PER_MINUTE: '200',
       }),
       db: t.db,
       chroma: new ChromaService({ CHROMA_URL: 'http://chroma:8000' }, (async () =>
@@ -271,6 +273,97 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
     } finally {
       await set(null);
     }
+  });
+
+  describe('response styles', () => {
+    const setDefault = (style: string | null) =>
+      app.inject({
+        method: 'PATCH',
+        url: '/v1/workspaces/ouc',
+        headers: { authorization: auth.admin },
+        payload: { settings: { style } },
+      });
+    const systemMessage = () =>
+      String(runs.find((r) => r.flow === 'rw-answer')!.body.tweaks.LLM!.system_message);
+
+    it('no style: the answer records none and the prompt is unchanged', async () => {
+      const res = await ask({ question: 'What is RAG?' });
+      expect(res.json().style).toBeNull();
+      expect(systemMessage()).toBe(DEFAULT_SYSTEM_PROMPT);
+    });
+
+    it("a request's style is added after the system prompt, and stored with the answer", async () => {
+      const res = await ask({ question: 'What is RAG?', style: 'academic' });
+      expect(res.statusCode).toBe(201);
+      expect(res.json().style).toBe('academic');
+      expect(systemMessage().startsWith(`${DEFAULT_SYSTEM_PROMPT}\n\nResponse style: Academic.`)).toBe(true);
+      const [stored] = await t.db.select().from(answers).where(eq(answers.id, res.json().id));
+      expect(stored!.style).toBe('academic');
+      const read = await app.inject({
+        method: 'GET',
+        url: `/v1/workspaces/ouc/answers/${res.json().id}`,
+        headers: { authorization: auth.reader },
+      });
+      expect(read.json().style).toBe('academic');
+    });
+
+    it("the workspace's default style applies, and a request's own style wins over it", async () => {
+      expect((await setDefault('tutor')).json().settings.style).toBe('tutor');
+      try {
+        expect((await ask({ question: 'What is RAG?' })).json().style).toBe('tutor');
+        expect(systemMessage()).toContain('Response style: Tutor.');
+        runs.length = 0;
+        expect((await ask({ question: 'What is RAG?', style: 'concise' })).json().style).toBe('concise');
+        expect(systemMessage()).toContain('Response style: Concise.');
+      } finally {
+        await setDefault(null);
+      }
+    });
+
+    it("a workspace's own system prompt keeps its place, with the style after it", async () => {
+      const patch = (systemPrompt: string | null) =>
+        app.inject({
+          method: 'PATCH',
+          url: '/v1/workspaces/ouc',
+          headers: { authorization: auth.admin },
+          payload: { settings: { systemPrompt } },
+        });
+      await patch('Only answer about week 3.');
+      try {
+        await ask({ question: 'What is RAG?', style: 'talkative' });
+        expect(systemMessage().startsWith('Only answer about week 3.\n\nResponse style: Talkative.')).toBe(
+          true,
+        );
+      } finally {
+        await patch(null);
+      }
+    });
+
+    it('an unknown style is a 400 and nothing is asked or stored', async () => {
+      const before = (await t.db.select().from(answers)).length;
+      const res = await ask({ question: 'What is RAG?', style: 'pirate' });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().detail).toContain('pirate');
+      expect(runs).toHaveLength(0);
+      expect(await t.db.select().from(answers)).toHaveLength(before);
+    });
+
+    it('nothing relevant: the fixed text whatever the style, and the style is still recorded', async () => {
+      hits = [];
+      const res = await ask({ question: 'What is the capital of Peru?', style: 'talkative' });
+      expect(res.json()).toMatchObject({ grounded: false, text: NOT_FOUND_TEXT, style: 'talkative' });
+    });
+
+    it('a failed answer still records its style', async () => {
+      answerReply = () => Response.json({ detail: { message: 'model not loaded' } }, { status: 500 });
+      const res = await ask({ question: 'Will this styled one fail?', style: 'concise' });
+      expect(res.statusCode).toBe(502);
+      const [stored] = await t.db
+        .select()
+        .from(answers)
+        .where(eq(answers.question, 'Will this styled one fail?'));
+      expect(stored).toMatchObject({ status: 'failed', style: 'concise' });
+    });
   });
 
   it('nothing relevant: an ungrounded answer with the fixed text, and no model call', async () => {

@@ -37,6 +37,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Provider key | `/v1/workspaces/{slug}/providers`, `/v1/providers/{provider}/models` | admin |
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
+| Response style | `/v1/styles` | anyone authenticated |
 
 Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down. The admin UI's workspace Settings screen reads it for its provider and model pickers, and shows `defaults.workspace` (from `DEFAULT_CHUNK_SIZE`, `DEFAULT_CHUNK_OVERLAP`, `DEFAULT_TOP_K`, `DEFAULT_MIN_SCORE` and the built-in system prompt) as the value an empty setting uses.
 
@@ -89,6 +90,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 - `embeddingPrefixes` (read-only) is the text put before each document and each search query when embedding. It is pinned with the model, at creation and at every reindex, from the built-in table (nomic-embed-text and Qwen3-Embedding) or `EMBEDDING_PREFIXES` in `.env`, so a workspace's queries always match how its documents were embedded. It is `null` for a workspace not reindexed since prefixes were added, which embeds without them.
 - `chunkSize` and `chunkOverlap` apply to documents ingested after the change; reindex applies them to everything.
 - `reasoningEffort` (`none`, `minimal`, `low`, `medium`, `high`) is sent to the chat model as `reasoning_effort`, by LM Studio and OpenAI only. `none` stops a thinking model such as Qwen 3 from reasoning before it answers, which can take minutes on a local machine. `null` uses `DEFAULT_REASONING_EFFORT`, and when that is unset too nothing is sent.
+- `style` is the response style slug answers and chat replies use when a request names none (`null`: no style). An unknown slug is `400`. See [Response styles](#response-styles).
 - `status` is `active` or `reindexing`. While reindexing, passage search and reads, answers and chat messages return `503` with `Retry-After: 30`; the document list still works, so progress can be watched (each document goes `queued`, `processing`, `ready`).
 - Deleting a workspace removes its collection, files, documents, conversations and answers, and unbinds it from API keys; a key left with no workspace is revoked. Usage rows are kept with the workspace marked deleted.
 
@@ -147,9 +149,14 @@ A hosted provider's key can be saved for one workspace from the admin UI, and th
 - A reply is also `"grounded": false` when it cites none of the passages it was given (`[n]` or `【n】`): passages can score well and still not hold the answer, and the model then says so without citing. Its text and citations (the passages it read) are kept. The same rule applies to conversation replies.
 - `usage` token counts can be `null` when the provider does not report them.
 - Streaming adds `timeToFirstTokenMs`. A stream that fails midway ends with an `error` event and the answer is stored as failed, so it still shows in usage.
-- The message body is `{ "content": "…", "folderId": "fld_…" }`; `folderId` is optional and limits that message's search to one folder. A conversation's history sent to the model is capped (last 10 turns by default).
+- `style` (optional, on answers and messages) names a response style; without it the workspace's `settings.style` applies. The answer or reply records the style used (`null` for none); an unknown slug is `400`.
+- The message body is `{ "content": "…", "folderId": "fld_…", "style": "…" }`; `folderId` is optional and limits that message's search to one folder. A conversation's history sent to the model is capped (last 10 turns by default).
 
-Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv_…", "role": "assistant", "content": "…", "citations": [...], "usage": {...} }`.
+Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv_…", "role": "assistant", "content": "…", "citations": [...], "style": null, "usage": {...} }`.
+
+### Response styles
+
+`GET /v1/styles` lists the styles an answer can be written in: `{ "data": [{ "slug": "academic", "name": "Academic", "description": "…", "instructions": "…", "builtIn": true }] }`. Four are built in: `academic`, `talkative`, `concise` and `tutor`. A style changes tone, length and format only. Its instructions are added after the workspace's system prompt, behind a header that repeats the grounding rules (cite with `[n]`, use only the passages, complete lists, say only that the material does not cover it), so no style can switch citations or refusals off. The fixed "not found" reply is the same in every style.
 
 ## Material
 

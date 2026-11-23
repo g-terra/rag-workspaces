@@ -122,6 +122,7 @@ const BLANK: Workspace = {
     topK: null,
     minScore: null,
     reasoningEffort: null,
+    style: null,
   },
 };
 
