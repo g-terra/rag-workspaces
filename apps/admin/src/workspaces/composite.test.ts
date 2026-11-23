@@ -1,6 +1,6 @@
 import type { Workspace } from '@rag/shared';
 import { describe, expect, it } from 'vitest';
-import { sourceChoices, sourceLabel, validateComposite } from './composite';
+import { documentHome, sourceChoices, sourceLabel, validateComposite } from './composite';
 
 const ws = (slug: string, kind: 'standard' | 'composite' = 'standard', name = slug.toUpperCase()) =>
   ({ slug, name, kind, sources: kind === 'composite' ? ['a', 'b'] : null }) as Workspace;
@@ -60,5 +60,17 @@ describe('sourceLabel', () => {
 
   it('falls back to the slug of a source the caller cannot open', () => {
     expect(sourceLabel('hidden', 'study', all)).toBe('hidden');
+  });
+});
+
+describe('documentHome', () => {
+  const all = [ws('ouc'), ws('study', 'composite')];
+
+  it("is the passage's own workspace, where its document can be opened", () => {
+    expect(documentHome('ouc', all)).toBe('ouc');
+  });
+
+  it('is null when the caller cannot open that workspace (reached only through a composite)', () => {
+    expect(documentHome('hidden', all)).toBeNull();
   });
 });

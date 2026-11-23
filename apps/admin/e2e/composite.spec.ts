@@ -44,6 +44,9 @@ test('an admin combines two workspaces into a composite, which has no documents 
   await expect(nav.getByRole('link', { name: 'Playground' })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Upload' })).toHaveCount(0);
   await expect(nav.getByRole('link', { name: 'Documents' })).toHaveCount(0);
+  // A typed address for a screen it doesn't have goes back to its overview.
+  await page.goto(`/w/${composite.slug}/upload`);
+  await expect(page).toHaveURL(new RegExp(`/w/${composite.slug}$`));
 
   // Settings: sources instead of embedding, chunking and reindex.
   await nav.getByRole('link', { name: 'Settings' }).click();

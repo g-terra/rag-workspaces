@@ -60,3 +60,14 @@ export function sourceLabel(passageWorkspace: string, asked: string, workspaces:
   if (passageWorkspace === asked) return null;
   return workspaces.find((w) => w.slug === passageWorkspace)?.name ?? passageWorkspace;
 }
+
+/**
+ * Where a passage's document can be opened (library, PDF preview): the workspace that holds it, which
+ * for a passage found through a composite is one of its sources. `null` when the caller can't open that
+ * workspace itself, so there is no document page to offer.
+ */
+export function documentHome(passageWorkspace: string, workspaces: Workspace[]): string | null {
+  return workspaces.some((w) => w.slug === passageWorkspace && w.kind === 'standard')
+    ? passageWorkspace
+    : null;
+}

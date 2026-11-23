@@ -1,7 +1,7 @@
 import type { Citation } from '@rag/shared';
+import { useMatch } from 'react-router';
 import { Notice } from '@/components/states';
 import { Button } from '@/components/ui/button';
-import { useMatch } from 'react-router';
 import { sourceLabel } from '@/workspaces/composite';
 import { useCurrentWorkspace } from '@/workspaces/current';
 import { useWorkspaces } from '@/workspaces/queries';

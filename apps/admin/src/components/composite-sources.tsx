@@ -29,6 +29,11 @@ function SourcePicker({
       <legend className="mb-1.5 block text-[13px] font-medium">Sources</legend>
       <div className="flex max-h-48 flex-col gap-2 overflow-y-auto">
         {workspaces.isPending && <span className="text-muted-foreground text-xs">Loading…</span>}
+        {workspaces.isError && (
+          <span role="alert" className="text-destructive text-xs">
+            Couldn't load the workspaces: {workspaces.error.message}
+          </span>
+        )}
         {choices.map((w: Workspace) => (
           <label key={w.slug} className="flex items-center gap-2 text-sm">
             <input
@@ -168,8 +173,15 @@ export function CreateCompositeDialog({
   );
 }
 
-/** The Settings section of a composite: change which workspaces it answers from. */
+/**
+ * The Settings section of a composite: change which workspaces it answers from. Keyed on the saved
+ * list, so a refetch that changes it (a source deleted elsewhere) starts the picker afresh.
+ */
 export function CompositeSourcesSettings({ workspace }: { workspace: Workspace }) {
+  return <SourcesForm key={(workspace.sources ?? []).join(',')} workspace={workspace} />;
+}
+
+function SourcesForm({ workspace }: { workspace: Workspace }) {
   const saved = workspace.sources ?? [];
   const [sources, setSources] = useState(saved);
   const [error, setError] = useState<string>();

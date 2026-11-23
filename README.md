@@ -71,7 +71,9 @@ If port 80 is taken, set `PROXY_PORT` in `.env` (for example `8088`) and add the
 "Also at" ports keep working either way; Keycloak's pages always show at `KEYCLOAK_PUBLIC_URL`.
 
 After signing in, the admin UI opens the workspace you used last (or your first one); the workspace
-switcher in the sidebar changes it. Admins create workspaces from "All workspaces" or the switcher. Editors
+switcher in the sidebar changes it. Admins create workspaces from "All workspaces" or the switcher, and
+"New composite" there combines two or more into one workspace that answers from all of their material (it
+has no Upload or Documents of its own; its Settings choose the sources). Editors
 and admins upload files from "Upload" in the sidebar and watch each one through ingestion live.
 "Documents" lists everything in the workspace, live, with download for everyone and reindex and delete for
 editors and admins. "Playground" asks the workspace a question and streams the answer back word by word,

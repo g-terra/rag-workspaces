@@ -37,6 +37,11 @@ this makes them usable without curl.
 - `routes/workspace-settings.tsx`: embedding model, chunk size and overlap, relevance threshold and the
   Reindex section only for a standard workspace; a Sources section for a composite.
 - `routes/workspace-home.tsx`: a Sources row.
+- `routes/workspace-layout.tsx`, `StandardOnly`: `/w/{composite}/upload` and `/documents` go to the
+  overview.
+- `playground/passage-dialog.tsx`: "Open the document" and "View page" use the passage's own workspace
+  (`documentHome`), and are hidden when the caller can't open it. `playground/ask-panel.tsx`: the "not
+  found" panel of a composite points at its sources instead of Upload.
 - `playground/answer-view.tsx`: `SourceWorkspace` ("from OUC study") under a citation; used by Sources (ask,
   chat, stored conversations) and by search hits in `playground/search-panel.tsx`.
 
@@ -64,10 +69,10 @@ None: ships with the admin UI image.
 ## Testing
 
 - `apps/admin/src/workspaces/composite.test.ts`: source choices, validation (two to ten, missing name and
-  slug), the source label.
+  slug), the source label, where a passage's document can be opened.
 - `apps/admin/e2e/composite.spec.ts` (Playwright on the smoke stack): create a composite from two
   workspaces through the dialog (refused with one), Overview lists the sources, no Upload or Documents in
-  the sidebar, Settings shows Sources and no embedding model or reindex, and saving one source is refused.
+  the sidebar and `/upload` goes to the overview, Settings shows Sources and no embedding model or reindex, and saving one source is refused.
 
 ## Out of scope and follow-ups
 
@@ -75,5 +80,4 @@ None: ships with the admin UI image.
 
 ## Docs updated
 
-None needed: `docs/api-schema.md` already describes composites; the admin UI has no separate doc for
-these screens.
+- `README.md`: "New composite" in the tour of the admin UI.
