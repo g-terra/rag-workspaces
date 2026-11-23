@@ -3,8 +3,10 @@ import { WorkspaceRole } from './api-keys.js';
 import { WorkspaceSlug } from './common.js';
 
 export const ChatProvider = z.enum(['lmstudio', 'openai', 'anthropic', 'gemini']);
+export type ChatProvider = z.infer<typeof ChatProvider>;
 /** Anthropic has no embedding models, so it is not an embedding provider. */
 export const EmbeddingProvider = z.enum(['lmstudio', 'openai', 'gemini']);
+export type EmbeddingProvider = z.infer<typeof EmbeddingProvider>;
 
 /**
  * Per-workspace settings. `null` means "use the global default from .env", except the
