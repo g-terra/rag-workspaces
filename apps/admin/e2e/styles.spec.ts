@@ -50,6 +50,8 @@ test('an admin creates, edits and deletes a custom style; one in use as a defaul
   await dialog.getByLabel('Instructions').fill('Answer in three bullet points at most.');
   await dialog.getByRole('button', { name: 'Save changes' }).click();
   await expect(custom.getByTestId('style').filter({ hasText: name })).toContainText('three bullet points');
+  // Fields the edit left alone keep their values.
+  await expect(custom.getByTestId('style').filter({ hasText: name })).toContainText('Short revision notes.');
 
   // A workspace that uses it as its default keeps it from being deleted, and the dialog says which.
   const headers = await bearer(page);
