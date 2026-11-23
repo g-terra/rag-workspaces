@@ -1,7 +1,7 @@
 ---
 title: cover website import and custom styles in the user guide
 date: 2026-11-23
-pr: pending
+pr: "#123"
 status: in review
 areas: [docs]
 ---
