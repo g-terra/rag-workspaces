@@ -17,7 +17,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Lists | `?limit=20&cursor=…` returns `{ "data": [...], "nextCursor": "…" | null }` |
 | Errors | RFC 9457 problem JSON: `{ "type", "title", "status", "detail", "requestId" }`; validation errors add `errors: [{ "path", "message" }]`. See [errors](#errors) |
 | Roles | One global role, `admin`. Inside a workspace, people and keys are `reader` or `editor` |
-| Rate limits *(planned)* | Per key and per user; `429` with `Retry-After` and `RateLimit-*` headers |
+| Rate limits | Per person and per API key, per minute: every `/v1` request counts against `RATE_LIMIT_PER_MINUTE` (600), and search, answers and chat messages also against `RATE_LIMIT_MODEL_PER_MINUTE` (30). Responses carry `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset` (seconds) for the tighter one; over it, `429` with `Retry-After` |
 | Streaming | `Accept: text/event-stream` on answers and messages streams `token`, `citations`, `done`, `error` events |
 | Tracing | Every response has `X-Request-Id`, also stored in the usage log |
 
@@ -203,7 +203,7 @@ Question text is kept for a configurable time (`USAGE_QUESTION_RETENTION_DAYS`, 
 | 404 | No such resource, or a workspace the caller has no access to |
 | 409 | Slug already taken; deleting or reindexing a document while it is processing; reindexing a workspace that is already reindexing; changing a revoked API key |
 | 413, 415 | File too large; file type not supported |
-| 429 | Rate limit |
+| 429 | Over a rate limit; `Retry-After` says how many seconds to wait |
 | 502, 504 | Langflow failed (or the model returned an empty answer) or timed out |
 | 503 | Langflow not ready yet (with `Retry-After`) or unreachable; a provider key missing; Keycloak unreachable; workspace reindexing |
 
