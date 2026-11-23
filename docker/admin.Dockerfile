@@ -11,6 +11,8 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm turbo run build --filter=@rag/admin...
 
 FROM nginx:1.30.7-alpine AS runtime
-COPY docker/admin/nginx.conf /etc/nginx/conf.d/default.conf
+# Rendered to /etc/nginx/conf.d/default.conf at start, with MAX_UPLOAD_BYTES filled in.
+COPY docker/admin/nginx.conf.template /etc/nginx/templates/default.conf.template
+ENV MAX_UPLOAD_BYTES=2147483648
 COPY --from=build /repo/apps/admin/dist /usr/share/nginx/html
 EXPOSE 8080

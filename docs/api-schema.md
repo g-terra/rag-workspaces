@@ -37,7 +37,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
 
-Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down. The admin UI's workspace Settings screen reads it for its provider and model pickers.
+Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down. The admin UI's workspace Settings screen reads it for its provider and model pickers, and shows `defaults.workspace` (from `DEFAULT_CHUNK_SIZE`, `DEFAULT_CHUNK_OVERLAP`, `DEFAULT_TOP_K`, `DEFAULT_MIN_SCORE` and the built-in system prompt) as the value an empty setting uses.
 
 ```json
 // GET /v1/system → 200 (admin only)
@@ -50,7 +50,9 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
                 { "id": "openai", "configured": false, "reachable": null, "error": "OPENAI_API_KEY is not set",
                   "embeddings": true, "models": [] }],
   "defaults": { "chat": { "provider": "lmstudio", "model": "qwen2.5-7b-instruct", "available": true },
-                "embedding": { "provider": "lmstudio", "model": "text-embedding-nomic-embed-text-v1.5", "available": true } } }
+                "embedding": { "provider": "lmstudio", "model": "text-embedding-nomic-embed-text-v1.5", "available": true },
+                "workspace": { "chunkSize": 800, "chunkOverlap": 100, "topK": 5, "minScore": 0.3,
+                               "systemPrompt": "You answer questions using only the numbered passages…" } } }
 ```
 
 `providers` always lists `lmstudio`, `openai`, `gemini` and `anthropic`; a hosted one is asked only when its key is set, and keys are never returned. `langflowKey` is `auto` (minted at start), `env` (`LANGFLOW_API_KEY`) or `none` (not yet). `/ready` does not ask the model providers, so a stopped LM Studio shows here but doesn't make the API unready.
@@ -144,7 +146,7 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
   "tags": ["rag"], "createdAt": "…", "updatedAt": "…" }
 ```
 
-`type` is `pdf`, `docx`, `txt`, `md`, or with the video profile `mp4`, `mp3` or `wav` (without it those get `415`). `status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit return `413`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. `folderId` is `null` for a document at the top level.
+`type` is `pdf`, `docx`, `txt`, `md`, or with the video profile `mp4`, `mp3` or `wav` (without it those get `415`). `status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit (`MAX_UPLOAD_BYTES`, 2 GB by default) return `413` with the limit in `detail`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. `folderId` is `null` for a document at the top level.
 
 The events stream (`text/event-stream`, read with `fetch` since `EventSource` can't send `Authorization`) sends:
 
