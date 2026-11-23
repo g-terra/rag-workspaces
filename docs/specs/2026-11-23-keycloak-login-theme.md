@@ -2,7 +2,7 @@
 title: style Keycloak's sign-in page like the admin UI
 date: 2026-11-23
 pr: "#104"
-status: in review
+status: merged
 areas: [infra]
 ---
 
