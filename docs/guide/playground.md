@@ -60,6 +60,11 @@ Pick one per question with `"style": "concise"` on an answer or chat message, or
 with `PATCH /v1/workspaces/{slug} { "settings": { "style": "academic" } }`. A request's style wins over
 the workspace's; `"style": null` asks for none. `GET /v1/styles` lists them with their full instructions.
 
+How each built-in style did on the OUC test questions is in [Tuning](../tuning.md#response-styles). In
+short, every style cites and answers the covered half of a partly covered question, `concise` was the most
+accurate, and `talkative` sometimes answers a question the material doesn't cover instead of refusing, so
+check its answers to off-topic questions.
+
 In the playground, the "Response style" picker in Ask and in Chat chooses one for the next question:
 "Workspace default", "No style", or any built-in or custom style. Each answer shows the style it used.
 
