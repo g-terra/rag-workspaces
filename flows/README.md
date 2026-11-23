@@ -65,6 +65,11 @@ Output `ChatOutput-passages`: `{ collection, query, passages }`, where `passages
 `{ rank, id, text, score, document_id, filename, folder, page, start_seconds, chunk_index }`, best first; `score` is cosine
 similarity and hits below `min_score` are left out. An unknown collection returns an empty list.
 
+The search is hybrid: the 200 best passages by meaning (Chroma's vector search) and the 200 best by words (BM25 over each
+passage's text and file name) are fused with reciprocal rank fusion (k = 60), and the top `top_k` are kept. So "best first"
+is the fused order, and `score` (cosine) need not fall steadily down the list. The keyword index lives in the Langflow worker,
+one per collection, and is rebuilt when the collection's passage count changes or after two minutes.
+
 ### `rw-answer`: retrieve, prompt, generate (streams)
 
 Same `Embeddings` and `Search` tweaks as `rw-retrieve`, plus:
