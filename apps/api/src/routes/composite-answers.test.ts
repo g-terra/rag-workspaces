@@ -36,6 +36,8 @@ describe.skipIf(!url)('composite workspaces answer from their sources (against T
   const docs: Record<string, string> = {};
   /** Hits per collection: what rw-retrieve returns for each source. */
   let hits: Record<string, unknown[]> = {};
+  /** Collections whose search fails, as a provider outage would. */
+  let failing = new Set<string>();
 
   const langflowFetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const flow = /\/run\/([^?]+)/.exec(String(input))![1]!;
@@ -43,7 +45,29 @@ describe.skipIf(!url)('composite workspaces answer from their sources (against T
     runs.push({ flow, body });
     if (flow === 'rw-retrieve') {
       const collection = body.tweaks.Search.collection_name as string;
+      if (failing.has(collection))
+        return Response.json({ detail: 'embedding provider down' }, { status: 500 });
       return output({ 'ChatOutput-passages': fenced({ passages: hits[collection] ?? [] }) });
+    }
+    if (String(input).includes('stream=true')) {
+      const end = {
+        outputs: [
+          {
+            outputs: [
+              { component_id: 'ChatOutput-answer', results: { message: { text: 'Both say so [1][2].' } } },
+            ],
+          },
+        ],
+      };
+      return new Response(
+        [
+          { event: 'token', data: { chunk: 'Both say so ' } },
+          { event: 'token', data: { chunk: '[1][2].' } },
+          { event: 'end', data: { result: end } },
+        ]
+          .map((e) => JSON.stringify(e) + '\n\n')
+          .join(''),
+      );
     }
     return output({ 'ChatOutput-answer': 'Both say so [1][2].' });
   }) as typeof fetch;
@@ -137,6 +161,7 @@ describe.skipIf(!url)('composite workspaces answer from their sources (against T
 
   beforeEach(() => {
     runs.length = 0;
+    failing = new Set();
     hits = {
       ws_ouc: [hit('ouc', 1, 0.5), hit('ouc', 2, 0.45)],
       ws_personal: [hit('personal', 1, 0.9)],
@@ -267,5 +292,74 @@ describe.skipIf(!url)('composite workspaces answer from their sources (against T
     expect(res.statusCode).toBe(200);
     expect(res.json().passage).toMatchObject({ documentId: docs.personal, workspace: 'personal' });
     expect((await get(docs.other!)).statusCode).toBe(404);
+  });
+
+  const setStatus = (slug: string, status: 'active' | 'reindexing') =>
+    t.db.update(workspaces).set({ status }).where(eq(workspaces.slug, slug));
+
+  it('a source whose search fails is left out; the others still answer', async () => {
+    failing = new Set(['ws_ouc']);
+    const res = await ask('reader');
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ status: 'complete', citations: [{ workspace: 'personal' }] });
+  });
+
+  it('when every source fails, the answer fails with the reason', async () => {
+    failing = new Set(['ws_ouc', 'ws_personal']);
+    const res = await ask('reader');
+    expect(res.statusCode).toBeGreaterThanOrEqual(500);
+    expect(runs.some((r) => r.flow === 'rw-generate')).toBe(false);
+  });
+
+  it('when every source is being reindexed, the composite answers 503 like a reindexing workspace', async () => {
+    await setStatus('ouc', 'reindexing');
+    await setStatus('personal', 'reindexing');
+    try {
+      const res = await ask('reader');
+      expect(res.statusCode).toBe(503);
+      expect(res.headers['retry-after']).toBe('30');
+      const search = await app.inject({
+        url: '/v1/workspaces/study/passages?query=rag',
+        headers: { authorization: auth.reader },
+      });
+      expect(search.statusCode).toBe(503);
+    } finally {
+      await setStatus('ouc', 'active');
+      await setStatus('personal', 'active');
+    }
+  });
+
+  it('streams tokens, then citations naming their source, through rw-generate', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/workspaces/study/answers',
+      headers: { authorization: auth.reader, accept: 'text/event-stream' },
+      payload: { question: 'Stream it' },
+    });
+    expect(res.statusCode).toBe(200);
+    const ev = res.body
+      .split('\n\n')
+      .filter(Boolean)
+      .map((b) => [/^event: (.*)$/m.exec(b)![1]!, JSON.parse(/^data: (.*)$/m.exec(b)![1]!)] as const);
+    expect(ev.map(([e]) => e)).toEqual(['token', 'token', 'citations', 'done']);
+    expect(ev[2]![1].citations.map((c: { workspace: string }) => c.workspace)).toEqual([
+      'personal',
+      'ouc',
+      'ouc',
+    ]);
+    expect(runs.find((r) => r.flow === 'rw-generate')!.body.tweaks.LLM).toMatchObject({ stream: true });
+  });
+
+  it("a passage of a source being reindexed can't be previewed through the composite either", async () => {
+    await setStatus('personal', 'reindexing');
+    try {
+      const res = await app.inject({
+        url: `/v1/workspaces/study/passages/psg_${docs.personal!.replace(/^doc_/, '')}_1`,
+        headers: { authorization: auth.reader },
+      });
+      expect(res.statusCode).toBe(503);
+    } finally {
+      await setStatus('personal', 'active');
+    }
   });
 });

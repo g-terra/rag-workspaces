@@ -72,8 +72,9 @@ models and provider keys). It is recorded as decision 25.
 3. If nothing is left, the fixed "couldn't find anything" reply, no model call (as today).
 4. Otherwise the passages go to a new flow, **`rw-generate`**: `ChatInput` (the question) → `Prompt`
    (`context`, `question`, `history` set as tweaks) → `LLM` → `ChatOutput-answer`. It has no search
-   node: the API already holds the passages and their citations. The context is formatted exactly as the
-   `Search` node's `context` output, with the source workspace's name added to each passage's heading.
+   node: the API already holds the passages and their citations. The context follows the layout of the
+   `Search` node's `context` output, with the source workspace's name and the document's title (not its
+   file name) in each passage's heading.
    The composite's chat model, provider keys, system prompt, reasoning effort and style apply. Answers and
    chat messages both use it (an answer sends history `(this is the first message)`).
 5. Answers, messages and usage rows are stored under the composite, so analytics, privacy (decision 21) and

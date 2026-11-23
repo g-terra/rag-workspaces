@@ -102,4 +102,5 @@ pull requests that touch `apps/admin` or the stack, and nightly on `main`.
 
 The AI logic (loading, splitting, embedding, retrieval, prompting, generation) lives in Langflow flows
 committed as JSON, pinned to Langflow 1.13.3. The API only calls Langflow, by endpoint name, passing
-inputs as tweaks keyed by fixed node ids. The spike's flows, custom components and client are in `poc/`.
+inputs as tweaks keyed by fixed node ids. The one place the API shapes retrieval itself is a composite workspace:
+it fuses the ranked lists `rw-retrieve` returns for each source and sends them to `rw-generate` as the context. The spike's flows, custom components and client are in `poc/`.

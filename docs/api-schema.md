@@ -118,7 +118,12 @@ from their material, under its own slug, members, API keys, chat settings, style
 - Answers, chat messages and passage search search each source with that source's own embedding model, prefixes,
   provider keys and `minScore` (for up to the composite's `topK`), skip a source that is reindexing, and fuse the lists
   by rank (RRF, k = 60): with sources that share no passages, they take turns, best first. The composite's chat model
-  then answers through the `rw-generate` flow. `minScore` in a composite's passage search is `400`.
+  then answers through the `rw-generate` flow. `minScore` in a composite's passage search is `400`. A source whose
+  search fails is left out, unless all fail (the answer fails). When every source is reindexing, the composite answers
+  `503` with `Retry-After`, as a reindexing workspace does.
+- A composite request counts once against the rate limits, although it searches each source: its embedding calls are
+  one per source. Usage, answers and conversations are recorded under the composite; a source's own usage does not
+  show questions asked through a composite, and its provider keys pay for the embedding of those questions.
 - Every passage and citation has `workspace`: the slug of the workspace it comes from (for a composite, a source). A
   cited passage can be read through the composite (`GET /v1/workspaces/{composite}/passages/{passageId}`).
 

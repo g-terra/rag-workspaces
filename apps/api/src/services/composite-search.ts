@@ -4,6 +4,7 @@ import type { ScoredPassage } from '@rag/shared';
 import type { Config } from '../config.js';
 import { sourcesOf } from './composites.js';
 import { resolveHits, retrieve } from './passages.js';
+import { assertSearchable } from './reindex.js';
 import { withWorkspaceKeys } from './provider-keys.js';
 
 /** A passage found in one of a composite's sources. `rank` is its place in that source's own list, then in the fused one. */
@@ -38,8 +39,9 @@ function clock(seconds: number): string {
 }
 
 /**
- * The passages as the prompt's `{context}`: the same layout as the Search component's context output
- * (`langflow/components/rag_workspaces/chroma_search.py`), with the source workspace's name first.
+ * The passages as the prompt's `{context}`, in the layout of the Search component's context output
+ * (`langflow/components/rag_workspaces/chroma_search.py`), with the source workspace's name first and
+ * the document's title in place of its file name.
  */
 export function contextText(passages: SourceHit[]): string {
   if (!passages.length) return 'No relevant passages found.';
@@ -68,7 +70,7 @@ export type CompositeSearchConfig = Pick<
  * Search every source of a composite and fuse the results. Each source is searched through
  * `rw-retrieve` with its own embedding model, prefixes, provider keys and `minScore`, for up to
  * `limit` passages (the composite's `topK` unless the caller asks for fewer). A source being
- * reindexed is skipped: its passages are being rebuilt.
+ * reindexed is skipped (503 when all are), and so is one whose search fails, unless all fail.
  */
 export async function searchSources(
   deps: { db: Database; langflow: LangflowClient; config: CompositeSearchConfig },
@@ -78,13 +80,19 @@ export async function searchSources(
 ): Promise<SourceHit[]> {
   const { db, langflow, config } = deps;
   const limit = opts.limit ?? composite.settings.topK ?? config.DEFAULT_TOP_K;
-  const sources = (await sourcesOf(db, composite)).filter((s) => s.status === 'active');
-  const lists = await Promise.all(
+  const all = await sourcesOf(db, composite);
+  const sources = all.filter((s) => s.status === 'active');
+  // Every source rebuilding: the same 503 a reindexing workspace gives, not a false "nothing found".
+  if (all.length && !sources.length) assertSearchable(all[0]!);
+  const settled = await Promise.allSettled(
     sources.map(async (source) => {
       const keys = await withWorkspaceKeys(db, config, source.id);
       const hits = await resolveHits(db, source, await retrieve(langflow, source, query, keys, { limit }));
       return hits.map((h) => ({ ...h, workspaceName: source.name }));
     }),
   );
+  // One source down (its provider, its key) leaves the others to answer; all of them down is a failure.
+  const lists = settled.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+  if (!lists.length && settled.length) throw (settled[0] as PromiseRejectedResult).reason;
   return fuseSources(lists, limit);
 }
