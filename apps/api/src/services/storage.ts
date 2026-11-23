@@ -29,6 +29,9 @@ export type PageFile = { storagePath: string; sha256: string; sizeBytes: number 
 /** Hex SHA-256, the checksum documents are deduplicated by. */
 export const sha256 = (data: Buffer | string) => createHash('sha256').update(data).digest('hex');
 
+/** Where an imported web page's Markdown lives on the uploads volume. */
+export const pagePath = (slug: string, documentId: string) => `${slug}/${documentId}.md`;
+
 /** Thrown when a file is larger than the limit; becomes 413. */
 export class FileTooLarge extends Error {}
 
@@ -96,7 +99,7 @@ export class UploadStorage {
    * step (written to a temp file, then renamed), so a reader never sees half a page.
    */
   async writePage(slug: string, documentId: string, markdown: string): Promise<PageFile> {
-    const storagePath = `${slug}/${documentId}.md`;
+    const storagePath = pagePath(slug, documentId);
     const body = Buffer.from(markdown, 'utf8');
     await mkdir(path.join(this.root, slug), { recursive: true });
     const tmp = path.join(this.root, slug, `.${documentId}.${randomUUID()}.tmp`);

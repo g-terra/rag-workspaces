@@ -117,8 +117,8 @@ Output `ChatOutput-result`: `{ document_id, deleted }`.
 
 The API's crawler (`apps/api/src/services/crawl.ts`) runs this once per URL of an imported website, so the
 API never fetches the web itself. Every request goes through Langflow's SSRF guard (private and internal
-addresses are refused unless their host is in `LANGFLOW_SSRF_ALLOWED_HOSTS`; each redirect hop is checked
-again), with a 15 s timeout, a 5 MB body cap and the user agent `rag-workspaces-crawler`. robots.txt is
+addresses are refused; each redirect hop is checked again). Hosts in `LANGFLOW_SSRF_ALLOWED_HOSTS` are for
+Langflow's own use, so they are refused too; a private docs site needs its host in `CRAWL_ALLOWED_HOSTS`, with a 15 s timeout, a 5 MB body cap and the user agent `rag-workspaces-crawler`. robots.txt is
 honoured and cached per site for ten minutes.
 
 | Node | Tweak fields |
@@ -134,6 +134,7 @@ Output `ChatOutput-result`:
   on the page, absolute, collected before cleaning. `blocked` is true when robots.txt disallows the page,
   `skipped` names the content type of something that is not a page, `error` says why nothing could be read
   (`status` is then 0).
-- `sitemap` (`url` is the site's scope): `{ urls, crawlDelay, hasLlmsTxt, sitemaps, errors }`, from robots.txt's
-  `Sitemap:` lines, `<scope>sitemap.xml` and `/sitemap.xml`, following sitemap indexes on the same origin (at
-  most 50 files, gzip allowed).
+- `sitemap` (`url` is the site's scope): `{ urls, crawlDelay, hasLlmsTxt, complete }`, from `<scope>sitemap.xml`, robots.txt's
+  `Sitemap:` lines and `/sitemap.xml`, following sitemap indexes on the same origin (at most 50 files, gzip
+  allowed). `complete` is true when pages were listed, every sitemap named was read and the file cap was not
+  reached.

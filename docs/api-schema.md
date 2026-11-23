@@ -173,7 +173,7 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/transcript` | The timed transcript of a video or audio file: `{ "language": "en", "segments": [{ "start": 0, "end": 4.3, "text": "…" }] }` (seconds). `404` for other types and until it is transcribed |
 | GET | `/v1/workspaces/{slug}/documents/events` | Live status changes (server-sent events); see below |
 | GET, POST | `/v1/workspaces/{slug}/sites` | List imported websites; import one (`{ "url", "folderId"?, "maxPages"?, "maxDepth"?, "excludePaths"? }`, `202`, the crawl runs in the background; `409` for a start URL the workspace already has) |
-| GET, PATCH, DELETE | `/v1/workspaces/{slug}/sites/{siteId}` | Read with its crawl counters; change limits or folder (a folder change moves the existing pages); remove it with all its pages (`409` while crawling or while a page is processing) |
+| GET, PATCH, DELETE | `/v1/workspaces/{slug}/sites/{siteId}` | Read with its crawl counters; change limits or folder (a folder change moves the existing pages; `409` while crawling); remove it with all its pages (`409` while crawling or while a page is processing) |
 | POST | `/v1/workspaces/{slug}/sites/{siteId}/crawl` | Crawl again: changed pages are re-ingested, new ones added, gone ones removed; `202`, or `409` while queued or crawling |
 
 ```json
@@ -217,10 +217,11 @@ whose SSRF guard refuses private addresses.
 
 `status` is `queued`, `crawling`, `ready` or `failed` (`lastError` says why: the start URL answered 404, robots.txt
 disallows it, Langflow could not be reached). Pages appear in the documents list as they are found and are ingested
-like uploads, so the events stream shows their progress. Crawling again re-ingests only pages whose content changed,
-leaves a page alone while it is being ingested, and removes pages that answer 404 or 410, that robots.txt now
-disallows, or (only after a crawl that finished without hitting `maxPages` and with fewer than half its fetches
-failing) that were not reached at all. Pages are deduplicated within their site, not against uploads.
+like uploads, so the events stream shows their progress. Crawling again fetches every page the site has (even pages
+nothing links to any more) and re-ingests only pages whose content changed. It leaves a page alone while it is
+being ingested, and removes a page only when it answers 404 or 410, robots.txt now disallows it, or `excludePaths`
+now leaves it out; a page that errors or lies beyond `maxPages` keeps what it had. Pages are deduplicated within
+their site, not against uploads. The start URL must not carry a user name or password.
 
 ## Usage analytics
 

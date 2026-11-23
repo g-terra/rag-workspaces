@@ -141,6 +141,7 @@ describe.skipIf(!url)('sites (against TEST_DATABASE_URL)', () => {
       { url: 'https://example.org/', maxDepth: 0 },
       { url: 'https://example.org/', excludePaths: ['fr-ca/'] },
       { url: 'https://example.org/', extra: true },
+      { url: 'https://user:secret@example.org/docs' },
     ]) {
       expect(
         (await call('POST', '/v1/workspaces/docs/sites', 'editor', body)).statusCode,
@@ -195,10 +196,28 @@ describe.skipIf(!url)('sites (against TEST_DATABASE_URL)', () => {
     expect(pages.every((p) => p.folderId === folder.id)).toBe(true);
   });
 
+  it('does not move pages while the site is crawling', async () => {
+    const { site } = await siteWithPages('https://busy-move.example.org/', 1);
+    await t.db.update(sites).set({ status: 'crawling' }).where(eq(sites.id, site.id));
+    const folder = (await call('POST', '/v1/workspaces/docs/folders', 'admin', { name: 'Busy move' })).json();
+    const res = await call('PATCH', `/v1/workspaces/docs/sites/${site.id}`, 'editor', {
+      folderId: folder.id,
+    });
+    expect(res.statusCode).toBe(409);
+    expect(chromaCalls).toEqual([]);
+    // Limits can still change: they apply from the next crawl.
+    expect(
+      (await call('PATCH', `/v1/workspaces/docs/sites/${site.id}`, 'editor', { maxPages: 5 })).statusCode,
+    ).toBe(200);
+  });
+
   it('removes a site with its pages, vectors and files, but not while a page is being ingested', async () => {
     const { site, ids } = await siteWithPages('https://remove.example.org/', 2);
     await t.db.update(documents).set({ status: 'processing' }).where(eq(documents.id, ids[0]!));
     expect((await call('DELETE', `/v1/workspaces/docs/sites/${site.id}`, 'editor')).statusCode).toBe(409);
+    // Nothing was deleted: not the idle page, not its vectors.
+    expect(await t.db.select().from(documents).where(eq(documents.siteId, site.id))).toHaveLength(2);
+    expect(chromaCalls).toEqual([]);
     expect((await call('DELETE', `/v1/workspaces/docs/sites/${site.id}`, 'reader')).statusCode).toBe(403);
 
     await t.db.update(documents).set({ status: 'ready' }).where(eq(documents.id, ids[0]!));

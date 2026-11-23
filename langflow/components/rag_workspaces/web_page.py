@@ -4,8 +4,10 @@ The API crawls a site one URL at a time through this component (flow `rw-fetch`)
 pages to visit, the limits and the pause between requests, and this component does the fetching and
 cleaning, so loading stays in Langflow.
 
-- Every request goes through Langflow's SSRF guard: private and internal addresses are refused unless
-  their host is in LANGFLOW_SSRF_ALLOWED_HOSTS, and each redirect hop is checked again.
+- Every request goes through Langflow's SSRF guard: private and internal addresses are refused, and each
+  redirect hop is checked again. Hosts in LANGFLOW_SSRF_ALLOWED_HOSTS are there for Langflow's own use (LM
+  Studio on host.docker.internal), so they are refused for crawling too. A docs site on a private network is
+  allowed only when its host is listed in CRAWL_ALLOWED_HOSTS (comma-separated, set on the langflow service).
 - robots.txt is honoured (cached per site for the life of the worker).
 - `page` mode returns the page's main content as Markdown, without navigation, headers, footers and
   sidebars, plus every link on the page (collected before cleaning, since navigation is where links are).
@@ -14,11 +16,12 @@ cleaning, so loading stays in Langflow.
   sitemap indexes, and returns the page URLs, robots.txt's Crawl-delay and whether llms.txt exists.
 """
 
-import gzip
+import os
 import re
 import sys
 import time
 import types
+import zlib
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
@@ -59,24 +62,51 @@ class Blocked(Exception):
     """The SSRF guard refused a URL."""
 
 
+def _host_list(value: str) -> list[str]:
+    return [h.strip() for h in value.split(",") if h.strip()]
+
+
 def _client_for(url: str) -> httpx.Client:
     """A client for one URL's host, DNS-pinned to addresses the SSRF guard approved."""
-    from lfx.utils.ssrf_protection import SSRFProtectionError, is_ssrf_protection_enabled, validate_and_resolve_url
+    from lfx.utils.ssrf_protection import (
+        SSRFProtectionError,
+        get_allowed_hosts,
+        is_host_allowed,
+        is_ssrf_protection_enabled,
+        resolve_hostname,
+        validate_and_resolve_url,
+    )
     from lfx.utils.ssrf_transport import create_ssrf_protected_sync_client, pin_host_for_url
 
+    kwargs = {"timeout": TIMEOUT_SECONDS, "headers": {"User-Agent": USER_AGENT}}
+    host = (urlparse(url).hostname or "").lower()
+    if is_host_allowed(host, None, _host_list(os.getenv("CRAWL_ALLOWED_HOSTS", ""))):
+        return httpx.Client(**kwargs)
+    # Langflow's allow-list exempts its own services (LM Studio on the Docker host) from the guard; a crawl
+    # must not reach them, by name or by an address in an allowed range.
+    langflow_allowed = get_allowed_hosts()
+    if langflow_allowed:
+        try:
+            addresses = resolve_hostname(host)
+        except Exception:  # noqa: BLE001 - an unresolvable host fails below with the guard's own message
+            addresses = []
+        if is_host_allowed(host, None, langflow_allowed) or any(
+            is_host_allowed(host, ip, langflow_allowed) for ip in addresses
+        ):
+            msg = f"{host} is reserved for Langflow's own use; add it to CRAWL_ALLOWED_HOSTS to crawl it"
+            raise Blocked(msg)
     try:
         _, ips = validate_and_resolve_url(url)
     except (SSRFProtectionError, ValueError) as e:
         msg = f"refused by Langflow's SSRF guard: {e}"
         raise Blocked(msg) from e
-    kwargs = {"timeout": TIMEOUT_SECONDS, "headers": {"User-Agent": USER_AGENT}}
     if is_ssrf_protection_enabled() and ips:
         return create_ssrf_protected_sync_client(hostname=pin_host_for_url(url), validated_ips=ips, **kwargs)
     return httpx.Client(**kwargs)
 
 
-def http_get(url: str, accept: str = "*/*") -> tuple[int, str, str, bytes]:
-    """GET with redirects followed by hand (each hop re-checked). Returns status, final URL, type, body."""
+def http_get(url: str, accept: str = "*/*") -> tuple[int, str, str, bytes, str]:
+    """GET with redirects followed by hand (each hop re-checked): status, final URL, type, body, charset."""
     current = url
     for _ in range(MAX_REDIRECTS + 1):
         with _client_for(current) as client, client.stream(
@@ -92,14 +122,28 @@ def http_get(url: str, accept: str = "*/*") -> tuple[int, str, str, bytes]:
                 if len(body) > MAX_BODY_BYTES:
                     msg = f"{current} is larger than {MAX_BODY_BYTES // (1024 * 1024)} MB"
                     raise ValueError(msg)
-            ctype = r.headers.get("content-type", "").split(";")[0].strip().lower()
-            return r.status_code, current, ctype, bytes(body)
+            header = r.headers.get("content-type", "")
+            ctype = header.split(";")[0].strip().lower()
+            charset = re.search(r'charset="?([\w.-]+)', header, re.IGNORECASE)
+            return r.status_code, current, ctype, bytes(body), charset.group(1) if charset else "utf-8"
     msg = f"more than {MAX_REDIRECTS} redirects from {url}"
     raise ValueError(msg)
 
 
-def decode(body: bytes) -> str:
-    return body.decode("utf-8", errors="replace")
+def decode(body: bytes, charset: str = "utf-8") -> str:
+    try:
+        return body.decode(charset, errors="replace")
+    except LookupError:
+        return body.decode("utf-8", errors="replace")
+
+
+def gunzip(body: bytes) -> bytes:
+    """Decompress a .gz sitemap, stopping at the body cap (a small file can expand enormously)."""
+    out = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(body, MAX_BODY_BYTES + 1)
+    if len(out) > MAX_BODY_BYTES:
+        msg = f"sitemap larger than {MAX_BODY_BYTES // (1024 * 1024)} MB when decompressed"
+        raise ValueError(msg)
+    return out
 
 
 def robots_for(url: str) -> RobotFileParser:
@@ -111,8 +155,8 @@ def robots_for(url: str) -> RobotFileParser:
         return cached[1]
     parser = RobotFileParser()
     try:
-        status, _, _, body = http_get(f"{origin}/robots.txt", "text/plain")
-        parser.parse(decode(body).splitlines() if status == 200 else [])
+        status, _, _, body, charset = http_get(f"{origin}/robots.txt", "text/plain")
+        parser.parse(decode(body, charset).splitlines() if status == 200 else [])
     except (httpx.HTTPError, ValueError, Blocked):
         parser.parse([])
     _CACHE.robots[origin] = (time.monotonic(), parser)
@@ -209,36 +253,43 @@ class WorkspaceWebPage(Component):
                 out["blocked"] = True
                 return out
             if self.prefer_markdown:
-                twin = url.rstrip("/") + ".md"
-                status, final, ctype, body = http_get(twin, "text/markdown, text/plain")
+                parts = urlparse(url)
+                twin = parts._replace(path=parts.path.rstrip("/") + ".md", query="", fragment="").geturl()
+                status, final, ctype, body, charset = http_get(twin, "text/markdown, text/plain")
                 if status == 200 and ctype in ("text/markdown", "text/plain", "text/x-markdown"):
-                    out["markdown"] = strip_llms_note(decode(body))
+                    out["markdown"] = strip_llms_note(decode(body, charset))
                     out["status"] = 200
                     heading = re.search(r"^#\s+(.+)$", out["markdown"], re.MULTILINE)
                     out["title"] = heading.group(1).strip() if heading else ""
                     if not self.want_links:
                         return out
-            status, final, ctype, body = http_get(url, "text/html, text/markdown;q=0.9, text/plain;q=0.8")
+            twin_text = out["markdown"]
+            try:
+                status, final, ctype, body, charset = http_get(
+                    url, "text/html, text/markdown;q=0.9, text/plain;q=0.8"
+                )
+            except Exception:
+                if twin_text:  # the HTML page was only wanted for its links
+                    return out
+                raise
+            if twin_text and (status >= 400 or ctype not in ("text/html", "application/xhtml+xml")):
+                return out
             out["status"], out["finalUrl"] = status, final
             if status >= 400:
-                out["markdown"] = ""
                 return out
             if ctype in ("text/markdown", "text/plain", "text/x-markdown"):
-                out["markdown"] = out["markdown"] or decode(body).strip()
+                out["markdown"] = decode(body, charset).strip()
                 return out
             if ctype not in ("text/html", "application/xhtml+xml"):
                 out["skipped"] = ctype or "unknown content type"
-                out["markdown"] = ""
                 return out
-            html = decode(body)
+            html = decode(body, charset)
             out["links"], out["canonical"], title = page_links(html, final)
             out["title"] = out["title"] or title
-            if not out["markdown"]:
+            if not twin_text:
                 out["markdown"] = main_markdown(html)
-        except Blocked as e:
-            out["error"] = str(e)
-        except (httpx.HTTPError, ValueError) as e:
-            out["error"] = f"{type(e).__name__}: {e}" if not str(e) else str(e)
+        except Exception as e:  # noqa: BLE001 - one bad page (network, parsing, conversion) must not stop a crawl
+            out["error"] = str(e) or type(e).__name__
         return out
 
     def _sitemap(self) -> dict:
@@ -247,37 +298,54 @@ class WorkspaceWebPage(Component):
         origin = f"{parts.scheme}://{parts.netloc}"
         robots = robots_for(scope)
         delay = robots.crawl_delay(USER_AGENT)
-        todo = [*(robots.site_maps() or []), urljoin(scope, "sitemap.xml"), f"{origin}/sitemap.xml"]
-        seen: set[str] = set()
-        urls: dict[str, None] = {}
-        errors: list[str] = []
-        while todo and len(seen) < MAX_SITEMAP_FILES:
-            sm = todo.pop(0)
-            if sm in seen:
-                continue
-            seen.add(sm)
-            try:
-                status, _, _, body = http_get(sm, "application/xml, text/xml")
-            except (httpx.HTTPError, ValueError, Blocked) as e:
-                errors.append(f"{sm}: {e}")
-                continue
-            if status != 200:
-                continue
-            if sm.endswith(".gz") or body[:2] == b"\x1f\x8b":
-                try:
-                    body = gzip.decompress(body)
-                except OSError:
-                    continue
-            pages, nested = sitemap_urls(decode(body))
-            for p in pages:
-                urls[p] = None
-            # Nested sitemaps outside the site's origin are not ours to read.
-            todo.extend(n for n in nested if n.startswith(origin))
+        # The scope's own sitemap first (a docs site's, e.g. /docs/sitemap.xml); robots.txt's often names a
+        # site-wide index instead, which is slower to read and mostly out of scope.
+        urls, complete = read_sitemaps([urljoin(scope, "sitemap.xml")], origin)
+        if not urls:
+            named = [*(robots.site_maps() or []), f"{origin}/sitemap.xml"]
+            urls, complete = read_sitemaps(named, origin)
         has_llms = False
         try:
-            status, _, ctype, _ = http_get(urljoin(scope, "llms.txt"), "text/plain, text/markdown")
+            status, _, ctype, _, _ = http_get(urljoin(scope, "llms.txt"), "text/plain, text/markdown")
             has_llms = status == 200 and ctype in ("text/plain", "text/markdown")
         except (httpx.HTTPError, ValueError, Blocked):
             pass
-        return {"urls": list(urls), "crawlDelay": float(delay) if delay else None, "hasLlmsTxt": has_llms,
-                "sitemaps": len(seen), "errors": errors[:5]}
+        return {"urls": urls, "crawlDelay": float(delay) if delay else None, "hasLlmsTxt": has_llms,
+                "complete": complete}
+
+
+def read_sitemaps(start: list[str], origin: str) -> tuple[list[str], bool]:
+    """Page URLs of these sitemaps and the indexes they lead to on the same origin, and whether every one
+    was read (none failed, none left over at the file cap). A missing first-level sitemap is no failure."""
+    todo = list(dict.fromkeys(start))
+    first_level = set(todo)
+    seen: set[str] = set()
+    urls: dict[str, None] = {}
+    complete = True
+    while todo:
+        sm = todo.pop(0)
+        if sm in seen:
+            continue
+        if len(seen) >= MAX_SITEMAP_FILES:
+            complete = False
+            break
+        seen.add(sm)
+        try:
+            status, _, _, body, charset = http_get(sm, "application/xml, text/xml")
+            if status != 200:
+                complete = complete and sm in first_level
+                continue
+            if sm.endswith(".gz") or body[:2] == b"\x1f\x8b":
+                body = gunzip(body)
+        except (httpx.HTTPError, ValueError, Blocked, zlib.error):
+            complete = False
+            continue
+        pages, nested = sitemap_urls(decode(body, charset))
+        for p in pages:
+            urls[p] = None
+        # Nested sitemaps on another origin are not ours to read.
+        for n in nested:
+            nested_url = urlparse(n)
+            if f"{nested_url.scheme}://{nested_url.netloc}" == origin:
+                todo.append(n)
+    return list(urls), complete and bool(urls)

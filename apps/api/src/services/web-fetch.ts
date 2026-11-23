@@ -27,6 +27,8 @@ export type SiteMap = {
   crawlDelay: number | null;
   /** The site publishes llms.txt, so pages likely have a Markdown twin at `<url>.md`. */
   hasLlmsTxt: boolean;
+  /** Every sitemap was read and listed pages, so `urls` is the whole site and links need not be followed. */
+  complete: boolean;
 };
 
 /** How the crawler reaches the web: only ever through Langflow (decision 18). */

@@ -95,31 +95,34 @@ and avoids a table of URLs.
 
 ### 3. Each fetched page becomes a document
 
-The crawler writes the page's Markdown to `<slug>/<document id>.md` on the uploads volume (the same
-layout as uploads), hashes it, and then:
+The crawler hashes the page's Markdown, claims the document row first (insert, or a guarded update that
+skips a busy row), then writes the file to `<slug>/<document id>.md` on the uploads volume (the same layout
+as uploads) and enqueues ingestion; if the write fails the row is put back. Then:
 
 | Situation | What happens |
 | --- | --- |
 | No document for this site and URL | Insert a document (type `web`, `sourceUrl`, `siteId`, title from the page) and enqueue ingestion |
 | Same URL, same SHA-256 | Nothing (no re-embedding) |
 | Same URL, new content | Replace the file, update `sha256`, `sizeBytes`, `title`, set `queued`, enqueue. Ingestion deletes the old vectors first, as it already does |
-| Same content as another document in the workspace | Skipped and counted as a duplicate, as an upload would be |
+| Same content as another page of the site | Not stored again; counted unchanged |
 | 404 or 410 for a known page | The page's document is removed (vectors, file, row) |
 | Other fetch error (5xx, timeout) | Counted in `pagesFailed` with the last error; a known page keeps its document; the crawl goes on |
 | robots.txt now disallows a known page | Removed: the owner asked crawlers to stay out |
-| Known page's document is `queued`, `transcribing` or `processing` | Left alone this crawl and counted as `busy`; the next crawl picks up any change. The crawler never replaces a file an ingest run may be reading |
-| A known page's new content equals another page of the site | The page's document is removed (it is now a duplicate) |
+| Known page's document is `queued`, `transcribing` or `processing` | Left alone this crawl and counted unchanged; the next crawl picks up any change. The crawler never replaces a file an ingest run may be reading |
+| A known page's new content equals another page of the site | Kept as it was and counted unchanged; it is never removed for being a duplicate |
+| Redirect that ends outside the site's scope | Counted in `pagesFailed`; nothing is stored or followed; a known page keeps its document |
+| Known page whose URL `excludePaths` now leaves out | Removed at the start of the crawl |
 
 **Duplicates.** Content dedup for pages is per site, not per workspace: the workspace-wide unique index
 on `(workspace_id, sha256)` becomes partial (`WHERE site_id IS NULL`), and pages get a unique index on
 `(site_id, sha256)`. So a page that matches an uploaded file is still imported and cited by its URL, and two
 URLs with the same content inside a site keep the first one reached.
 
-**Removing unreached pages.** A page counts as reached when it was fetched and answered with anything but
-404 or 410 (including errors and skips). Only when a crawl ends `ready` **and** did not stop at `maxPages`
-**and** fewer than half of its fetches failed are the site's documents whose URL was not reached removed
-(the page left the site, moved to another URL, or is no longer linked). A crawl that ends `failed`, stops at
-`maxPages`, or saw mostly errors removes nothing.
+**Removal is per page, never by absence.** Every page the site already has is queued at the start of a
+crawl, after the start URL and the sitemap, so it is fetched again even when nothing links to it any more.
+A page is removed only when its own fetch says so (404, 410, robots.txt) or `excludePaths` now leaves it
+out. A page that errors, or that the crawl did not reach before `maxPages`, keeps its document. A
+partial crawl, a sitemap that could not be read, or a flaky site can therefore never empty a workspace.
 
 **Other routes.** A crawl that starts while the workspace is `reindexing` waits (the job retries with
 backoff). A site's page documents can still be moved, renamed or deleted through the documents routes; a
@@ -131,11 +134,11 @@ path are unchanged: checksum, queue, statuses, retries, reindex, delete.
 
 ### 4. Fetching and cleaning a page in Langflow
 
-A new flow `rw-fetch` (`flows/fetch.json`): `ChatInput` → `Fetch` (new custom component
+A new flow `rw-fetch` (`flows/fetch.json`): `Fetch` (new custom component
 `WorkspaceWebPage`, `langflow/components/rag_workspaces/web_page.py`) → `ChatOutput-result`. The component:
 
-- Fetches with httpx through Langflow's SSRF guard (DNS pinning, private addresses refused unless in
-  `LANGFLOW_SSRF_ALLOWED_HOSTS`), following redirects with each hop re-checked, a 15 s timeout, a 5 MB
+- Fetches with httpx through Langflow's SSRF guard (DNS pinning, private addresses refused), following
+  redirects with each hop re-checked, a 15 s timeout, a 5 MB
   body cap, and the user agent `rag-workspaces-crawler`.
 - Checks robots.txt (stdlib `urllib.robotparser`, cached per host for the life of the Langflow worker)
   and returns `blocked: true` instead of fetching a disallowed page.
@@ -151,7 +154,16 @@ A new flow `rw-fetch` (`flows/fetch.json`): `ChatInput` → `Fetch` (new custom 
   `noscript`, `svg`, `nav`, `header`, `footer`, `aside`, `form`, elements with role `navigation`,
   `banner`, `contentinfo` or `search`, and elements whose class or id names a sidebar, table of contents,
   breadcrumb, "edit this page", pagination or cookie banner. Then converts it with markitdown.
-- Returns fenced JSON: `{ url, finalUrl, status, title, markdown, links, canonical, blocked, skipped }`.
+- Returns fenced JSON: `{ url, finalUrl, status, title, markdown, links, canonical, blocked, skipped, error }`.
+- **Hosts.** `LANGFLOW_SSRF_ALLOWED_HOSTS` exists for Langflow's own services (LM Studio on
+  `host.docker.internal`), so a host in it, by name or by resolved address, is refused for crawling. A docs
+  site on a private network is crawled only when its host is in `CRAWL_ALLOWED_HOSTS` (comma-separated, on
+  the `langflow` service).
+- **Sitemap mode** reads `<scope>sitemap.xml`, then robots.txt's `Sitemap:` lines and `/sitemap.xml`,
+  following same-origin indexes (at most 50 files, gzip decompressed up to the 5 MB cap). It returns
+  `{ urls, crawlDelay, hasLlmsTxt, complete }`; `complete` is true only when pages were listed, every named
+  sitemap was read and the file cap was not reached. Only then does the crawler skip asking for links. The
+  API gives this run 5 minutes; if it fails the crawl goes on by following links and notes it in `lastError`.
 
 ### 5. Citations link back
 
@@ -178,10 +190,10 @@ with its own `queued` → `processing` → `ready`.
 | New document type `web` | Reuse `md` | The UI and filters can tell pages from uploaded Markdown; the loader still reads the `.md` file |
 | Use a page's `.md` twin when the site publishes `llms.txt` | Always clean the HTML | Mintlify, GitBook and others publish the page's own Markdown, written by the authors: better text than any boilerplate stripping, and cheaper. It is checked per page and falls back to HTML |
 | Dedup pages per site, not per workspace | Keep the workspace-wide checksum rule | A page identical to an uploaded file would otherwise never be cited by its URL, and a changed page whose content matches another document would hit the unique index mid-update |
-| Never touch a page that is being ingested; count it `busy` | Wait for it; replace the file anyway | Replacing or deleting a file Langflow is reading breaks the run; waiting would stall a long crawl. The next crawl catches the change |
+| Never touch a page that is being ingested; count it unchanged | Wait for it; replace the file anyway | Replacing or deleting a file Langflow is reading breaks the run; waiting would stall a long crawl. The next crawl catches the change |
 | Frontier in memory, restart from the start after a crash | A `site_pages` table | Unchanged pages cost one fetch and no embedding, so a restart is cheap; one table less |
-| Remove unreached pages only after a crawl that did not hit `maxPages` | Always; never | Always would delete pages just beyond the limit; never would keep dead pages forever |
-| Langflow's SSRF guard stays on | Turn it off for the crawler | An editor must not be able to point the stack at Keycloak, Chroma or the host. An intranet docs site needs its host in `LANGFLOW_SSRF_ALLOWED_HOSTS`, as LM Studio does |
+| Re-fetch every known page and remove only on its own 404, 410 or robots.txt | Remove pages a clean crawl did not reach | Absence is a weak signal: a sitemap timeout, a changed nav or a flaky hour would delete pages that still exist. Re-fetching costs one request per page and no embedding |
+| Langflow's SSRF guard stays on, with a separate `CRAWL_ALLOWED_HOSTS` | Turn it off for the crawler; reuse `LANGFLOW_SSRF_ALLOWED_HOSTS` | An editor must not be able to point the stack at Keycloak, Chroma or the host. Reusing Langflow's list would let a crawl reach LM Studio on the host |
 | Polite by default: one crawl at a time, 1 s between requests, robots.txt honoured | Parallel fetches | A docs site is someone else's server; 200 pages take about four minutes, which is fine for a one-off import |
 | No JavaScript rendering | Headless browser in Langflow | Most docs generators (Docusaurus, MkDocs, Sphinx, VitePress) serve the text in HTML. A browser would add a large dependency to the stack |
 
@@ -194,15 +206,18 @@ with its own `queued` → `processing` → `ready`.
     list and read).
   - `POST .../sites/{siteId}/crawl` → 202 `Site`; 409 while it is queued or crawling.
   - `PATCH .../sites/{siteId}` `{ maxPages?, maxDepth?, excludePaths?, folderId? }` → `Site`; limits apply
-    from the next crawl, a folder change moves the existing pages at once.
-  - `DELETE .../sites/{siteId}` → 204; removes the site and all its pages; 409 while it is crawling or any
-    of its pages is being ingested.
+    from the next crawl, a folder change moves the existing pages at once (409 while crawling).
+  - `DELETE .../sites/{siteId}` → 204; removes the site and all its pages in one transaction; 409 while it
+    is crawling or any of its pages is being ingested, and then nothing is deleted.
+  - The start URL must not carry a user name or password (400).
   - `Document`, `Passage`, `ScoredPassage`, `Citation` gain `sourceUrl: string | null`; `Document` gains
     `siteId: string | null`; `DocumentType` gains `web`.
 - **Configuration**: `CRAWL_DELAY_MS` (default 1000, the minimum gap between two requests to a site),
-  `CRAWL_FETCH_TIMEOUT_MS` (default 30000, the API's timeout for one `rw-fetch` run).
+  `CRAWL_FETCH_TIMEOUT_MS` (default 30000, the API's timeout for one page run; the sitemap run gets 5
+  minutes). On the `langflow` service, `CRAWL_ALLOWED_HOSTS` (empty by default) lists private hosts that
+  may be crawled.
 - **Data**: migration adding table `sites` (`id` `site_<ulid>`, `workspace_id` cascade, `folder_id` set
-  null, `start_url`, `scope`, `exclude_paths`, `max_pages`, `max_depth`, `prefers_markdown`, `status`, the counters, `last_error`, `crawled_at`,
+  null, `start_url`, `scope`, `exclude_paths`, `max_pages`, `max_depth`, `status`, the counters, `last_error`, `crawled_at`,
   timestamps; unique `(workspace_id, start_url)`), columns `documents.source_url` and `documents.site_id`
   (cascade is not used: the API deletes a site's documents itself so their vectors and files go too),
   unique `(site_id, source_url)` and `(site_id, sha256)`, the existing `(workspace_id, sha256)` index made
@@ -213,14 +228,15 @@ with its own `queued` → `processing` → `ready`.
   `WorkspaceWebPage`. `rw-ingest` is unchanged. `apps/api/src/flows.ts` lists `rw-fetch`, so `/ready`
   checks it.
 - **Events and logs**: no new SSE event type; page documents use the existing document events. Log lines
-  `crawl started`, `crawl finished` (with counters) and `page failed` carry `siteId`.
+  `crawl started`, `crawl finished` (with counters), `crawl failed` and `sitemap not read` carry
+  `siteId`; single page failures are on the site row (`pagesFailed`, `lastError`).
 
 ## Operations
 
 - Existing installs: `docker compose up -d --build` runs the migration on API start and imports the new
   flow on Langflow start. No `.env` change is needed.
 - An intranet or `localhost` docs site is refused by Langflow's SSRF guard; add its host to
-  `LANGFLOW_SSRF_ALLOWED_HOSTS` in `docker-compose.yml` (docs/setup.md says how).
+  `CRAWL_ALLOWED_HOSTS` in `.env` (docs/setup.md says how).
 - Removing a site deletes its pages' vectors, files and rows; it cannot be undone (crawl again instead).
 - Crawl failures show on the site (`failed` with `lastError`, for example "robots.txt disallows the start
   URL" or "start URL returned 404"); single page failures show as `pagesFailed` with the last error.
@@ -233,19 +249,22 @@ with its own `queued` → `processing` → `ready`.
 - `apps/api/src/services/crawl.test.ts` (Postgres from `TEST_DATABASE_URL`, a fake `PageFetcher`): breadth
   first within scope, sitemap seeding, Markdown twins and Crawl-delay, `maxPages` and `maxDepth`, canonical
   and duplicate pages, the site folder, a failed start page and Langflow down (both remove nothing), page
-  errors counted; crawling again re-ingests only changed pages, removes gone and robots-disallowed pages,
-  keeps unreached pages after a crawl that hit `maxPages` or mostly failed, leaves busy pages alone, removes a
+  errors counted, an incomplete or failing sitemap, a redirect out of the site; crawling again re-ingests
+  only changed pages, re-fetches pages nothing links to and keeps them, removes gone, robots-disallowed and
+  newly excluded pages, keeps pages that errored or were beyond `maxPages`, leaves busy pages alone, keeps a
   page that became a duplicate; waits during a reindex; recovery after a restart.
+- `apps/api/src/services/web-fetch.test.ts`: the tweaks sent to `rw-fetch` in both modes.
 - `apps/api/src/routes/sites.test.ts`: defaults and scope, 409 for a duplicate start URL, validation, reader
-  can read but not add, other workspace 404, crawl again once at a time, PATCH moves existing pages, DELETE
-  removes pages and vectors and refuses while a page is processing, `web` documents show `sourceUrl`.
+  can read but not add, other workspace 404, a URL with credentials refused, crawl again once at a time,
+  PATCH moves existing pages but not while crawling, DELETE removes pages and vectors and, while a page is
+  processing, refuses and deletes nothing, `web` documents show `sourceUrl`.
 - `apps/api/src/services/storage.test.ts`: `writePage` replaces a page in place.
 - `packages/db/src/db.test.ts`: uploads deduplicated per workspace, pages per site.
 - `apps/api/src/flows.test.ts` covers `fetch.json` like the other flows (component code matches the file).
 - The component was run against a real Langflow 1.13.3 container and a local static site: main-content pick
   and chrome removal, links collected before cleaning, canonical, Markdown twin with fallback, robots.txt
-  `Disallow` and `Crawl-delay`, nested sitemap index, `llms.txt` detection, and the SSRF guard refusing
-  `127.0.0.1`. auth0.com/docs was checked in a browser (Mintlify, `.md` twins, 7,000 sitemap entries); the
+  `Disallow` and `Crawl-delay`, nested sitemap index, `llms.txt` detection, the SSRF guard refusing
+  `127.0.0.1`, and `host.docker.internal` refused unless it is in `CRAWL_ALLOWED_HOSTS`. auth0.com/docs was checked in a browser (Mintlify, `.md` twins, 7,000 sitemap entries); the
   sandbox could not reach it, so a real crawl of it is still to run.
 - By hand: `pnpm smoke --keep`, then `POST /v1/workspaces/<slug>/sites` with a small public docs site and
   `maxPages: 20`, poll `GET …/sites/<id>`, then ask a question. The smoke-test addition is a follow-up.

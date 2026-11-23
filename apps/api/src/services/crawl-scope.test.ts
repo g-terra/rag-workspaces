@@ -9,6 +9,8 @@ describe('scopeOf', () => {
   it('keeps a directory and drops a file name, query and fragment', () => {
     expect(scopeOf('https://docs.example.org/guide/?x=1#top')).toBe('https://docs.example.org/guide/');
     expect(scopeOf('https://docs.example.org/guide/index.html')).toBe('https://docs.example.org/guide/');
+    expect(scopeOf('https://docs.example.org/docs/v2.1')).toBe('https://docs.example.org/docs/v2.1/');
+    expect(scopeOf('https://docs.example.org/guide/intro.md')).toBe('https://docs.example.org/guide/');
     expect(scopeOf('https://Docs.Example.org')).toBe('https://docs.example.org/');
   });
 });

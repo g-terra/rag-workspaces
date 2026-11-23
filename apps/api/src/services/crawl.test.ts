@@ -30,10 +30,12 @@ function page(
 
 class FakeFetcher implements PageFetcher {
   site: FakeSite = {};
-  map: SiteMap = { urls: [], crawlDelay: null, hasLlmsTxt: false };
+  map: SiteMap = { urls: [], crawlDelay: null, hasLlmsTxt: false, complete: false };
   fetched: { url: string; preferMarkdown: boolean; wantLinks: boolean }[] = [];
   /** Throw instead of answering, as when Langflow is down. */
   down = false;
+  /** Only the sitemap call throws, as when it times out. */
+  sitemapFails = false;
 
   async page(url: string, opts: { preferMarkdown: boolean; wantLinks: boolean }): Promise<FetchedPage> {
     this.fetched.push({ url, ...opts });
@@ -55,7 +57,7 @@ class FakeFetcher implements PageFetcher {
   }
 
   async sitemap(): Promise<SiteMap> {
-    if (this.down) throw new Error('Langflow: connect ECONNREFUSED');
+    if (this.down || this.sitemapFails) throw new Error('Langflow: connect ECONNREFUSED');
     return this.map;
   }
 }
@@ -110,9 +112,10 @@ describe.skipIf(!url)('crawler (against TEST_DATABASE_URL)', () => {
 
   beforeEach(() => {
     fetcher.site = {};
-    fetcher.map = { urls: [], crawlDelay: null, hasLlmsTxt: false };
+    fetcher.map = { urls: [], crawlDelay: null, hasLlmsTxt: false, complete: false };
     fetcher.fetched = [];
     fetcher.down = false;
+    fetcher.sitemapFails = false;
     queued.length = 0;
     sleeps.length = 0;
     vectorDeletes.length = 0;
@@ -191,6 +194,7 @@ describe.skipIf(!url)('crawler (against TEST_DATABASE_URL)', () => {
       urls: [`${ROOT}a`, `${ROOT}b`, 'https://docs.example.org/other/c', `${ROOT}fr-ca/a`],
       crawlDelay: 2,
       hasLlmsTxt: true,
+      complete: true,
     };
     await db
       .update(sites)
@@ -208,6 +212,27 @@ describe.skipIf(!url)('crawler (against TEST_DATABASE_URL)', () => {
     // The sitemap lists the site, so links are not needed and the Markdown twin is enough.
     expect(fetcher.fetched.every((f) => f.preferMarkdown && !f.wantLinks)).toBe(true);
     expect(sleeps).toEqual([2000, 2000]);
+  });
+
+  it('follows links when the sitemap is incomplete, and goes on without one', async () => {
+    const site = await newSite();
+    fetcher.map = { urls: [`${ROOT}a`], crawlDelay: null, hasLlmsTxt: false, complete: false };
+    fetcher.site = {
+      [site.startUrl]: page('# Home', [`${ROOT}b`]),
+      [`${ROOT}a`]: page('# A'),
+      [`${ROOT}b`]: page('# B'),
+    };
+    expect(await crawler.crawl(site.id)).toBe('ready');
+    expect(fetcher.fetched.map((f) => f.url)).toEqual([site.startUrl, `${ROOT}a`, `${ROOT}b`]);
+    expect(fetcher.fetched[0]!.wantLinks).toBe(true);
+
+    const bare = await newSite();
+    fetcher.fetched = [];
+    fetcher.sitemapFails = true;
+    fetcher.site = { [bare.startUrl]: page('# Bare', [`${ROOT}c`]), [`${ROOT}c`]: page('# C') };
+    expect(await crawler.crawl(bare.id)).toBe('ready');
+    expect(fetcher.fetched.map((f) => f.url)).toEqual([bare.startUrl, `${ROOT}c`]);
+    expect((await siteRow(bare.id)).lastError).toMatch(/sitemap/);
   });
 
   it('stops at maxPages and at maxDepth', async () => {
@@ -286,6 +311,22 @@ describe.skipIf(!url)('crawler (against TEST_DATABASE_URL)', () => {
     expect(vectorDeletes).toEqual([]);
   });
 
+  it('does not follow a redirect out of the site', async () => {
+    const site = await newSite();
+    fetcher.site = {
+      [site.startUrl]: page('# Home', [`${ROOT}out`]),
+      [`${ROOT}out`]: page('# Elsewhere', [`https://evil.example.com/x`], {
+        finalUrl: 'https://evil.example.com/landing',
+      }),
+    };
+    expect(await crawler.crawl(site.id)).toBe('ready');
+    expect((await pagesOf(site.id)).map((p) => p.sourceUrl)).toEqual([site.startUrl]);
+    expect(await siteRow(site.id)).toMatchObject({
+      pagesFailed: 1,
+      lastError: expect.stringMatching(/redirected outside the site/),
+    });
+  });
+
   it('counts page errors and goes on', async () => {
     const site = await newSite();
     fetcher.site = {
@@ -340,6 +381,37 @@ describe.skipIf(!url)('crawler (against TEST_DATABASE_URL)', () => {
       });
     });
 
+    it('fetches pages nothing links to any more, and keeps them while they answer', async () => {
+      const site = await newSite();
+      fetcher.site = {
+        [site.startUrl]: page('# Home', [`${ROOT}orphan`]),
+        [`${ROOT}orphan`]: page('# Orphan'),
+      };
+      await crawler.crawl(site.id);
+      await ingestAll(site.id);
+      fetcher.site[site.startUrl] = page('# Home');
+      fetcher.fetched = [];
+      await crawler.crawl(site.id);
+      expect(fetcher.fetched.map((f) => f.url)).toEqual([site.startUrl, `${ROOT}orphan`]);
+      expect(await pagesOf(site.id)).toHaveLength(2);
+      expect(vectorDeletes).toEqual([]);
+    });
+
+    it('removes pages now excluded from the site', async () => {
+      const site = await newSite();
+      fetcher.site = { [site.startUrl]: page('# Home', [`${ROOT}old/x`]), [`${ROOT}old/x`]: page('# Old') };
+      await crawler.crawl(site.id);
+      await ingestAll(site.id);
+      const old = (await pagesOf(site.id)).find((p) => p.sourceUrl === `${ROOT}old/x`)!;
+      await db
+        .update(sites)
+        .set({ excludePaths: ['/guide/old/'] })
+        .where(eq(sites.id, site.id));
+      await crawler.crawl(site.id);
+      expect((await pagesOf(site.id)).map((p) => p.sourceUrl)).toEqual([site.startUrl]);
+      expect(vectorDeletes).toEqual([old.id]);
+    });
+
     it('removes a page robots.txt now disallows', async () => {
       const site = await newSite();
       fetcher.site = { [site.startUrl]: page('# Home', [`${ROOT}p`]), [`${ROOT}p`]: page('# P') };
@@ -350,7 +422,7 @@ describe.skipIf(!url)('crawler (against TEST_DATABASE_URL)', () => {
       expect((await pagesOf(site.id)).map((p) => p.sourceUrl)).toEqual([site.startUrl]);
     });
 
-    it('keeps unreached pages when the crawl stopped at maxPages or most fetches failed', async () => {
+    it('keeps pages that were not fetched or did not answer', async () => {
       const site = await newSite();
       fetcher.site = {
         [site.startUrl]: page('# Home', [`${ROOT}x`, `${ROOT}y`]),
@@ -396,7 +468,7 @@ describe.skipIf(!url)('crawler (against TEST_DATABASE_URL)', () => {
       expect((await pagesOf(site.id)).map((p) => p.sourceUrl)).toContain(`${ROOT}busy`);
     });
 
-    it('removes a page whose new content duplicates another page of the site', async () => {
+    it('keeps a page whose new content duplicates another page of the site, as it was', async () => {
       const site = await newSite();
       fetcher.site = {
         [site.startUrl]: page('# Home', [`${ROOT}a`, `${ROOT}b`]),
@@ -405,9 +477,12 @@ describe.skipIf(!url)('crawler (against TEST_DATABASE_URL)', () => {
       };
       await crawler.crawl(site.id);
       await ingestAll(site.id);
+      const before = await pagesOf(site.id);
       fetcher.site[`${ROOT}b`] = page('# A');
       await crawler.crawl(site.id);
-      expect((await pagesOf(site.id)).map((p) => p.sourceUrl)).toEqual([site.startUrl, `${ROOT}a`]);
+      expect(await pagesOf(site.id)).toEqual(before);
+      expect(vectorDeletes).toEqual([]);
+      expect((await siteRow(site.id)).pagesUnchanged).toBe(3);
     });
   });
 
