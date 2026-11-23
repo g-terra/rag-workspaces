@@ -1,7 +1,7 @@
 ---
 title: show the real default values in workspace settings
 date: 2026-11-23
-pr: pending
+pr: "#69"
 status: in review
 areas: [api, admin, docs]
 ---
