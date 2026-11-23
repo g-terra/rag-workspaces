@@ -20,6 +20,11 @@ from lfx.schema.dataframe import DataFrame
 TRANSCRIPT_ROW_CHARS = 600
 TRANSCRIPT_ROW_SECONDS = 60
 
+# pypdf stops parsing a page's content stream after 2 million tokens ("Reached maximum number of tokens
+# per stream"), which real slide decks with drawn diagrams can pass. This allows 25 times more; a page
+# that still goes over is skipped rather than failing the whole document.
+PDF_STREAM_PARSING_BUDGET = 50_000_000
+
 
 class WorkspaceDocumentLoader(Component):
     display_name = "Workspace Document Loader"
@@ -57,13 +62,20 @@ class WorkspaceDocumentLoader(Component):
             meta["folder"] = self.folder
 
         rows: list[Data] = []
+        skipped: list[int] = []
         if ext == ".pdf":
-            from pypdf import PdfReader
+            from pypdf import PdfReader, apply_configuration
+            from pypdf.errors import LimitReachedError
 
-            for i, page in enumerate(PdfReader(str(path)).pages, start=1):
-                text = (page.extract_text() or "").strip()
-                if text:
-                    rows.append(Data(data={**meta, "page": i, "text": text}))
+            with apply_configuration(stream_parsing_work_maximum_count=PDF_STREAM_PARSING_BUDGET):
+                for i, page in enumerate(PdfReader(str(path)).pages, start=1):
+                    try:
+                        text = (page.extract_text() or "").strip()
+                    except LimitReachedError:
+                        skipped.append(i)
+                        continue
+                    if text:
+                        rows.append(Data(data={**meta, "page": i, "text": text}))
         elif ext == ".docx":
             import docx
 
@@ -80,8 +92,12 @@ class WorkspaceDocumentLoader(Component):
 
         if not rows:
             msg = f"No text could be extracted from {path.name}"
+            if skipped:
+                msg += f" (pages too complex to read: {', '.join(map(str, skipped))})"
             raise ValueError(msg)
         self.status = f"{len(rows)} page row(s) from {path.name}"
+        if skipped:
+            self.status += f"; skipped pages too complex to read: {', '.join(map(str, skipped))}"
         return DataFrame(rows)
 
 

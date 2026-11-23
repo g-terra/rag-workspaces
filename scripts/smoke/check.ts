@@ -341,6 +341,21 @@ async function main() {
     },
   );
 
+  await step('a PDF page with a very long content stream is still read', async () => {
+    const form = new FormData();
+    form.append('files', new Blob([densePdf()]), 'dense.pdf');
+    const { data } = (await call(token, 'POST', `/v1/workspaces/${slug}/documents`, form)) as {
+      data: { document: Doc }[];
+    };
+    const [doc] = await waitUntilReady(token, slug, [data[0]!.document.id]);
+    expect(doc!.status === 'ready', `dense.pdf: ${doc!.status} ${doc!.error ?? ''}`);
+    const passages = await passagesOf(collection, doc!.id);
+    expect(
+      passages.some((p) => p.page === 1),
+      `dense.pdf passages: ${JSON.stringify(passages)}`,
+    );
+  });
+
   await step('video and audio: a WAV is transcribed, and its passages carry start times', async () => {
     // A valid, silent WAV header; the stand-in Whisper answers any file with the same two segments.
     const wav = Buffer.alloc(44 + 1600);
@@ -399,3 +414,30 @@ main().catch((err) => {
   console.error(err instanceof CheckFailed ? `FAIL ${err.message}` : err);
   process.exit(1);
 });
+
+/**
+ * A one-page PDF whose content stream holds about 3 million tokens (a million `0 0 m` path operators)
+ * after one line of text: more than pypdf parses by default ("Reached maximum number of tokens per
+ * stream"), as in slide decks with drawn diagrams.
+ */
+function densePdf(): Buffer {
+  const body = 'BT /F1 12 Tf 72 720 Td (Dense page text) Tj ET\n' + '0 0 m\n'.repeat(1_000_000);
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+    `<< /Length ${body.length} >>\nstream\n${body}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = objects.map((o, i) => {
+    const at = pdf.length;
+    pdf += `${i + 1} 0 obj\n${o}\nendobj\n`;
+    return at;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const at of offsets) pdf += `${String(at).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf, 'latin1');
+}
