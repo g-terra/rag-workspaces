@@ -16,6 +16,10 @@ second set. One run per setting can't separate differences of a question or two.
 
 ## Recommended settings (local models, OUC course material)
 
+The chunk size and overlap, top-k, minimum score and system prompt below are the defaults for workspaces that don't set
+their own (`apps/api/src/config.ts`, `DEFAULT_SYSTEM_PROMPT` in `apps/api/src/services/generate.ts`). The default prompt
+says "this workspace's material" instead of "course material".
+
 | Setting                | Value                                                                                                                                                                                                       |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Chat model             | `qwen3.6-35b-a3b-splash`, reasoning effort `none` (about 21 GB). Lighter: `openai/gpt-oss-20b` (about 12 GB); in one run each at the same settings it scored 12 against 13 of 15, with a 2.9 s median against 1.5 s |

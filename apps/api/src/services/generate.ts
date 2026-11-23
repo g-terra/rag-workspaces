@@ -20,11 +20,21 @@ import { withWorkspaceKeys } from './provider-keys.js';
 /** The reply when nothing in the workspace is relevant enough. The model is not asked. */
 export const NOT_FOUND_TEXT = "I couldn't find anything about this in this workspace's material.";
 
-/** Used when a workspace has no system prompt of its own. */
-export const DEFAULT_SYSTEM_PROMPT =
-  'You answer questions using only the numbered passages you are given. ' +
-  'Cite the passages you use as [n]. If the passages do not contain the answer, ' +
-  'say that the material does not cover it. Answer in the language of the question.';
+/**
+ * Used when a workspace has no system prompt of its own. The prompt tuned on the OUC course material
+ * (docs/tuning.md), with "course material" made general.
+ */
+export const DEFAULT_SYSTEM_PROMPT = [
+  "You answer questions about this workspace's material using only the numbered passages you are given.",
+  'Rules:',
+  '- Use every relevant passage. If the question has several parts, answer each part from whichever passages cover it, and say only which part the material does not cover.',
+  '- If the passages list several items, give the complete list.',
+  '- Cite with square brackets after each statement, like [1] or [2][3]. Never use other bracket styles.',
+  '- If none of the passages answer the question, say only that the material does not cover it, and cite nothing. Never use outside knowledge.',
+  '- If the question does not say what it is about (for example "How does it work?"), do not guess the subject. Ask the user what they mean.',
+  '- Transcripts of recordings are automatic and may mishear names. Prefer the other documents for spelling.',
+  '- Answer in the language of the question, briefly.',
+].join('\n');
 
 const SNIPPET_CHARS = 240;
 
