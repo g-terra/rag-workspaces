@@ -3,7 +3,7 @@ title: Start times on passages and citations
 date: 2026-11-23
 pr: "#72"
 status: in review
-areas: [api, flows, langflow-client, mcp, docs]
+areas: [api, flows, mcp, docs]
 ---
 
 # Start times on passages and citations
@@ -77,6 +77,7 @@ have `start_seconds` in Chroma.
   PDF hit returns `null`, and a passage's neighbours read it from chunk metadata.
 - `apps/api/src/routes/answers.test.ts`: a citation from a transcript carries `startSeconds`, and an
   answer whose stored citations have no `startSeconds` reads back with `null`.
+- `apps/api/src/routes/conversations.test.ts`: the same for a stored chat reply.
 - `apps/mcp/src/tools.test.ts`: `ask` passes `startSeconds` on.
 - `apps/api/src/flows.test.ts`: the three flows carry the new search code.
 - `scripts/smoke/check.ts`: the WAV step now checks that search finds the transcript with a numeric
