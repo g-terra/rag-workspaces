@@ -41,13 +41,25 @@ docker compose up -d     # first start pulls about 2 GB of images and takes a fe
 docker compose ps        # every service should say (healthy)
 ```
 
-| What | Where | Login |
-|---|---|---|
-| Admin UI | http://localhost:8080 | `RW_ADMIN_USERNAME` / `RW_ADMIN_PASSWORD`, through Keycloak's sign-in page |
-| API and Swagger UI | http://localhost:3000/docs | none yet |
-| Langflow editor | http://localhost:7860 | `LANGFLOW_SUPERUSER` / `LANGFLOW_SUPERUSER_PASSWORD` from `.env` |
-| Keycloak admin console (create people here) | http://localhost:8081/admin | `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` |
-| rag-workspaces sign-in (realm `rag-workspaces`) | http://localhost:8081/realms/rag-workspaces/account | `RW_ADMIN_USERNAME` / `RW_ADMIN_PASSWORD` |
+| What | Where | Also at | Login |
+|---|---|---|---|
+| Admin UI | http://rag.localhost | http://localhost:8080 | `RW_ADMIN_USERNAME` / `RW_ADMIN_PASSWORD`, through Keycloak's sign-in page |
+| API and Swagger UI | http://api.rag.localhost/docs | http://localhost:3000/docs | a Keycloak token or an `rw_` API key |
+| Langflow editor | http://langflow.rag.localhost | http://localhost:7860 | `LANGFLOW_SUPERUSER` / `LANGFLOW_SUPERUSER_PASSWORD` from `.env` |
+| Keycloak admin console (create people here) | http://auth.rag.localhost/admin | http://localhost:8081/admin | `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` |
+| rag-workspaces sign-in (realm `rag-workspaces`) | http://auth.rag.localhost/realms/rag-workspaces/account | | `RW_ADMIN_USERNAME` / `RW_ADMIN_PASSWORD` |
+
+The names come from a small proxy (Caddy, `docker/caddy/Caddyfile`) on port 80, over plain HTTP. Chrome, Firefox
+and Edge send every `*.localhost` name to this machine by themselves, so there is nothing to set up. If a
+browser or tool doesn't open them (some Safari versions, older curl), add this line to `/etc/hosts`:
+
+```text
+127.0.0.1 rag.localhost api.rag.localhost auth.rag.localhost langflow.rag.localhost
+```
+
+If port 80 is taken, set `PROXY_PORT` in `.env` (for example `8088`) and add the port to `KEYCLOAK_PUBLIC_URL`,
+`ADMIN_UI_URL` and `PUBLIC_API_URL` (`http://rag.localhost:8088`), then `docker compose up -d --build`. The
+"Also at" ports keep working either way; Keycloak's pages always show at `KEYCLOAK_PUBLIC_URL`.
 
 After signing in, the admin UI opens the workspace you used last (or your first one); the workspace
 switcher in the sidebar changes it. Admins create workspaces from "All workspaces" or the switcher. Editors
@@ -66,6 +78,15 @@ the stack's data) and `docker compose up -d --build`. To keep your data instead,
 the Keycloak admin console; for the people list (`GET /v1/users`, added 2026-11-23) that means creating the
 `api-directory` client as `realm.json` describes it, with `KEYCLOAK_DIRECTORY_SECRET` from `.env` as its
 secret.
+
+An install from before the local names (2026-11-23) keeps its `localhost` URLs, because `pnpm env:init`
+never changes existing values, and keeps working as before. To move it to the names:
+
+1. In `.env`, set `KEYCLOAK_PUBLIC_URL=http://auth.rag.localhost`, `ADMIN_UI_URL=http://rag.localhost` and
+   `PUBLIC_API_URL=http://api.rag.localhost`.
+2. In the Keycloak admin console (realm `rag-workspaces`, client `admin-ui`), add `http://rag.localhost/*` to
+   the valid redirect URIs and post-logout redirect URIs, and `http://rag.localhost` to the web origins.
+3. Run `docker compose up -d --build` (the admin UI has the Keycloak URL built in).
 
 ## Development
 
