@@ -2,7 +2,7 @@
 title: Let admins create custom response styles
 date: 2026-11-23
 pr: "#109"
-status: in review
+status: merged
 areas: [api, db, shared, docs]
 ---
 

@@ -286,7 +286,7 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
             <Field
               id="ws-style"
               label="Default response style"
-              hint="The tone and length answers use when a question names no style. Citations and refusals apply in every style."
+              hint="The tone and length answers use when a question names no style. Citations and refusals apply in every style. Admins manage the styles under Response styles."
             >
               <select
                 id="ws-style"

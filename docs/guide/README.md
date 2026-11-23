@@ -38,6 +38,6 @@ and each API key is a **reader** or an **editor**.
 | Upload, reindex and delete documents | | yes | yes |
 | See the workspace's usage | | yes | yes |
 | Create workspaces, change settings, manage members | | | yes |
-| Create API keys, see usage across all workspaces, see the System page | | | yes |
+| Create API keys, manage response styles, see usage across all workspaces, see the System page | | | yes |
 
 Answers and conversations are private to the person or key that asked, plus admins.

@@ -2,7 +2,7 @@
 title: cover custom styles and crawl settings in the user guide
 date: 2026-11-23
 pr: "#123"
-status: in review
+status: merged
 areas: [docs]
 ---
 
