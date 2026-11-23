@@ -40,7 +40,7 @@ export function AppLayout() {
             <NavLink to="/usage" className={navItemClass}>
               <BarChart3 className="size-4" /> Usage
             </NavLink>
-            <NavLink to="/system" className={navItemClass} data-tour="system">
+            <NavLink to="/system" className={navItemClass}>
               <Activity className="size-4" /> System
             </NavLink>
           </nav>

@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/auth/auth-context';
 
 /**
- * `GET /v1/system`: the services and the model providers, for the pickers on the settings page.
+ * `GET /v1/system`: the services and the model providers, for the pickers on the settings page and
+ * the System page. `live` asks again every 30 seconds; `enabled` holds it back for non-admins.
  * Admins only, so it is called from screens an admin alone reaches; a failure is never fatal — the
  * page that reads it falls back to what the API's own schemas accept.
  */

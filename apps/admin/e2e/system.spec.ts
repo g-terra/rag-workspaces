@@ -7,7 +7,7 @@ test('the sidebar shows the version, and System shows the services and links to 
   page,
 }) => {
   await signIn(page, '/');
-  await expect(page.getByTestId('app-version')).toHaveText(/^v\d+\.\d+\.\d+/);
+  await expect(page.getByTestId('app-version')).toHaveText(/^v\d+\.\d+\.\d+$/);
 
   await page.getByRole('link', { name: 'System' }).click();
   await expect(page).toHaveURL(/\/system$/);
@@ -20,7 +20,7 @@ test('the sidebar shows the version, and System shows the services and links to 
     const row = page.getByTestId('health-row').filter({ hasText: name }).first();
     await expect(row).toContainText(/\d+ ms/);
   }
-  await expect(page.getByTestId('health-row').filter({ hasText: 'LM Studio' })).toBeVisible();
+  await expect(page.getByTestId('health-row').filter({ hasText: 'LM Studio' }).first()).toBeVisible();
 
   const tools = page.getByRole('region', { name: 'Tools' });
   await expect(tools.getByRole('link', { name: /Langflow/ })).toHaveAttribute('href', /^http:\/\/.+\/$/);

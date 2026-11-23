@@ -1,5 +1,6 @@
 import { ExternalLink, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/auth/auth-context';
+import { KEYCLOAK_URL } from '@/auth/oidc';
 import { ErrorState, Loading, Notice } from '@/components/states';
 import { TopBar } from '@/components/top-bar';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,7 @@ import { toolLinks } from '@/system/tools';
 
 const TOOLS = toolLinks({
   langflow: import.meta.env.VITE_LANGFLOW_URL ?? 'http://localhost:7860',
-  keycloak: import.meta.env.VITE_KEYCLOAK_URL ?? 'http://localhost:8081',
+  keycloak: KEYCLOAK_URL,
 });
 
 const GROUPS: { group: HealthRow['group']; title: string }[] = [
@@ -96,7 +97,7 @@ export function System() {
               onRetry={() => void system.refetch()}
             />
           )}
-          {summary && (
+          {summary && !system.isError && (
             <>
               <p
                 role="status"

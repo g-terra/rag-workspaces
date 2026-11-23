@@ -1,8 +1,8 @@
 ---
 title: show the version, the stack's health and links to its tools in the admin UI
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#103"
+status: in review
 areas: [admin, infra]
 ---
 
@@ -34,15 +34,16 @@ model pickers. The tool URLs were printed once by `pnpm run setup` (`scripts/set
   under the product name. No release-please change is needed, and the admin's own `package.json` version stays
   unused.
 - **System page.** `routes/system.tsx`, routed at `/system` in `router.tsx`, linked from the Admin nav in
-  `components/app-layout.tsx` (`data-tour="system"`, for the first-time walkthrough built in parallel).
+  `components/app-layout.tsx`.
   Non-admins get the same "Admins only" notice as the API keys page. The page reads `useSystem()`
   (`system/queries.ts`), now refetching every 30 seconds while the page is open, with a Refresh button.
+  When a refresh fails, the page shows the error and hides the last result rather than a stale green line.
   `system/health.ts` turns the response into rows: one per service, one per provider (`ok`, `down` or
   `not set up`), one per default model, and an overall line ("All systems working" or "N problems"). The API's
   own version from `/v1/system` is shown next to the UI's, so a stale container is visible.
 - **Tool links.** `system/tools.ts` builds the list from build-time URLs: Langflow from `VITE_LANGFLOW_URL`
   (new), Keycloak's admin console from the existing `VITE_KEYCLOAK_URL` (`/admin/master/console/#/rag-workspaces`,
-  the realm's users), and Swagger at `/api/docs/` on the UI's own origin (nginx already forwards `/api/`, as
+  the realm's users; it signs in as the master realm's `KEYCLOAK_ADMIN`, not the app login, and the link says so), and Swagger at `/api/docs/` on the UI's own origin (nginx already forwards `/api/`, as
   the top bar's "API docs" button does). Links open in a new tab.
 - **Build wiring.** `docker/admin.Dockerfile` takes a `LANGFLOW_PUBLIC_URL` build argument (default
   `http://langflow.rag.localhost`) into `VITE_LANGFLOW_URL`, as it already does for Keycloak;

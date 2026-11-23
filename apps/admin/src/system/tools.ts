@@ -14,7 +14,8 @@ export function toolLinks(urls: { langflow: string; keycloak: string }): ToolLin
     },
     {
       name: 'Keycloak',
-      description: 'Admin console: people, passwords and roles in the rag-workspaces realm',
+      description:
+        'Admin console for people, passwords and roles. Sign in with KEYCLOAK_ADMIN from .env, not your app login',
       href: `${base(urls.keycloak)}/admin/master/console/#/rag-workspaces`,
     },
     {
