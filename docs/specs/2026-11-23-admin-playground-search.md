@@ -1,8 +1,8 @@
 ---
 title: Search mode in the admin playground
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#58"
+status: in review
 areas: [admin]
 ---
 

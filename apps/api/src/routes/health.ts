@@ -25,8 +25,8 @@ export const healthRoutes: FastifyPluginAsyncZod<HealthRoutesOptions> = async (a
         tags: ['system'],
         summary: 'Readiness: every dependency answers',
         description:
-          'Returns 200 when Postgres, Chroma, Langflow, Keycloak and the model provider all answer, 503 otherwise. ' +
-          'No detail is given here; admins get it from `GET /v1/system`.',
+          'Returns 200 when Postgres, Chroma, Langflow and Keycloak all answer, 503 otherwise. ' +
+          'No detail is given here; admins get it, and the state of the model providers, from `GET /v1/system`.',
         response: { 200: Ready, 503: Ready },
       },
       logLevel: 'warn',

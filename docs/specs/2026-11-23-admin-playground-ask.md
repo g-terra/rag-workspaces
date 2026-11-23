@@ -1,8 +1,8 @@
 ---
 title: Ask a workspace a question in the admin playground
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#55"
+status: in review
 areas: [admin]
 ---
 
@@ -75,7 +75,7 @@ the UI, not only through the API. The routes and their streaming contract are sp
 | Move `sse.ts` to `src/api/` | Import it from `@/documents/` | Two unrelated features read it now; a feature folder importing another feature's internals hides that |
 | One `streamGeneration()` for answers and messages | A copy per route | The two streams differ only in the id the `error` event carries |
 | Ignore the `citations` event | Render sources from it | The `done` record that follows it immediately carries the same citations |
-| Ignore events after Stop | Keep the last token that races in | Stop means stop; the API still stores the whole answer, which the stopped note says |
+| Ignore events after Stop | Keep the last token that races in | Stop means stop; closing the stream aborts the run, and the API stores the answer as it stood, which the stopped note says |
 | Keep the partial text after a failure | Clear it and show only the error | The text already read is what the person saw; hiding it looks like a bug |
 | A stream ending without `done` is a failure | Treat the text as the answer | A dropped connection must not look like a finished answer |
 | Passage count as a fixed 3/5/8 choice, 5 by default | A number input, or leave it to the workspace | The mock's three choices, in order, and the API caps it at 20 anyway |

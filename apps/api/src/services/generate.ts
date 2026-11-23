@@ -50,6 +50,8 @@ type GenerateInput = {
   /** Earlier turns as text. Given → the `rw-chat` flow; absent → `rw-answer`. */
   history?: string;
   maxPassages?: number;
+  /** Search only this folder (already checked to belong to the workspace). */
+  folderId?: string;
   /** Langflow session id; one per run, so runs never share Langflow-side memory. */
   sessionId: string;
   /** Stream the reply: called with each piece of text as the model writes it. */
@@ -90,7 +92,7 @@ export class Generator {
 
   async generate(input: GenerateInput): Promise<Generation> {
     const { db, langflow, config } = this.deps;
-    const { workspace, question, history, maxPassages, sessionId, onToken, signal } = input;
+    const { workspace, question, history, maxPassages, folderId, sessionId, onToken, signal } = input;
     const searchQuery = input.searchQuery ?? question;
     const started = performance.now();
     const elapsed = () => Math.round(performance.now() - started);
@@ -107,7 +109,7 @@ export class Generator {
 
     try {
       chat = chatEndpoint(workspace.settings, config);
-      const opts = { limit: maxPassages };
+      const opts = { limit: maxPassages, folderId };
       // Resolve before deciding: a hit whose document was deleted or is not ready doesn't count.
       const hits = await resolveHits(
         db,
@@ -140,9 +142,9 @@ export class Generator {
         },
       };
       if (history !== undefined) {
-        // In rw-chat the chat input is the search query; the question and history go to the prompt.
-        tweaks.Question = { input_value: question };
-        tweaks.History = { input_value: history || '(this is the first message)' };
+        // In rw-chat the chat input is the search query; the question and history are set
+        // straight on the prompt's own fields, so the flow needs no extra input nodes.
+        tweaks.Prompt = { question, history: history || '(this is the first message)' };
       }
       const request: RunRequest = {
         input_value: history === undefined ? question : searchQuery,

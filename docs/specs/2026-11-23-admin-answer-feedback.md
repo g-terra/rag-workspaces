@@ -1,8 +1,8 @@
 ---
 title: Rating a playground answer
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#57"
+status: in review
 areas: [admin]
 ---
 

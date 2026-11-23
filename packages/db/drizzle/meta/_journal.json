@@ -50,6 +50,13 @@
       "when": 1795195607141,
       "tag": "0006_usage_log",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795431434073,
+      "tag": "0007_folders",
+      "breakpoints": true
     }
   ]
 }
