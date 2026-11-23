@@ -297,6 +297,7 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
       expect(res.statusCode).toBe(201);
       expect(res.json().style).toBe('academic');
       expect(systemMessage().startsWith(`${DEFAULT_SYSTEM_PROMPT}\n\nResponse style: Academic.`)).toBe(true);
+      expect(systemMessage()).toContain('cite them with [n]');
       const [stored] = await t.db.select().from(answers).where(eq(answers.id, res.json().id));
       expect(stored!.style).toBe('academic');
       const read = await app.inject({
@@ -315,6 +316,10 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
         runs.length = 0;
         expect((await ask({ question: 'What is RAG?', style: 'concise' })).json().style).toBe('concise');
         expect(systemMessage()).toContain('Response style: Concise.');
+        runs.length = 0;
+        // `null` asks for no style, even where the workspace has a default.
+        expect((await ask({ question: 'What is RAG?', style: null })).json().style).toBeNull();
+        expect(systemMessage()).toBe(DEFAULT_SYSTEM_PROMPT);
       } finally {
         await setDefault(null);
       }
@@ -334,6 +339,8 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
         expect(systemMessage().startsWith('Only answer about week 3.\n\nResponse style: Talkative.')).toBe(
           true,
         );
+        // The default prompt's rules are not added to a prompt that may not want them.
+        expect(systemMessage()).not.toContain('cite them with [n]');
       } finally {
         await patch(null);
       }
@@ -352,6 +359,41 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
       hits = [];
       const res = await ask({ question: 'What is the capital of Peru?', style: 'talkative' });
       expect(res.json()).toMatchObject({ grounded: false, text: NOT_FOUND_TEXT, style: 'talkative' });
+    });
+
+    it('a workspace default that no longer exists is ignored, not blamed on the caller', async () => {
+      const [ws] = await t.db.select().from(workspaces).where(eq(workspaces.slug, 'ouc'));
+      const before = ws!.settings;
+      await t.db
+        .update(workspaces)
+        .set({ settings: { ...before, style: 'gone' } })
+        .where(eq(workspaces.id, ws!.id));
+      try {
+        const res = await ask({ question: 'What is RAG?' });
+        expect(res.statusCode).toBe(201);
+        expect(res.json().style).toBeNull();
+        expect(systemMessage()).toBe(DEFAULT_SYSTEM_PROMPT);
+      } finally {
+        await t.db.update(workspaces).set({ settings: before }).where(eq(workspaces.id, ws!.id));
+      }
+    });
+
+    it('a streamed answer carries its style in done; an unknown style is a plain 400 before any stream', async () => {
+      const streamed = await app.inject({
+        method: 'POST',
+        url: '/v1/workspaces/ouc/answers',
+        headers: { authorization: auth.reader, accept: 'text/event-stream' },
+        payload: { question: 'What is RAG?', style: 'concise' },
+      });
+      expect(streamed.body).toMatch(/event: done\ndata: .*"style":"concise"/);
+      const bad = await app.inject({
+        method: 'POST',
+        url: '/v1/workspaces/ouc/answers',
+        headers: { authorization: auth.reader, accept: 'text/event-stream' },
+        payload: { question: 'What is RAG?', style: 'no-such-style' },
+      });
+      expect(bad.statusCode).toBe(400);
+      expect(bad.headers['content-type']).toContain('application/problem+json');
     });
 
     it('a failed answer still records its style', async () => {

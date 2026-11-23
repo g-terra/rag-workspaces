@@ -6,18 +6,24 @@ import { BUILT_IN_STYLES, composeSystemPrompt, findStyle } from './styles.js';
 
 describe('composeSystemPrompt', () => {
   it('leaves the prompt exactly as it was with no style', () => {
-    expect(composeSystemPrompt(DEFAULT_SYSTEM_PROMPT, null)).toBe(DEFAULT_SYSTEM_PROMPT);
+    expect(composeSystemPrompt(DEFAULT_SYSTEM_PROMPT, null, true)).toBe(DEFAULT_SYSTEM_PROMPT);
   });
 
   it("adds the style after the base prompt, so a workspace's own prompt keeps its rules too", () => {
     const style = findStyle('academic');
-    const prompt = composeSystemPrompt('Custom rules.', style);
+    const prompt = composeSystemPrompt('Custom rules.', style, false);
     expect(prompt.startsWith('Custom rules.\n\nResponse style: Academic.')).toBe(true);
     expect(prompt.endsWith(style.instructions)).toBe(true);
   });
 
+  it("does not impose the default rules on a workspace's own prompt", () => {
+    const prompt = composeSystemPrompt('Answer freely.', findStyle('talkative'), false);
+    expect(prompt).toContain('Every rule above still applies.');
+    expect(prompt).not.toContain('cite them with [n]');
+  });
+
   it('repeats the grounding rules in the style header', () => {
-    const prompt = composeSystemPrompt(DEFAULT_SYSTEM_PROMPT, findStyle('talkative'));
+    const prompt = composeSystemPrompt(DEFAULT_SYSTEM_PROMPT, findStyle('talkative'), true);
     const header = prompt.slice(DEFAULT_SYSTEM_PROMPT.length);
     expect(header).toContain('Every rule above still applies');
     expect(header).toContain('cite them with [n]');

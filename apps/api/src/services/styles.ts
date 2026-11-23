@@ -54,24 +54,35 @@ export function findStyle(slug: string): ResponseStyle {
   return style;
 }
 
-/** The style for one request: the one it names, else the workspace's default, else none. */
-export function styleFor(requested: string | undefined, workspace: Workspace): ResponseStyle | null {
-  const slug = requested ?? workspace.settings.style;
-  return slug ? findStyle(slug) : null;
+/**
+ * The style for one request: the one it names (`null`: none), else the workspace's default, else none.
+ * A default that no longer resolves is ignored rather than turned into a `400` the caller did not cause.
+ */
+export function styleFor(requested: string | null | undefined, workspace: Workspace): ResponseStyle | null {
+  if (requested !== undefined) return requested === null ? null : findStyle(requested);
+  const fallback = workspace.settings.style;
+  return (fallback && BUILT_IN_STYLES.find((s) => s.slug === fallback)) || null;
 }
 
 /**
- * The system prompt with a style added after it. With no style the prompt is unchanged. The header
- * repeats the grounding rules on purpose: small local models weigh the end of a prompt most, and a
- * style like `talkative` pulls towards freer answers.
+ * The system prompt with a style added after it. With no style the prompt is unchanged. After the
+ * built-in prompt the header repeats its grounding rules on purpose: small local models weigh the end of
+ * a prompt most, and a style like `talkative` pulls towards freer answers. A workspace's own prompt may
+ * have other rules, so it only gets the general reminder.
  */
-export function composeSystemPrompt(base: string, style: ResponseStyle | null): string {
+export function composeSystemPrompt(
+  base: string,
+  style: ResponseStyle | null,
+  baseIsDefault: boolean,
+): string {
   if (!style) return base;
+  const recap = baseIsDefault
+    ? ' Every rule above still applies: use only the passages, cite them with [n], give complete lists, and if the passages do not cover the question say only that.'
+    : ' Every rule above still applies.';
   return [
     base,
     '',
-    `Response style: ${style.name}. This changes only tone, length and format. Every rule above still applies: ` +
-      'use only the passages, cite them with [n], give complete lists, and if the passages do not cover the question say only that.',
+    `Response style: ${style.name}. This changes only tone, length and format.${recap}`,
     style.instructions,
   ].join('\n');
 }
