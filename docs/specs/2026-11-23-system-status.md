@@ -1,7 +1,7 @@
 ---
 title: system status for admins, with the models each provider offers
 date: 2026-11-23
-pr: pending
+pr: "#46"
 status: in review
 areas: [api, docs]
 ---
