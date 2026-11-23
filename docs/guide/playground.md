@@ -7,7 +7,8 @@ modes, picked at the top of the page (the mode is in the URL, so a link opens th
 
 One question, one answer written from the workspace's material. The answer streams in word by word, with
 numbered citations like `[1]` that point to the passages it used. Each source shows its document and page
-(or `at 12:34` for a recording) and opens the document there. Nothing is remembered between questions.
+(or `at 12:34` for a recording, or the page's address for an imported website) and opens the document
+there. Nothing is remembered between questions.
 
 ![Ask mode: a streamed answer with its sources](../images/playground-answer.png)
 
@@ -58,6 +59,7 @@ built in:
 Pick one per question with `"style": "concise"` on an answer or chat message, or set a workspace default
 with `PATCH /v1/workspaces/{slug} { "settings": { "style": "academic" } }`. A request's style wins over
 the workspace's; `"style": null` asks for none. `GET /v1/styles` lists them with their full instructions.
+
 In the playground, the "Response style" picker in Ask and in Chat chooses one for the next question:
 "Workspace default", "No style", or any built-in or custom style. Each answer shows the style it used.
 
@@ -65,6 +67,11 @@ Admins add their own styles under "Response styles" in the sidebar: a name, a sh
 instructions the model gets after its usual rules. Custom styles are shared by every workspace. The built-in
 ones are listed there too, read-only. A style that a workspace uses as its default can't be deleted until
 that workspace picks another; the dialog names the workspaces.
+
+Through the API, admins add them with `POST /v1/styles` (a slug, name, description and instructions), and
+change or delete them with `PATCH` and `DELETE /v1/styles/{slug}`. A custom style works like a built-in one
+in every workspace, behind the same reminder of the grounding rules. Agents can pick one too: the MCP
+server has `list_styles`, and `ask` takes a `style` ([API keys and agents](api-keys.md#connect-an-ai-agent-mcp)).
 
 ## Conversations
 

@@ -28,6 +28,8 @@ services:
     environment:
       # Langflow blocks model URLs on private networks; the stand-in is one.
       LANGFLOW_SSRF_ALLOWED_HOSTS: host.docker.internal,standin
+      # The stand-in also serves a stub docs website for the website import's check.
+      CRAWL_ALLOWED_HOSTS: standin
 
   api:
     depends_on:
