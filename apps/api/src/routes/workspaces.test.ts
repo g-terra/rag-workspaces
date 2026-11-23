@@ -336,6 +336,37 @@ describe.skipIf(!url)('workspaces (against TEST_DATABASE_URL)', () => {
       ).toBe(400);
     });
 
+    it('PATCH refuses an unknown or composite source and keeps the old list', async () => {
+      await call('POST', '/v1/workspaces', 'admin', {
+        slug: 'nested',
+        name: 'Nested',
+        kind: 'composite',
+        sources: ['ouc', 'personal'],
+      });
+      for (const sources of [
+        ['ouc', 'nope'],
+        ['ouc', 'nested'],
+      ]) {
+        expect((await call('PATCH', '/v1/workspaces/study', 'admin', { sources })).statusCode).toBe(400);
+      }
+      expect((await call('GET', '/v1/workspaces/study', 'admin')).json().sources).toEqual(['ouc', 'third']);
+    });
+
+    it('changing only the sources still marks the composite updated', async () => {
+      const before = (await call('GET', '/v1/workspaces/study', 'admin')).json().updatedAt;
+      await new Promise((r) => setTimeout(r, 10));
+      const res = await call('PATCH', '/v1/workspaces/study', 'admin', { sources: ['third', 'ouc'] });
+      expect(res.json().updatedAt > before).toBe(true);
+      await call('PATCH', '/v1/workspaces/study', 'admin', { sources: ['ouc', 'third'] });
+    });
+
+    it('a reader of the composite sees its sources, even ones they cannot open', async () => {
+      await call('PUT', '/v1/workspaces/study/members/alice-1', 'admin', { role: 'reader' });
+      const got = await call('GET', '/v1/workspaces/study', 'alice');
+      expect(got.json()).toMatchObject({ kind: 'composite', sources: ['ouc', 'third'], access: 'reader' });
+      expect((await call('GET', '/v1/workspaces/third', 'alice')).statusCode).toBe(404);
+    });
+
     it('a deleted source drops out of the composite', async () => {
       expect((await call('DELETE', '/v1/workspaces/third', 'admin')).statusCode).toBe(204);
       expect((await call('GET', '/v1/workspaces/study', 'admin')).json().sources).toEqual(['ouc']);

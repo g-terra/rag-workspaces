@@ -103,7 +103,11 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
       const visible = [];
       for (const w of rows) {
         const access = await accessTo(db, p, w);
-        const sources = links.filter((l) => l.compositeId === w.id).map((l) => byId.get(l.sourceId)!);
+        // A link read after its source was deleted (two separate reads) is skipped, not a crash.
+        const sources = links.flatMap((l) => {
+          const source = l.compositeId === w.id ? byId.get(l.sourceId) : undefined;
+          return source ? [source] : [];
+        });
         if (access) visible.push(toApi(w, access, sources));
       }
       return { data: visible, nextCursor: null };
@@ -136,14 +140,14 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
         .where(eq(workspaces.slug, slug));
       if (taken) throw new HttpProblem(409, `The slug "${slug}" is taken.`);
       const composite = kind === 'composite';
-      const embeddingModel = settings.embeddingModel ?? config.DEFAULT_EMBEDDING_MODEL;
+      const embeddingModel = () => settings.embeddingModel ?? config.DEFAULT_EMBEDDING_MODEL;
       const pinned = composite
-        ? { ...settings, embeddingPrefixes: undefined }
+        ? settings
         : {
             ...settings,
             embeddingProvider: settings.embeddingProvider ?? config.DEFAULT_EMBEDDING_PROVIDER,
-            embeddingModel,
-            embeddingPrefixes: embeddingPrefixes(embeddingModel, config),
+            embeddingModel: embeddingModel(),
+            embeddingPrefixes: embeddingPrefixes(embeddingModel(), config),
           };
       // Collection first: if Chroma is down nothing is half-created in Postgres. A composite has none.
       if (!composite) await chroma.ensureCollection(ChromaService.collectionName(slug));
@@ -218,6 +222,7 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
       if (req.body.name !== undefined) set.name = req.body.name;
       if (req.body.description !== undefined) set.description = req.body.description;
       if (settings) set.settings = { ...workspace.settings, ...settings };
+      if (sources) set.updatedAt = new Date();
       return db.transaction(async (tx) => {
         const [row] = Object.keys(set).length
           ? await tx.update(workspaces).set(set).where(eq(workspaces.id, workspace.id)).returning()
