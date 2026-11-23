@@ -13,7 +13,8 @@ import { and, eq } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
-import { requireStandard } from '../services/composites.js';
+import { searchSources } from '../services/composite-search.js';
+import { requireStandard, sourcesOf } from '../services/composites.js';
 import { requireFolder } from '../services/folders.js';
 import { assertSearchable } from '../services/reindex.js';
 import type { Config } from '../config.js';
@@ -43,12 +44,17 @@ const SlugParams = z.object({ slug: WorkspaceSlug });
 const common = { tags: ['passages'], security: [{ bearerAuth: [] }] };
 
 /** A stored chunk as a passage. `page` is only kept when it is a real page number, `startSeconds` when it is a number. */
-function fromChunk(chunk: StoredChunk, document: Pick<DocumentRow, 'id' | 'title'>): Passage {
+function fromChunk(
+  chunk: StoredChunk,
+  document: Pick<DocumentRow, 'id' | 'title'>,
+  workspace: string,
+): Passage {
   const index = Number(chunk.metadata.chunk_index ?? chunk.id.split(':').pop());
   const page = chunk.metadata.page;
   const start = chunk.metadata.start_seconds;
   return {
     id: passageId(document.id, index),
+    workspace,
     documentId: document.id,
     documentTitle: document.title,
     page: typeof page === 'number' && Number.isInteger(page) ? page : null,
@@ -67,6 +73,18 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
       .from(documents)
       .where(and(eq(documents.workspaceId, workspace.id), eq(documents.id, documentId)));
     return row;
+  }
+
+  /**
+   * The document and the workspace that holds it: the one asked, or for a composite whichever of its
+   * sources does. A document outside them is not found.
+   */
+  async function findDocument(workspace: Workspace, documentId: string) {
+    for (const holder of workspace.kind === 'composite' ? await sourcesOf(db, workspace) : [workspace]) {
+      const document = await loadDocument(holder, documentId);
+      if (document) return { document, holder };
+    }
+    return undefined;
   }
 
   app.get(
@@ -90,6 +108,17 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
       const { query, limit, minScore } = req.query;
       const folderId = req.query.folderId && (await requireFolder(db, workspace.id, req.query.folderId));
       req.usage = { question: query };
+      if (workspace.kind === 'composite') {
+        // Each source searches with its own model and minScore; a composite has neither (nor folders).
+        if (minScore !== undefined)
+          throw new HttpProblem(400, 'A composite has no minScore: each source uses its own.');
+        try {
+          const fused = await searchSources({ db, langflow, config }, workspace, query, { limit });
+          return { data: fused.map(({ workspaceName: _, rank: __, ...p }) => p) };
+        } catch (err) {
+          throw flowProblem(err, 'Search');
+        }
+      }
       let hits;
       try {
         hits = await retrieve(langflow, workspace, query, await withWorkspaceKeys(db, config, workspace.id), {
@@ -101,7 +130,7 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
         throw flowProblem(err, 'Search');
       }
 
-      const data = await resolveHits(db, workspace.id, hits);
+      const data = await resolveHits(db, workspace, hits);
       return { data };
     },
   );
@@ -122,14 +151,17 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'reader');
       assertSearchable(workspace);
       const parsed = parsePassageId(req.params.passageId);
-      const document = parsed && (await loadDocument(workspace, parsed.documentId));
-      if (!parsed || !document || document.status !== 'ready')
+      const found = parsed && (await findDocument(workspace, parsed.documentId));
+      if (!parsed || !found || found.document.status !== 'ready')
         throw new HttpProblem(404, `No passage ${req.params.passageId}`);
+      const { document, holder } = found;
 
       const i = parsed.chunkIndex;
       const wanted = [i - 1, i, i + 1].filter((n) => n >= 0).map((n) => vectorId(document.id, n));
-      const chunks = await chroma.getChunks(ChromaService.collectionName(workspace.slug), wanted);
-      const byIndex = new Map(chunks.map((c) => [fromChunk(c, document).chunkIndex, fromChunk(c, document)]));
+      const chunks = await chroma.getChunks(ChromaService.collectionName(holder.slug), wanted);
+      const byIndex = new Map(
+        chunks.map((c) => fromChunk(c, document, holder.slug)).map((p) => [p.chunkIndex, p] as const),
+      );
       const passage = byIndex.get(i);
       if (!passage) throw new HttpProblem(404, `No passage ${req.params.passageId}`);
       return { passage, previous: byIndex.get(i - 1) ?? null, next: byIndex.get(i + 1) ?? null };
@@ -163,7 +195,9 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
       const ids = [];
       for (let n = offset; n < end; n++) ids.push(vectorId(document.id, n));
       const chunks = await chroma.getChunks(ChromaService.collectionName(workspace.slug), ids);
-      const data = chunks.map((c) => fromChunk(c, document)).sort((a, b) => a.chunkIndex - b.chunkIndex);
+      const data = chunks
+        .map((c) => fromChunk(c, document, workspace.slug))
+        .sort((a, b) => a.chunkIndex - b.chunkIndex);
       return { data, nextCursor: end < total ? String(end) : null };
     },
   );

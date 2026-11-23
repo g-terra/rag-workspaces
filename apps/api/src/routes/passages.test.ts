@@ -147,6 +147,7 @@ describe.skipIf(!url)('passages (against TEST_DATABASE_URL)', () => {
     expect(res.json().data).toEqual([
       {
         id: `psg_${docId.slice(4)}_1`,
+        workspace: 'ouc',
         documentId: docId,
         documentTitle: 'Week 3 slides',
         page: 2,

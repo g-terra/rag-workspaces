@@ -5,6 +5,8 @@ import { StyleSlug } from './styles.js';
 /** A passage the model was given, in rank order. `rank` is the `[n]` it may cite in the text. */
 export const Citation = z.object({
   rank: z.number().int(),
+  /** The workspace the passage is from: the answering one, or for a composite, one of its sources. */
+  workspace: WorkspaceSlug,
   passageId: z.string(),
   documentId: z.string(),
   documentTitle: z.string(),

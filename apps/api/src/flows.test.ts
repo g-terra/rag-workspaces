@@ -99,3 +99,21 @@ describe('flows/*.json', () => {
     });
   });
 });
+
+describe('rw-generate', () => {
+  const flow = flows.find(([, f]) => f.endpoint_name === 'rw-generate')?.[1];
+
+  it('only prompts and generates: the API gives it the passages', () => {
+    expect(flow?.data.nodes.map((n) => n.id).sort()).toEqual([
+      'ChatInput',
+      'ChatOutput-answer',
+      'LLM',
+      'Prompt',
+    ]);
+  });
+
+  it('feeds the chat input to the prompt, so the answer is downstream of it and streams', () => {
+    const wires = flow!.data.edges.map((e) => `${e.source}>${e.target}`);
+    expect(wires.sort()).toEqual(['ChatInput>Prompt', 'LLM>ChatOutput-answer', 'Prompt>LLM']);
+  });
+});
