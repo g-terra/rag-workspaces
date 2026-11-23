@@ -118,7 +118,7 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
     async (req, reply) => {
       const admin = currentUser(req);
       const { slug, name, description, settings = {} } = req.body;
-      if (settings.style) findStyle(settings.style);
+      if (settings.style) await findStyle(db, settings.style);
       const [taken] = await db
         .select({ id: workspaces.id })
         .from(workspaces)
@@ -175,7 +175,7 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
     },
     async (req) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'admin');
-      if (req.body.settings?.style) findStyle(req.body.settings.style);
+      if (req.body.settings?.style) await findStyle(db, req.body.settings.style);
       const set: Partial<typeof workspaces.$inferInsert> = {};
       if (req.body.name !== undefined) set.name = req.body.name;
       if (req.body.description !== undefined) set.description = req.body.description;

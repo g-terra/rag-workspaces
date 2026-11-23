@@ -14,7 +14,14 @@ const ExcludePath = z
 export const CreateSite = z
   .object({
     /** The page to start from; its directory is the scope (`https://auth0.com/docs` → `https://auth0.com/docs/`). */
-    url: z.url({ protocol: /^https?$/, error: 'Give an http or https URL.' }).max(2000),
+    url: z
+      .url({ protocol: /^https?$/, error: 'Give an http or https URL.' })
+      .max(2000)
+      // A user name or password in the URL would be stored and shown with the site.
+      .refine((u) => {
+        const parsed = URL.parse(u);
+        return !parsed?.username && !parsed?.password;
+      }, 'Leave the user name and password out of the URL.'),
     folderId: z.string().min(1).nullable().optional(),
     maxPages: z.number().int().min(1).max(10_000).optional(),
     maxDepth: z.number().int().min(1).max(20).optional(),

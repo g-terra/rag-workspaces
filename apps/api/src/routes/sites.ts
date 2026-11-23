@@ -169,9 +169,10 @@ export const siteRoutes: FastifyPluginAsyncZod<SiteRoutesOptions> = async (app, 
         ...common,
         summary: 'Crawl a website again',
         description:
-          'Fetches every page again: changed pages are re-ingested, new ones added, and pages that are gone ' +
-          'removed (only after a complete crawl that did not stop at `maxPages`). Unchanged pages cost one ' +
-          'request and no embedding. `409` while the site is queued or crawling.',
+          'Fetches every page again, including pages nothing links to any more: changed pages are ' +
+          're-ingested and new ones added. A page is removed only when it answers 404 or 410, robots.txt ' +
+          'disallows it, or `excludePaths` now leaves it out. Unchanged pages cost one request and no ' +
+          'embedding. `409` while the site is queued or crawling.',
         params: SiteParams,
         response: { 202: Site },
       },
@@ -198,7 +199,8 @@ export const siteRoutes: FastifyPluginAsyncZod<SiteRoutesOptions> = async (app, 
         summary: 'Change a website’s limits or folder',
         description:
           'Limits apply from the next crawl. `folderId` (null: the top level) is where new pages go, and the ' +
-          'existing pages move there at once; a page being ingested right now keeps its folder.',
+          'existing pages move there at once; a page being ingested right now keeps its folder. `409` for a ' +
+          'folder change while the site is crawling.',
         params: SiteParams,
         body: UpdateSite,
         response: { 200: Site },
@@ -208,6 +210,9 @@ export const siteRoutes: FastifyPluginAsyncZod<SiteRoutesOptions> = async (app, 
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'editor');
       const site = await loadSite(workspace.id, req.params.siteId);
       const { folderId, ...limits } = req.body;
+      // The crawl adds pages to the folder it read at its start; moving them now would split the site.
+      if (folderId !== undefined && site.status === 'crawling')
+        throw new HttpProblem(409, 'This site is being crawled. Move it when the crawl finishes.');
       const set: Partial<SiteRow> = { ...limits };
       if (folderId !== undefined)
         set.folderId = folderId === null ? null : await requireFolder(db, workspace.id, folderId);
@@ -249,17 +254,32 @@ export const siteRoutes: FastifyPluginAsyncZod<SiteRoutesOptions> = async (app, 
       const site = await loadSite(workspace.id, req.params.siteId);
       if (site.status === 'crawling')
         throw new HttpProblem(409, 'This site is being crawled. Try again when it finishes.');
-      const pages = await db.select().from(documents).where(eq(documents.siteId, site.id));
-      if (pages.some((p) => (BUSY_DOCS as readonly string[]).includes(p.status)))
-        throw new HttpProblem(
-          409,
-          'Some of this site’s pages are being ingested. Try again when they finish.',
-        );
       const collection = ChromaService.collectionName(workspace.slug);
-      // Vectors first: if Chroma is down, nothing is deleted and the caller can retry.
-      for (const p of pages) await chroma.deleteDocumentVectors(collection, p.id);
-      await db.delete(documents).where(eq(documents.siteId, site.id));
-      await db.delete(sites).where(eq(sites.id, site.id));
+      // One transaction: rows go only when no page is being ingested, and if Chroma fails nothing is
+      // deleted, so the caller can retry.
+      const pages = await db.transaction(async (tx) => {
+        const gone = await tx
+          .delete(documents)
+          .where(and(eq(documents.siteId, site.id), notInArray(documents.status, [...BUSY_DOCS])))
+          .returning();
+        const [left] = await tx
+          .select({ id: documents.id })
+          .from(documents)
+          .where(eq(documents.siteId, site.id))
+          .limit(1);
+        if (left)
+          throw new HttpProblem(
+            409,
+            'Some of this site’s pages are being ingested. Try again when they finish.',
+          );
+        const [removed] = await tx
+          .delete(sites)
+          .where(and(eq(sites.id, site.id), notInArray(sites.status, ['crawling'])))
+          .returning({ id: sites.id });
+        if (!removed) throw new HttpProblem(409, 'This site is being crawled. Try again when it finishes.');
+        for (const p of gone) await chroma.deleteDocumentVectors(collection, p.id);
+        return gone;
+      });
       for (const p of pages) {
         await storage.remove(p.storagePath);
         events.emit({ workspaceId: workspace.id, document: p, removed: true });

@@ -165,6 +165,23 @@ export const providerKeys = pgTable(
 );
 
 /**
+ * Custom response styles, made by admins and shared by every workspace. The built-in ones live in
+ * code (apps/api services/styles.ts) and their slugs can't be used here.
+ */
+export const responseStyles = pgTable('response_styles', {
+  slug: text().primaryKey(),
+  name: text().notNull(),
+  description: text().notNull().default(''),
+  /** Added to the system prompt after the grounding rules' reminder. */
+  instructions: text().notNull(),
+  /** Keycloak user id of the admin who made it. */
+  createdBy: text().notNull(),
+  ...timestamps,
+});
+
+export type ResponseStyleRow = typeof responseStyles.$inferSelect;
+
+/**
  * Optional groupings inside a workspace (a course code, a project), usable as a filter when
  * searching and asking. Flat, and they isolate nothing. Passages carry the folder id in their
  * Chroma metadata (`folder`), so a rename changes nothing there and a move updates it.

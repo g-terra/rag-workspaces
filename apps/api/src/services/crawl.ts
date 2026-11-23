@@ -1,5 +1,5 @@
 import { documents, newId, sites, workspaces, type Database, type Document, type Site } from '@rag/db';
-import { and, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, eq, notInArray } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 import { PgBoss } from 'pg-boss';
 import type { Config } from '../config.js';
@@ -7,7 +7,7 @@ import { ChromaService } from './chroma.js';
 import { inScope, looksLikePage, normalizeUrl } from './crawl-scope.js';
 import type { DocumentEvents } from './document-events.js';
 import type { IngestQueue } from './ingest-queue.js';
-import { sha256, type UploadStorage } from './storage.js';
+import { pagePath, sha256, type UploadStorage } from './storage.js';
 import type { FetchedPage, PageFetcher } from './web-fetch.js';
 
 export type CrawlDeps = {
@@ -33,6 +33,8 @@ const isBusy = (d: Document) => (BUSY as readonly string[]).includes(d.status);
 const MAX_DELAY_MS = 30_000;
 /** This many fetches in a row that never reached the page (Langflow down) end the crawl. */
 const MAX_FETCH_ERRORS_IN_A_ROW = 5;
+/** Reading a large sitemap index (auth0.com/docs lists about 7,000 pages) takes far longer than a page. */
+const SITEMAP_TIMEOUT_MS = 5 * 60_000;
 
 class CrawlFailed extends Error {}
 
@@ -52,13 +54,15 @@ type Counters = {
  * frontier, the scope, the limits and the pacing; every request to the site goes through the
  * `rw-fetch` flow (decision 18), which returns the page as Markdown with its links.
  *
- * - Breadth first from the start URL, plus the sitemap's pages in scope. Links are followed up to
- *   `maxDepth` levels; the crawl stops after `maxPages` fetches.
+ * - Breadth first from the start URL, plus the sitemap's pages in scope and every page the site already
+ *   has. Links are followed up to `maxDepth` levels (not at all when a complete sitemap lists the
+ *   site); the crawl stops after `maxPages` fetches.
  * - A page is a document of type `web`, saved as `<slug>/<id>.md` and ingested by the usual queue.
  *   Unchanged content (same SHA-256) is not re-ingested; changed content is, after its file is replaced.
- * - Pages are removed when they answer 404 or 410, when robots.txt now disallows them, when their new
- *   content duplicates another page of the site, and (only after a clean, complete crawl) when they
- *   were not reached at all. A crawl that fails, stops at `maxPages` or saw mostly errors removes nothing.
+ *   Content another page of the site already has is not stored twice.
+ * - A page is removed only when it answers 404 or 410, when robots.txt now disallows it, or when it is
+ *   no longer in the site's scope (`excludePaths` changed). A page that errors or was not reached keeps
+ *   what it had.
  * - A page waiting for or under ingestion is left alone; the next crawl picks up any change.
  * - The frontier lives in memory: after a restart the crawl starts over, and unchanged pages cost
  *   one fetch each.
@@ -135,11 +139,11 @@ class CrawlRun {
   private readonly seen = new Set<string>();
   /** The site's documents by page URL, as the crawl found them and as it changes them. */
   private readonly byUrl = new Map<string, Document>();
-  /** Documents whose page answered this crawl (with anything but 404 or 410). */
-  private readonly reached = new Set<string>();
+  /** Page URLs stored (or found unchanged) in this crawl. */
+  private readonly stored = new Set<string>();
   private delayMs: number;
   private preferMarkdown = false;
-  /** The sitemap lists pages, so links are only needed when it does not. */
+  /** A complete sitemap lists the site's pages, so links are not needed. */
   private sitemapCovers = false;
   private errorsInARow = 0;
 
@@ -155,18 +159,33 @@ class CrawlRun {
   }
 
   async go(): Promise<void> {
-    const { db, fetcher, config } = this.deps;
-    for (const d of await db.select().from(documents).where(eq(documents.siteId, this.site.id)))
-      if (d.sourceUrl) this.byUrl.set(d.sourceUrl, d);
+    const { db, fetcher, log } = this.deps;
+    const known = await db.select().from(documents).where(eq(documents.siteId, this.site.id));
+    for (const d of known) if (d.sourceUrl) this.byUrl.set(d.sourceUrl, d);
 
-    const start = normalizeUrl(this.site.startUrl, this.site.startUrl)!;
-    this.enqueue(start, 0);
-    const map = await fetcher.sitemap(this.site.scope, AbortSignal.timeout(config.CRAWL_FETCH_TIMEOUT_MS));
-    this.preferMarkdown = map.hasLlmsTxt;
-    if (map.crawlDelay) this.delayMs = Math.min(Math.max(this.delayMs, map.crawlDelay * 1000), MAX_DELAY_MS);
-    for (const u of map.urls) {
-      const n = normalizeUrl(u, this.site.scope);
-      if (n && this.enqueue(n, 0)) this.sitemapCovers = true;
+    this.enqueue(normalizeUrl(this.site.startUrl, this.site.startUrl)!, 0);
+    try {
+      const map = await fetcher.sitemap(this.site.scope, AbortSignal.timeout(SITEMAP_TIMEOUT_MS));
+      this.preferMarkdown = map.hasLlmsTxt;
+      if (map.crawlDelay)
+        this.delayMs = Math.min(Math.max(this.delayMs, map.crawlDelay * 1000), MAX_DELAY_MS);
+      let listed = false;
+      for (const u of map.urls) {
+        const n = normalizeUrl(u, this.site.scope);
+        if (n && this.enqueue(n, 0)) listed = true;
+      }
+      this.sitemapCovers = listed && map.complete;
+    } catch (err) {
+      // Without the sitemap the crawl follows links instead; the start page decides whether it can go on.
+      const reason = `Could not read the sitemap: ${err instanceof Error ? err.message : String(err)}`;
+      this.counters.lastError = reason;
+      log.warn({ siteId: this.site.id, reason }, 'sitemap not read');
+    }
+    // Pages the site already has are fetched again even when nothing links to them any more.
+    for (const d of known) {
+      if (!d.sourceUrl) continue;
+      if (inScope(d.sourceUrl, this.site.scope, this.site.excludePaths)) this.enqueue(d.sourceUrl, 0);
+      else await this.remove(d);
     }
 
     let first = true;
@@ -178,12 +197,6 @@ class CrawlRun {
       await this.handle(url, depth, page, first);
       first = false;
       await this.progress(this.counters);
-    }
-
-    const stoppedAtLimit = this.frontier.length > 0;
-    const mostlyFailed = this.counters.pagesFailed * 2 >= this.counters.pagesFetched;
-    if (!stoppedAtLimit && !mostlyFailed) {
-      for (const doc of this.byUrl.values()) if (!this.reached.has(doc.id)) await this.remove(doc);
     }
   }
 
@@ -238,63 +251,67 @@ class CrawlRun {
       if (known) await this.remove(known);
       return;
     }
-    if (known) this.reached.add(known.id);
     if (page.error || page.status >= 400 || (!page.skipped && !page.markdown.trim())) {
       const reason = page.error ?? (page.status >= 400 ? `HTTP ${page.status}` : 'no text on the page');
       if (isStart) throw new CrawlFailed(`The start URL ${url} could not be read: ${reason}.`);
-      this.counters.pagesFailed++;
-      this.counters.lastError = `${url}: ${reason}`;
-      return;
+      return this.failed(url, reason);
     }
     if (page.skipped) return;
 
+    // A redirect that leaves the site is not followed: the page keeps what it had.
+    const landed = page.finalUrl ? normalizeUrl(page.finalUrl, url) : url;
+    if (!landed || !inScope(landed, this.site.scope, this.site.excludePaths)) {
+      const reason = `redirected outside the site, to ${page.finalUrl}`;
+      if (isStart) throw new CrawlFailed(`The start URL ${url} was ${reason}.`);
+      return this.failed(url, reason);
+    }
+
     for (const href of page.links) {
-      const n = normalizeUrl(href, page.finalUrl || url);
+      const n = normalizeUrl(href, landed);
       if (n) this.enqueue(n, depth + 1);
     }
 
-    // One document per page: the canonical URL (or where redirects ended) when it is in scope.
-    let pageUrl = url;
-    for (const alt of [page.canonical, page.finalUrl]) {
-      const n = alt && normalizeUrl(alt, url);
-      if (n && n !== url && inScope(n, this.site.scope, this.site.excludePaths)) {
-        pageUrl = n;
-        break;
-      }
-    }
+    // One document per page: its canonical URL when that is in the site (one outside is ignored), else
+    // where redirects ended.
+    const canonical = page.canonical && normalizeUrl(page.canonical, landed);
+    const pageUrl =
+      canonical && inScope(canonical, this.site.scope, this.site.excludePaths) ? canonical : landed;
     if (pageUrl !== url) {
+      if (this.stored.has(pageUrl)) return; // already handled under that URL in this crawl
       this.seen.add(pageUrl);
-      const target = this.byUrl.get(pageUrl);
-      if (target && this.reached.has(target.id)) return; // already handled under its canonical URL
     }
     await this.store(pageUrl, page);
   }
 
+  private failed(url: string, reason: string): void {
+    this.counters.pagesFailed++;
+    this.counters.lastError = `${url}: ${reason}`;
+  }
+
   private async store(pageUrl: string, page: FetchedPage): Promise<void> {
     const { db, storage, events, ingest } = this.deps;
+    this.stored.add(pageUrl);
     const markdown = page.markdown.trim();
     const hash = sha256(markdown);
+    const sizeBytes = Buffer.byteLength(markdown, 'utf8');
     const title = (page.title || new URL(pageUrl).pathname).slice(0, 200);
     const existing = this.byUrl.get(pageUrl);
-    const twin = [...this.byUrl.values()].find((d) => d.sha256 === hash && d.id !== existing?.id);
+    // Content another page of the site already has is not stored twice (pages are unique per site
+    // by SHA-256). A known page that now duplicates another keeps its old content until it differs.
+    const twin = [...this.byUrl.values()].some((d) => d.sha256 === hash && d.id !== existing?.id);
 
     if (existing) {
-      this.reached.add(existing.id);
-      if (existing.sha256 === hash || isBusy(existing)) {
+      if (existing.sha256 === hash || isBusy(existing) || twin) {
         this.counters.pagesUnchanged++;
         return;
       }
-      if (twin) {
-        await this.remove(existing);
-        return;
-      }
-      const file = await storage.writePage(this.slug, existing.id, markdown);
+      // Claim the row first, so an ingest run never reads a file that does not match its row.
       const [doc] = await db
         .update(documents)
         .set({
           title,
-          sha256: file.sha256,
-          sizeBytes: file.sizeBytes,
+          sha256: hash,
+          sizeBytes,
           status: 'queued',
           attempts: 0,
           error: null,
@@ -303,6 +320,24 @@ class CrawlRun {
         .where(and(eq(documents.id, existing.id), notInArray(documents.status, [...BUSY])))
         .returning();
       if (!doc) return; // deleted or claimed meanwhile
+      try {
+        await storage.writePage(this.slug, doc.id, markdown);
+      } catch (err) {
+        // Put the row back as it was: the old file is still in place.
+        await db
+          .update(documents)
+          .set({
+            title: existing.title,
+            sha256: existing.sha256,
+            sizeBytes: existing.sizeBytes,
+            status: existing.status,
+            attempts: existing.attempts,
+            error: existing.error,
+            passageCount: existing.passageCount,
+          })
+          .where(eq(documents.id, doc.id));
+        return this.failed(pageUrl, `could not save the page: ${err instanceof Error ? err.message : err}`);
+      }
       this.byUrl.set(pageUrl, doc);
       events.emit({ workspaceId: doc.workspaceId, document: doc });
       await ingest.enqueue(doc.id);
@@ -311,13 +346,10 @@ class CrawlRun {
     }
 
     if (twin) {
-      // The same content under another URL of the site: keep the first one.
-      if (!this.reached.has(twin.id)) this.reached.add(twin.id);
       this.counters.pagesUnchanged++;
       return;
     }
     const id = newId('document');
-    const file = await storage.writePage(this.slug, id, markdown);
     const [doc] = await db
       .insert(documents)
       .values({
@@ -329,18 +361,20 @@ class CrawlRun {
         title,
         fileName: pageUrl,
         type: 'web',
-        sizeBytes: file.sizeBytes,
-        sha256: file.sha256,
-        storagePath: file.storagePath,
+        sizeBytes,
+        sha256: hash,
+        storagePath: pagePath(this.slug, id),
       })
       .onConflictDoNothing()
       .returning();
-    if (!doc) {
-      await storage.remove(file.storagePath);
-      return;
+    if (!doc) return; // another row took this URL or content meanwhile
+    try {
+      await storage.writePage(this.slug, id, markdown);
+    } catch (err) {
+      await db.delete(documents).where(eq(documents.id, id));
+      return this.failed(pageUrl, `could not save the page: ${err instanceof Error ? err.message : err}`);
     }
     this.byUrl.set(pageUrl, doc);
-    this.reached.add(doc.id);
     events.emit({ workspaceId: doc.workspaceId, document: doc });
     await ingest.enqueue(doc.id);
     this.counters.pagesNew++;
@@ -418,14 +452,4 @@ export class PgBossCrawlQueue implements CrawlQueue {
   async stop(): Promise<void> {
     await this.boss?.stop({ graceful: true, timeout: 10_000 });
   }
-}
-
-/** Sites whose pages may be read by an ingest run right now. */
-export async function sitePagesBusy(db: Database, siteId: string): Promise<boolean> {
-  const [busy] = await db
-    .select({ id: documents.id })
-    .from(documents)
-    .where(and(eq(documents.siteId, siteId), inArray(documents.status, ['transcribing', 'processing'])))
-    .limit(1);
-  return Boolean(busy);
 }

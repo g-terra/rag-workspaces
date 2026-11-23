@@ -15,10 +15,14 @@ const NOT_PAGES = new Set(
   ).split(' '),
 );
 
+/** Extensions that make a start URL's last segment a page file rather than a directory. */
+const PAGE_FILES = /\.(html?|php|aspx?|jsp|md)$/i;
+
 /**
  * The URL prefix every page of the site must start with: the start URL's directory. A start URL
  * without a trailing slash counts as a directory (`https://auth0.com/docs` → `https://auth0.com/docs/`)
- * unless its last segment is a file name (`/guide/index.html` → `/guide/`).
+ * unless its last segment is a page file (`/guide/index.html` → `/guide/`). Other dots are part of a
+ * directory name (`/docs/v2.1` → `/docs/v2.1/`).
  */
 export function scopeOf(startUrl: string): string {
   const u = new URL(startUrl);
@@ -26,7 +30,7 @@ export function scopeOf(startUrl: string): string {
   u.hash = '';
   if (!u.pathname.endsWith('/')) {
     const last = u.pathname.slice(u.pathname.lastIndexOf('/') + 1);
-    u.pathname = last.includes('.') ? u.pathname.slice(0, -last.length) : `${u.pathname}/`;
+    u.pathname = PAGE_FILES.test(last) ? u.pathname.slice(0, -last.length) : `${u.pathname}/`;
   }
   return u.toString();
 }

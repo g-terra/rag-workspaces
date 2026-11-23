@@ -38,7 +38,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Provider key | `/v1/workspaces/{slug}/providers`, `/v1/providers/{provider}/models` | admin |
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
-| Response style | `/v1/styles` | anyone authenticated |
+| Response style | `/v1/styles` | anyone authenticated to list; admins create, change and delete custom ones |
 
 Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down. The admin UI's workspace Settings screen reads it for its provider and model pickers, and shows `defaults.workspace` (from `DEFAULT_CHUNK_SIZE`, `DEFAULT_CHUNK_OVERLAP`, `DEFAULT_TOP_K`, `DEFAULT_MIN_SCORE` and the built-in system prompt) as the value an empty setting uses.
 
@@ -159,6 +159,15 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
 
 `GET /v1/styles` lists the styles an answer can be written in, to any signed-in person or API key (instructions included): `{ "data": [{ "slug": "academic", "name": "Academic", "description": "…", "instructions": "…", "builtIn": true }] }`. Four are built in: `academic`, `talkative`, `concise` and `tutor`. A style changes tone, length and format only. Its instructions are added after the workspace's system prompt, behind a header that repeats the built-in prompt's grounding rules (cite with `[n]`, use only the passages, complete lists, say only that the material does not cover it), so no style can switch citations or refusals off. A workspace with its own system prompt gets only "every rule above still applies", so its rules are not mixed with the built-in ones. The fixed "not found" reply is the same in every style.
 
+| Method | Path | Does |
+|---|---|---|
+| GET | `/v1/styles` | Built-in styles, then custom ones by name |
+| POST | `/v1/styles` | Admins: create a custom style, `{ "slug", "name", "description", "instructions" }` (instructions up to 2,000 characters). A taken slug, built-ins included, is `409` |
+| PATCH | `/v1/styles/{slug}` | Admins: change `name`, `description` or `instructions`. Built-ins are `403` |
+| DELETE | `/v1/styles/{slug}` | Admins: `204`; `409` while a workspace uses it as `settings.style`. Built-ins are `403` |
+
+Custom styles are shared by every workspace. Answers keep the slug of the style they used, even after it is changed or deleted.
+
 ## Material
 
 | Method | Path | Does |
@@ -173,7 +182,7 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/transcript` | The timed transcript of a video or audio file: `{ "language": "en", "segments": [{ "start": 0, "end": 4.3, "text": "…" }] }` (seconds). `404` for other types and until it is transcribed |
 | GET | `/v1/workspaces/{slug}/documents/events` | Live status changes (server-sent events); see below |
 | GET, POST | `/v1/workspaces/{slug}/sites` | List imported websites; import one (`{ "url", "folderId"?, "maxPages"?, "maxDepth"?, "excludePaths"? }`, `202`, the crawl runs in the background; `409` for a start URL the workspace already has) |
-| GET, PATCH, DELETE | `/v1/workspaces/{slug}/sites/{siteId}` | Read with its crawl counters; change limits or folder (a folder change moves the existing pages); remove it with all its pages (`409` while crawling or while a page is processing) |
+| GET, PATCH, DELETE | `/v1/workspaces/{slug}/sites/{siteId}` | Read with its crawl counters; change limits or folder (a folder change moves the existing pages; `409` while crawling); remove it with all its pages (`409` while crawling or while a page is processing) |
 | POST | `/v1/workspaces/{slug}/sites/{siteId}/crawl` | Crawl again: changed pages are re-ingested, new ones added, gone ones removed; `202`, or `409` while queued or crawling |
 
 ```json
@@ -217,10 +226,11 @@ whose SSRF guard refuses private addresses.
 
 `status` is `queued`, `crawling`, `ready` or `failed` (`lastError` says why: the start URL answered 404, robots.txt
 disallows it, Langflow could not be reached). Pages appear in the documents list as they are found and are ingested
-like uploads, so the events stream shows their progress. Crawling again re-ingests only pages whose content changed,
-leaves a page alone while it is being ingested, and removes pages that answer 404 or 410, that robots.txt now
-disallows, or (only after a crawl that finished without hitting `maxPages` and with fewer than half its fetches
-failing) that were not reached at all. Pages are deduplicated within their site, not against uploads.
+like uploads, so the events stream shows their progress. Crawling again fetches every page the site has (even pages
+nothing links to any more) and re-ingests only pages whose content changed. It leaves a page alone while it is
+being ingested, and removes a page only when it answers 404 or 410, robots.txt now disallows it, or `excludePaths`
+now leaves it out; a page that errors or lies beyond `maxPages` keeps what it had. Pages are deduplicated within
+their site, not against uploads. The start URL must not carry a user name or password.
 
 ## Usage analytics
 
