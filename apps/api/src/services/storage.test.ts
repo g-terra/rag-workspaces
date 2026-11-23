@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -61,6 +61,19 @@ describe('UploadStorage', async () => {
     await expect(storage.stage('ouc', Readable.from([Buffer.from('too long')]))).rejects.toBeInstanceOf(
       FileTooLarge,
     );
+  });
+
+  it('writes a website page as <slug>/<id>.md and replaces it in place', async () => {
+    const storage = new UploadStorage(root, 1024);
+    const first = await storage.writePage('docs', 'doc_p', 'hello');
+    expect(first).toEqual({
+      storagePath: 'docs/doc_p.md',
+      sha256: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824',
+      sizeBytes: 5,
+    });
+    await storage.writePage('docs', 'doc_p', 'hello again');
+    expect(await readFile(path.join(root, 'docs/doc_p.md'), 'utf8')).toBe('hello again');
+    expect((await readdir(path.join(root, 'docs'))).sort()).toEqual(['doc_p.md']);
   });
 
   it('refuses paths that escape the volume', () => {

@@ -71,6 +71,13 @@
       "when": 1795463607334,
       "tag": "0009_provider_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795469654367,
+      "tag": "0010_sites",
+      "breakpoints": true
     }
   ]
 }
