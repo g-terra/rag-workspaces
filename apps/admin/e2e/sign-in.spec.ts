@@ -15,6 +15,8 @@ test('signs in through Keycloak, survives a reload, and signs out', async ({ pag
 
   // Back in the app: /v1/me answered with the bearer token, so we know who this is.
   await expect(page.getByTestId('user-role')).toHaveText('admin');
+  // A fresh browser gets the first-time walkthrough (walkthrough.spec.ts); close it.
+  await page.getByRole('button', { name: 'Skip tour' }).click();
 
   // The tokens are kept for this tab, so a reload doesn't go back to Keycloak.
   await page.reload();
