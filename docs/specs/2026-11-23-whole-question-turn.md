@@ -1,7 +1,7 @@
 ---
 title: search the whole question too when it has several parts
 date: 2026-11-23
-pr: pending
+pr: "#91"
 status: in review
 areas: [flows, langflow, docs]
 ---
