@@ -1,7 +1,7 @@
 ---
 title: default to gpt-oss-20b as the chat model
 date: 2026-11-23
-pr: pending
+pr: "#96"
 status: in review
 areas: [api, infra, docs]
 ---
