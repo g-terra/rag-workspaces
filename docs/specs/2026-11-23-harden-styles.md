@@ -1,7 +1,7 @@
 ---
 title: keep the talkative and academic styles to the passages
 date: 2026-11-23
-pr: pending
+pr: "#127"
 status: in review
 areas: [api, docs]
 ---
