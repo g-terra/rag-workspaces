@@ -1,4 +1,6 @@
-import type { Workspace } from '@rag/db';
+import { documents, type Database, type Workspace } from '@rag/db';
+import type { ScoredPassage } from '@rag/shared';
+import { and, eq, inArray } from 'drizzle-orm';
 import { messageText, outputsByComponent, parseJsonMessage, type LangflowClient } from '@rag/langflow-client';
 import type { Config } from '../config.js';
 import { FLOWS } from '../flows.js';
@@ -94,4 +96,47 @@ export function normalise(parsed: unknown): FlowPassage[] {
       ? (parsed as { passages: unknown[] }).passages
       : [];
   return (list as FlowPassage[]).filter((p) => p && typeof p.id === 'string' && typeof p.text === 'string');
+}
+
+/**
+ * Flow hits as API passages, with titles from our database. A hit whose document is gone
+ * (deleted a moment ago) is dropped. `rank` is the `[n]` the model saw.
+ */
+export async function resolveHits(
+  db: Database,
+  workspaceId: string,
+  hits: FlowPassage[],
+): Promise<(ScoredPassage & { rank: number })[]> {
+  const ids = [...new Set(hits.map((h) => h.document_id).filter((id): id is string => !!id))];
+  const docs = ids.length
+    ? await db
+        .select({ id: documents.id, title: documents.title })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.workspaceId, workspaceId),
+            inArray(documents.id, ids),
+            // Hits from a document that is not ready (re-indexing, or a failed run's leftovers) are dropped.
+            eq(documents.status, 'ready'),
+          ),
+        )
+    : [];
+  const titles = new Map(docs.map((d) => [d.id, d.title]));
+  return hits.flatMap((h) => {
+    const title = h.document_id ? titles.get(h.document_id) : undefined;
+    if (!h.document_id || title === undefined) return [];
+    const index = h.chunk_index ?? Number(h.id.split(':').pop());
+    return [
+      {
+        rank: h.rank,
+        id: passageId(h.document_id, index),
+        documentId: h.document_id,
+        documentTitle: title,
+        page: typeof h.page === 'number' ? h.page : null,
+        chunkIndex: index,
+        text: h.text,
+        score: h.score,
+      },
+    ];
+  });
 }
