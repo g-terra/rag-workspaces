@@ -1,7 +1,7 @@
 ---
 title: add a user guide with screenshots
 date: 2026-11-23
-pr: pending
+pr: "#113"
 status: in review
 areas: [docs]
 ---
