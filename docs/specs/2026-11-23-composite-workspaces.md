@@ -1,8 +1,8 @@
 ---
 title: Composite workspaces that answer from several workspaces
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#116"
+status: in review
 areas: [api, db, docs]
 ---
 
