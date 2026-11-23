@@ -30,6 +30,11 @@ describe('composeSystemPrompt', () => {
     expect(header).toContain('cite them with [n]');
     expect(header).toContain('say only that');
   });
+
+  it('tells the model to cite nothing when the passages do not cover the question', () => {
+    const prompt = composeSystemPrompt(DEFAULT_SYSTEM_PROMPT, builtIn('academic'), true);
+    expect(prompt.slice(DEFAULT_SYSTEM_PROMPT.length)).toContain('say only that, and cite nothing');
+  });
 });
 
 describe('built-in styles', () => {
@@ -41,5 +46,20 @@ describe('built-in styles', () => {
       expect(s.builtIn).toBe(true);
       expect(s.instructions.length).toBeGreaterThan(20);
     }
+  });
+
+  // On a real model, talkative explained an off-topic question from general knowledge, and academic
+  // refused while citing unrelated passages (docs/tuning.md). Their own text now covers that case.
+  it('keep talkative to the passages, with no related-question suggestion after a refusal', () => {
+    const { instructions } = builtIn('talkative');
+    expect(instructions).toContain('only from the passages');
+    expect(instructions).toContain('one friendly sentence');
+    expect(instructions).toContain('Only after an answer the passages support');
+  });
+
+  it('have academic cite only passages that support the sentence, and nothing in a refusal', () => {
+    const { instructions } = builtIn('academic');
+    expect(instructions).toContain('Cite a passage only where it directly supports the sentence');
+    expect(instructions).toContain('cite nothing');
   });
 });

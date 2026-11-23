@@ -15,6 +15,8 @@ export const BUILT_IN_STYLES: readonly ResponseStyle[] = [
     instructions:
       'Write in a formal academic register. Use precise terminology and define each key term the first time it appears. ' +
       'Organise the answer in well-structured paragraphs, and point out where the material limits or qualifies a claim. ' +
+      'Cite a passage only where it directly supports the sentence; a passage on another topic is never a source. ' +
+      'If the passages do not cover the question, say so in one formal sentence and cite nothing. ' +
       'No casual language and no emoji.',
     builtIn: true,
   },
@@ -24,8 +26,9 @@ export const BUILT_IN_STYLES: readonly ResponseStyle[] = [
     description: 'Warm and conversational, explains more and connects ideas.',
     instructions:
       'Write in a warm, conversational tone, like a friendly tutor chatting with a student. ' +
-      'Explain in more depth than usual and connect the ideas the passages give. A longer answer is fine. ' +
-      'You may end with one short suggestion of a related question the same passages could answer.',
+      'Explain in more depth than usual, but only from the passages: connect the ideas they give, and add nothing from general knowledge. ' +
+      'A longer answer is fine. If the passages do not cover the question, say so in one friendly sentence and stop: no explanation, no citations. ' +
+      'Only after an answer the passages support, you may end with one short suggestion of a related question the same passages could answer.',
     builtIn: true,
   },
   {
@@ -101,7 +104,7 @@ export function composeSystemPrompt(
 ): string {
   if (!style) return base;
   const recap = baseIsDefault
-    ? ' Every rule above still applies: use only the passages, cite them with [n], give complete lists, and if the passages do not cover the question say only that.'
+    ? ' Every rule above still applies: use only the passages, cite them with [n], give complete lists, and if the passages do not cover the question say only that, and cite nothing.'
     : ' Every rule above still applies.';
   return [
     base,
