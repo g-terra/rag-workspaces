@@ -25,12 +25,15 @@ const ConfigSchema = z.object({
   // --- Uploads ---
   /** The uploads volume, shared read-only with Langflow at the same path. */
   UPLOADS_DIR: z.string().default('/data/uploads'),
-  /** Largest accepted file. nginx in front of the admin UI has the same limit. */
+  /**
+   * Largest accepted file, in bytes: 2 GB by default, so lecture videos fit. Compose passes the same value
+   * to nginx in front of the admin UI (`client_max_body_size`).
+   */
   MAX_UPLOAD_BYTES: z.coerce
     .number()
     .int()
     .positive()
-    .default(200 * 1024 * 1024),
+    .default(2 * 1024 ** 3),
   /** Most files in one upload request. */
   MAX_UPLOAD_FILES: z.coerce.number().int().positive().default(20),
 

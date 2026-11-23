@@ -53,6 +53,9 @@ test('lists conversations, opens one, carries it on and deletes it', async ({ pa
   await page.getByLabel('Message').fill('What is retrieval-augmented generation?');
   await page.getByRole('button', { name: 'Send' }).click();
   await expect(page.getByTestId('reply')).not.toBeEmpty({ timeout: 60_000 });
+  // The reply and the conversation's title are stored when the stream ends, which is when the meta line
+  // shows; opening the conversation on the first tokens would race them.
+  await expect(page.getByTestId('reply-meta')).toBeVisible({ timeout: 60_000 });
   const conversationId = (await page.getByTestId('conversation-link').getAttribute('data-conversation-id'))!;
   await page.getByTestId('conversation-link').click();
 
@@ -75,15 +78,12 @@ test('lists conversations, opens one, carries it on and deletes it', async ({ pa
   await page.getByLabel('Follow-up').fill('Why does that matter?');
   await page.getByRole('button', { name: 'Send' }).click();
   await expect(page.getByTestId('reply')).not.toBeEmpty({ timeout: 60_000 });
-  // The reply's text arrives before the API has finished storing it, so wait for the stored thread.
-  await expect
-    .poll(async () => {
-      const stored = await page.request.get(`/api/v1/workspaces/${ws.slug}/conversations/${conversationId}`, {
-        headers,
-      });
-      return ((await stored.json()) as { messages: { role: string }[] }).messages.map((m) => m.role);
-    })
-    .toEqual(['user', 'assistant', 'user', 'assistant']);
+  await expect(page.getByTestId('reply-meta')).toBeVisible({ timeout: 60_000 });
+  const stored = await page.request.get(`/api/v1/workspaces/${ws.slug}/conversations/${conversationId}`, {
+    headers,
+  });
+  const thread = (await stored.json()) as { messages: { role: string }[] };
+  expect(thread.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
 
   // A reload shows what was sent here as stored messages, not as live turns.
   await page.reload();

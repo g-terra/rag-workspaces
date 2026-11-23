@@ -192,6 +192,8 @@ test('holds a conversation, answers a follow-up from it and starts a new one', a
   await send(page, 'Why does that matter?');
   await expect(page.getByTestId('turn')).toHaveCount(2);
   await expect(page.getByTestId('reply').nth(1)).not.toBeEmpty({ timeout: 60_000 });
+  // The reply is stored when its stream ends, which is when its meta line shows; text alone is too soon.
+  await expect(page.getByTestId('reply-meta')).toHaveCount(2, { timeout: 60_000 });
   await expect(link).toHaveAttribute('data-conversation-id', conversationId);
 
   // The API has the whole thread, both sides of both turns, under that one conversation.
