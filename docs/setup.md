@@ -158,6 +158,20 @@ WHISPER_URL=http://whisper:9000
 - Files can be up to `MAX_UPLOAD_BYTES` (see `.env`). For very long videos, uploading just the audio is
   quicker: `ffmpeg -i lecture.mp4 -vn -c:a libmp3lame -b:a 64k lecture.mp3`.
 
+## Documentation websites
+
+A workspace can import a documentation website: `POST /v1/workspaces/{slug}/sites` with `{ "url": "https://…" }`
+(see docs/api-schema.md, "Imported websites"). Each page becomes a document whose citations link back to the page.
+
+- The crawl is polite by default: one request a second (`CRAWL_DELAY_MS`), robots.txt honoured, one site at a time.
+  A large site takes a while: about 2,300 pages of auth0.com/docs take roughly 40 minutes to fetch, and embedding them
+  on LM Studio longer. Start with a small `maxPages` to check the result.
+- Leave out translations and other parts with `excludePaths`, for example `["/docs/fr-ca/", "/docs/ja-jp/"]`.
+- Langflow fetches the pages and refuses private and internal addresses. To import a site on your own network or on
+  your machine, add its host to `LANGFLOW_SSRF_ALLOWED_HOSTS` in `docker-compose.yml` (comma-separated, next to
+  `host.docker.internal`) and run `docker compose up -d langflow`.
+- Sites that need JavaScript to show their text, or a login, are not supported.
+
 ## Stopping, updating, starting over
 
 | To | Run |

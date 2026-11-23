@@ -54,8 +54,10 @@ flowchart LR
 
 `POST /v1/workspaces/{slug}/sites` with `{ url, folderId?, maxPages?, maxDepth?, excludePaths? }` creates
 a row in a new `sites` table and queues a crawl. The **scope** is fixed from the start URL: same scheme and
-host, and a path under the start URL's directory (`https://docs.example.org/guide/intro` gives
-`https://docs.example.org/guide/`; `https://auth0.com/docs` gives `https://auth0.com/docs/`).
+host, and a path under the start URL's directory. A start URL without a trailing slash counts as a
+directory (`https://auth0.com/docs` gives `https://auth0.com/docs/`, `https://docs.example.org/guide/intro`
+gives `https://docs.example.org/guide/intro/`) unless its last segment is a file name
+(`/guide/index.html` gives `/guide/`); to crawl a whole section, start from the section.
 `excludePaths` is a list of path prefixes left out of the scope, typically translations
 (`/docs/fr-ca/`, `/docs/ja-jp/`). Defaults: `maxPages` 1,000 (1 to 10,000), `maxDepth` 10 (1 to 20). Pages
 go into `folderId` when given. A workspace may hold several sites; the same start URL twice in one
@@ -226,36 +228,44 @@ with its own `queued` → `processing` → `ready`.
 
 ## Testing
 
-- `apps/api/src/services/crawl-scope.test.ts`: scope from a start URL, link normalisation, canonical,
-  non-page extensions, depth.
-- `apps/api/src/services/crawl.test.ts` (Testcontainers Postgres, a fake `rw-fetch` client): new, changed,
-  unchanged, duplicate and removed pages; `maxPages` keeps unreached pages; robots-blocked and failed pages
-  are counted; delay between requests; recovery after a crash.
-- `apps/api/src/routes/sites.test.ts`: auth (reader can list, editor can create, other workspace 404),
-  validation, 409s, delete removes pages.
-- `apps/api/src/flows.test.ts` covers `fetch.json` like the other flows (node ids, no legacy components).
-- Smoke (`pnpm smoke`): a static three-page docs site served inside the smoke stack (its host added to
-  `LANGFLOW_SSRF_ALLOWED_HOSTS` in `docker-compose.smoke.yml`), crawled, then searched, with the citation's
-  `sourceUrl` checked; this is what exercises the Python component.
-- Admin UI: component tests for the dialog and list; one Playwright test adds the smoke site.
-- By hand: `pnpm smoke --keep`, then in the admin UI add a small public docs site, watch the counters,
-  ask a question and follow the citation link.
+- `apps/api/src/services/crawl-scope.test.ts`: scope from a start URL, link normalisation (fragments,
+  tracking parameters, host case), excluded paths, non-page extensions.
+- `apps/api/src/services/crawl.test.ts` (Postgres from `TEST_DATABASE_URL`, a fake `PageFetcher`): breadth
+  first within scope, sitemap seeding, Markdown twins and Crawl-delay, `maxPages` and `maxDepth`, canonical
+  and duplicate pages, the site folder, a failed start page and Langflow down (both remove nothing), page
+  errors counted; crawling again re-ingests only changed pages, removes gone and robots-disallowed pages,
+  keeps unreached pages after a crawl that hit `maxPages` or mostly failed, leaves busy pages alone, removes a
+  page that became a duplicate; waits during a reindex; recovery after a restart.
+- `apps/api/src/routes/sites.test.ts`: defaults and scope, 409 for a duplicate start URL, validation, reader
+  can read but not add, other workspace 404, crawl again once at a time, PATCH moves existing pages, DELETE
+  removes pages and vectors and refuses while a page is processing, `web` documents show `sourceUrl`.
+- `apps/api/src/services/storage.test.ts`: `writePage` replaces a page in place.
+- `packages/db/src/db.test.ts`: uploads deduplicated per workspace, pages per site.
+- `apps/api/src/flows.test.ts` covers `fetch.json` like the other flows (component code matches the file).
+- The component was run against a real Langflow 1.13.3 container and a local static site: main-content pick
+  and chrome removal, links collected before cleaning, canonical, Markdown twin with fallback, robots.txt
+  `Disallow` and `Crawl-delay`, nested sitemap index, `llms.txt` detection, and the SSRF guard refusing
+  `127.0.0.1`. auth0.com/docs was checked in a browser (Mintlify, `.md` twins, 7,000 sitemap entries); the
+  sandbox could not reach it, so a real crawl of it is still to run.
+- By hand: `pnpm smoke --keep`, then `POST /v1/workspaces/<slug>/sites` with a small public docs site and
+  `maxPages: 20`, poll `GET …/sites/<id>`, then ask a question. The smoke-test addition is a follow-up.
 
 ## Out of scope and follow-ups
 
 - JavaScript-rendered sites, sites behind a login, PDFs linked from pages.
 - Scheduled re-crawls (a re-crawl is a button or `POST .../crawl`).
 - MCP tools for sites (the MCP server already sees page documents and `sourceUrl`).
-- Delivery as a stack of PRs, each with its own short spec pointing here:
-  1. `feat(flows)`: `WorkspaceWebPage` component and `rw-fetch` flow, contract in `flows/README.md`.
-  2. `feat(api)`: `sites` table, `web` type and `sourceUrl`, crawl service and queue, with
-     `POST`/`GET .../sites` so the service has a caller (rule 1).
-  3. `feat(api)`: re-crawl, refresh and removal rules, `PATCH` and `DELETE`, docs.
-  4. `feat(admin)`: Add website dialog, Websites list, citation links.
-  5. `test`: smoke and e2e coverage with a stub docs site (may fold into 3 and 4).
+- Delivery. This PR carries the whole backend: the `WorkspaceWebPage` component and `rw-fetch` flow, the
+  `sites` table and the `web` type, the crawler with its re-crawl and removal rules, and every site route.
+  They were planned as three PRs, but the crawler's rules only make sense together and the component has
+  no caller without the crawler (rule 1), so they land as one. Follow-ups, each with its own spec:
+  1. `feat(api)`: `sourceUrl` on passages and citations (section 5), so answers link to the page.
+  2. `feat(admin)`: Add website dialog, Websites list, links on web documents and citations (section 6).
+  3. `test(smoke)`: a stub docs site crawled end to end in the compose smoke test.
 
 ## Docs updated
 
-This spec only. The PRs that build it update `docs/architecture.md` (ingestion), `docs/api-schema.md`
-(sites, `sourceUrl`), `flows/README.md` (`rw-fetch`), `docs/setup.md` (intranet sites and the SSRF list)
-and `README.md` (feature list).
+`docs/architecture.md` (ingestion, flow names, status), `docs/api-schema.md` (sites, `web` documents),
+`flows/README.md` (`rw-fetch`), `docs/setup.md` ("Documentation websites": pacing, `excludePaths`, the SSRF
+allow list) and `README.md` (feature list). `sourceUrl` on passages and citations is documented by the
+follow-up that adds it.
