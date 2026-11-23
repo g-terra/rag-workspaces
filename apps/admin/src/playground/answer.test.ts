@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { answerMeta, answerParts, formatDuration, passageWhere } from './answer';
 
 describe('answerParts', () => {
+  it('reads the fullwidth 【n】 some models (gpt-oss) write, with or without a †locator', () => {
+    expect(answerParts('It retrieves 【1】 then 【1, 2】.', [1, 2])).toEqual([
+      { text: 'It retrieves ' },
+      { rank: 1 },
+      { text: ' then ' },
+      { rank: 1 },
+      { rank: 2 },
+      { text: '.' },
+    ]);
+    expect(answerParts('See 【2†L3-L5】.', [2])).toEqual([{ text: 'See ' }, { rank: 2 }, { text: '.' }]);
+    expect(answerParts('See 【9】.', [2])).toEqual([{ text: 'See 【9】.' }]);
+  });
+
   it('leaves text without markers alone', () => {
     expect(answerParts('RAG retrieves passages.', [1, 2])).toEqual([{ text: 'RAG retrieves passages.' }]);
   });

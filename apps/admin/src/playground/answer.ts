@@ -6,8 +6,9 @@ export const NOT_GROUNDED = 'Nothing in this workspace was close enough to that,
 /** A piece of an answer: text to show, or the `[n]` marker of a citation to open. */
 export type AnswerPart = { text: string } | { rank: number };
 
-// `[1]`, `[12]` or `[1, 2]`: how the system prompt asks the model to cite its passages.
-const MARKER = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
+// `[1]`, `[12]` or `[1, 2]`: how the system prompt asks the model to cite its passages. Some models
+// (gpt-oss) write their own house style instead, fullwidth `【1】` or `【1†L3-L5】`; the locator is dropped.
+const MARKER = /\[(\d+(?:\s*,\s*\d+)*)\]|【(\d+(?:\s*,\s*\d+)*)(?:†[^】]*)?】/g;
 // A citation follows a space, punctuation or another citation. Anything else to its left makes it part
 // of that word, such as the subscript in `items[1]`, which is code the model wrote, not a citation.
 const ATTACHED = /[\p{L}\p{N}_$\]]/u;
@@ -25,7 +26,7 @@ export function answerParts(text: string, ranks: number[]): AnswerPart[] {
     if (upTo > at) parts.push({ text: text.slice(at, upTo) });
   };
   for (const match of text.matchAll(MARKER)) {
-    const cited = match[1]!.split(',').map((n) => Number(n.trim()));
+    const cited = (match[1] ?? match[2])!.split(',').map((n) => Number(n.trim()));
     if (!cited.every((rank) => ranks.includes(rank))) continue;
     // A marker directly after another is the second half of a list like `[1][2]`, not an index.
     if (match.index !== at && ATTACHED.test(text[match.index - 1] ?? '')) continue;
