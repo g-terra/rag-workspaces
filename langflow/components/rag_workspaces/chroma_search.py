@@ -1,9 +1,14 @@
 """Search a workspace's Chroma collection and return structured passages.
 
-Hybrid search: the question is matched by meaning (Chroma's vector search) and by its words (BM25 over the
-passages' text and file names), and the two rankings are fused with reciprocal rank fusion. Words alone find
+Hybrid search: the question is matched by meaning (cosine similarity to the passages' vectors) and by its words
+(BM25 over the passages' text and file names), and the two rankings are fused with reciprocal rank fusion. Words alone find
 rare exact terms (a name, a code, a symbol) that similarity ranks low; meaning alone finds paraphrases.
 `score` stays the cosine similarity, so `min_score` means what it always did.
+
+Matching by meaning is exact: the passages' vectors are cached with the keyword index and every one is scored
+(about 2 ms for 18,000 passages). Chroma's HNSW index is approximate and, on real material, left passages that
+rank in the exact top 5 out of its top 200 entirely. Only a collection too big to hold in memory
+(`EXACT_MAX_VALUES`) falls back to Chroma's own vector search.
 
 A question with several parts ("What is X, and how does Y work?") is searched part by part instead: each
 part gets its own fused ranking, and the parts take turns filling the results (`question_parts`,
@@ -20,6 +25,7 @@ import time
 from collections import Counter
 
 import httpx
+import numpy as np
 
 from lfx.custom.custom_component.component import Component
 from lfx.io import FloatInput, HandleInput, IntInput, MessageTextInput, Output, StrInput
@@ -36,6 +42,9 @@ BM25_B = 0.75
 # A collection's keyword index is rebuilt when its passage count changes, or after this many seconds.
 INDEX_TTL_SECONDS = 120
 PAGE = 1000
+# Vectors are kept in memory (float32) for exact search up to this many numbers per collection: 64M is 256 MB,
+# for example 80,000 passages of 768 dimensions. Bigger collections use Chroma's approximate (HNSW) search.
+EXACT_MAX_VALUES = 64_000_000
 
 _WORD = re.compile(r"\w+", re.UNICODE)
 
@@ -125,8 +134,31 @@ def interleave(rankings: list[list[str]]) -> list[str]:
     return out
 
 
-# Keyword indexes by (Chroma URL, collection id), kept across runs in this Langflow worker.
-_INDEXES: dict[tuple[str, str], tuple[int, float, KeywordIndex]] = {}
+class VectorIndex:
+    """A collection's vectors, normalised, for exact cosine search."""
+
+    def __init__(self, ids: list[str], vectors: list[list[float]], metadatas: list[dict]) -> None:
+        self.ids = ids
+        matrix = np.asarray(vectors, dtype=np.float32)
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        self.matrix = matrix / np.where(norms == 0, 1, norms)
+        self.folders = np.asarray([(m or {}).get("folder") or "" for m in metadatas], dtype=object)
+
+    def search(self, query: list[float], limit: int, folder: str | None = None) -> list[str]:
+        q = np.asarray(query, dtype=np.float32)
+        q = q / (np.linalg.norm(q) or 1)
+        scores = self.matrix @ q
+        candidates = np.flatnonzero(self.folders == folder) if folder else np.arange(len(self.ids))
+        if len(candidates) > limit:
+            top = np.argpartition(-scores[candidates], limit - 1)[:limit]
+            candidates = candidates[top]
+        best = candidates[np.argsort(-scores[candidates], kind="stable")]
+        return [self.ids[i] for i in best]
+
+
+# Indexes by (Chroma URL, collection id), kept across runs in this Langflow worker: the passage count when built,
+# when it was built, the keyword index, and the vector index (None when the collection is too big for it).
+_INDEXES: dict[tuple[str, str], tuple[int, float, KeywordIndex, VectorIndex | None]] = {}
 
 
 def cosine(a: list[float], b: list[float]) -> float:
@@ -164,15 +196,21 @@ class ChromaWorkspaceSearch(Component):
     def _base(self) -> str:
         return f"{self.chroma_url.rstrip('/')}/api/v2/tenants/{self.tenant}/databases/{self.database}"
 
-    def _keyword_index(self, client: httpx.Client, cid: str) -> KeywordIndex:
-        """The collection's BM25 index, rebuilt when its passage count changed or it is a few minutes old."""
+    def _indexes(self, client: httpx.Client, cid: str) -> tuple[KeywordIndex, VectorIndex | None]:
+        """The collection's BM25 and vector indexes, rebuilt when its passage count changed or they are a few
+        minutes old. The vector index is None when the collection has more than EXACT_MAX_VALUES numbers.
+
+        A rebuild reads every passage's text again (about 0.4 s for 18,000) but only the vectors of passages it
+        has not seen: reading all vectors takes several seconds. A passage id is its document and chunk number,
+        and a document's chunks are not rewritten in place, so a vector already held is still right.
+        """
         key = (self._base(), cid)
         r = client.get(f"{self._base()}/collections/{cid}/count")
         r.raise_for_status()
         count = int(r.json())
         cached = _INDEXES.get(key)
         if cached and cached[0] == count and time.monotonic() - cached[1] < INDEX_TTL_SECONDS:
-            return cached[2]
+            return cached[2], cached[3]
         ids, texts, metadatas = [], [], []
         for offset in range(0, count, PAGE):
             r = client.post(f"{self._base()}/collections/{cid}/get",
@@ -182,9 +220,49 @@ class ChromaWorkspaceSearch(Component):
             ids += page["ids"]
             texts += [d or "" for d in page["documents"]]
             metadatas += [m or {} for m in page["metadatas"]]
-        index = KeywordIndex(ids, texts, metadatas)
-        _INDEXES[key] = (count, time.monotonic(), index)
-        return index
+        keyword = KeywordIndex(ids, texts, metadatas)
+        vector = self._vector_index(client, cid, ids, metadatas, cached[3] if cached else None)
+        _INDEXES[key] = (count, time.monotonic(), keyword, vector)
+        return keyword, vector
+
+    def _vector_index(
+        self, client: httpx.Client, cid: str, ids: list[str], metadatas: list[dict], previous: VectorIndex | None
+    ) -> VectorIndex | None:
+        """Vectors for `ids`, reusing the previous index's rows and reading only the new ones from Chroma."""
+        known = {pid: row for row, pid in enumerate(previous.ids)} if previous is not None else {}
+        missing = [pid for pid in ids if pid not in known]
+        fetched: dict[str, list[float]] = {}
+        dimensions = previous.matrix.shape[1] if previous is not None else None
+        for start in range(0, len(missing), PAGE):
+            batch = missing[start : start + PAGE]
+            r = client.post(f"{self._base()}/collections/{cid}/get", json={"ids": batch, "include": ["embeddings"]})
+            r.raise_for_status()
+            page = r.json()
+            fetched.update(zip(page["ids"], page["embeddings"], strict=True))
+            dimensions = dimensions or (len(page["embeddings"][0]) if page["embeddings"] else None)
+            if dimensions and len(ids) * dimensions > EXACT_MAX_VALUES:
+                return None
+        if not ids or not dimensions:
+            return None
+        # A passage deleted between the two reads has no vector: leave it out.
+        present = [i for i, pid in enumerate(ids) if pid in fetched or pid in known]
+        rows = [fetched[ids[i]] if ids[i] in fetched else previous.matrix[known[ids[i]]] for i in present]
+        return VectorIndex([ids[i] for i in present], rows, [metadatas[i] for i in present])
+
+    def _vector_ranking(
+        self, client: httpx.Client, cid: str, embeddings: list[list[float]], limit: int, folder: str | None
+    ) -> list[list[str]]:
+        """The best `limit` passage ids by cosine for each query vector: exact from the cached vectors, or
+        Chroma's approximate search when the collection is too big to cache."""
+        _, vector = self._indexes(client, cid)
+        if vector is not None:
+            return [vector.search(e, limit, folder) for e in embeddings]
+        body = {"query_embeddings": embeddings, "n_results": limit, "include": ["distances"]}
+        if folder:
+            body["where"] = {"folder": folder}
+        r = client.post(f"{self._base()}/collections/{cid}/query", json=body)
+        r.raise_for_status()
+        return r.json()["ids"]
 
     def _search(self) -> list[dict]:
         if hasattr(self, "_cached"):
@@ -204,17 +282,10 @@ class ChromaWorkspaceSearch(Component):
             embeddings = [self.embedding.embed_query(q) for q in queries]
             # Scores are always against the whole query, so they mean the same with or without parts.
             query_embedding = embeddings[0] if len(queries) == 1 else self.embedding.embed_query(self.search_query)
-            body = {
-                "query_embeddings": embeddings,
-                "n_results": max(CANDIDATES, self.top_k),
-                "include": ["distances"],
-            }
-            if self.folder:
-                body["where"] = {"folder": self.folder}
-            r = client.post(f"{self._base()}/collections/{cid}/query", json=body)
-            r.raise_for_status()
-            by_meaning = r.json()["ids"]
-            index = self._keyword_index(client, cid)
+            by_meaning = self._vector_ranking(
+                client, cid, embeddings, max(CANDIDATES, self.top_k), self.folder or None
+            )
+            index, _ = self._indexes(client, cid)
             per_query = [
                 fuse(meaning, index.search(q, max(CANDIDATES, self.top_k), self.folder or None))
                 for q, meaning in zip(queries, by_meaning, strict=True)
