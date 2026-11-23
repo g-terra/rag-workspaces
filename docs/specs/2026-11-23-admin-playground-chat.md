@@ -31,7 +31,9 @@ copy follow the approved "Playground" mock's Chat panel.
    it streams, the stored `Message` once it arrives, an error, and a status (`streaming`, `done`,
    `failed`, `stopped`). `chatReducer` appends a turn on `sent` and then only ever changes the newest
    one, and only while it is streaming, so events still in flight after Stop are ignored — the same rule
-   `askReducer` follows. `cleared` empties the thread for a new conversation.
+   `askReducer` follows. Sending aborts whatever was streaming, so `sent` also settles a turn still
+   marked `streaming` as `stopped`; a turn no event can reach again must not keep its caret. `cleared`
+   empties the thread for a new conversation.
 2. **The requests** (`src/playground/use-chat.ts`). `useChat()` keeps the conversation id in a ref, so
    the first message creates the conversation and every later message reuses it without waiting for a
    render. The reply streams through the existing `streamGeneration()` with `Message` as the `done`
@@ -57,6 +59,9 @@ copy follow the approved "Playground" mock's Chat panel.
 | Reuse `streamGeneration` | A second streaming reader for messages | The events are the same four; only the `done` shape differs, which is already a parameter |
 | Only the new message is sent | Send the whole thread each time | The API keeps the history (`CHAT_HISTORY_TURNS`) and is the thing being tried out here |
 | A failed turn offers "Try again" | Retry in place | Retrying sends a new message, which is what the API offers; the failed turn stays visible above it |
+| No "Try again" while a reply streams | Leave it enabled | Sending aborts the reply in flight, so the button would quietly throw away an answer being read |
+| A failed turn keeps the words that arrived | Show only the reason | They were already read; hiding them looks like a bug, and Ask keeps them too |
+| A 401 while creating the conversation shows nothing | Report it on the turn | The session has ended and the app is signing in again, which is not the message's fault |
 | No rating on a reply | Thumbs on each reply | Feedback is an answers route; the API has none for messages |
 | `answerMeta` takes a nullable latency | A second formatter for replies | A reply reports the same three things, and may report none of them |
 | Shared pieces in `answer-view.tsx` | Chat imports them from `ask-panel.tsx` | A panel importing another panel's internals; the move is behaviour-preserving |
@@ -80,8 +85,9 @@ conversation (and admins) can delete through the API; the screen for that is the
 
 - `apps/admin/src/playground/chat.test.ts`: a turn opens on `sent`; tokens append to the turn being
   answered; the stored reply's content replaces the streamed text, and does not when it is `null`; a
-  failure keeps what arrived; events after `stopped` are ignored; earlier turns are untouched; `cleared`
-  empties the thread; `lastTurn()` of an empty chat.
+  failure keeps what arrived; events after `stopped` are ignored; earlier turns are untouched; a turn
+  still streaming when the next message is sent is stopped, keeping its text; `cleared` empties the
+  thread; `lastTurn()` of an empty chat.
 - `apps/admin/src/playground/answer.test.ts`: `answerMeta()` for a reply, which has no provider, and for
   one that reported nothing at all.
 - `apps/admin/src/playground/search.test.ts`: `parseMode('chat')`.
@@ -92,7 +98,8 @@ conversation (and admins) can delete through the API; the screen for that is the
 
 By hand: ask a question, then ask "why?" on its own — the reply should answer the first question, which
 is what the kept history buys. Stop a reply mid-stream and send another message: the conversation
-continues, and the API stored the whole reply you stopped reading.
+continues, and the stopped turn keeps the words that had arrived. Closing the stream aborts the run, so
+the API stores that reply as it stood, not as it would have finished.
 
 ## Out of scope and follow-ups
 

@@ -79,7 +79,8 @@ export function AskPanel() {
               </p>
               {ask.status === 'stopped' && (
                 <p className="text-muted-foreground border-t pt-3 text-[13px]">
-                  Stopped. What had arrived is above; the API still stored the whole answer.
+                  Stopped. What had arrived is above; the API stopped generating too and stored the answer as
+                  it stood.
                 </p>
               )}
               {ask.status === 'done' && ask.answer && (

@@ -105,6 +105,9 @@ async function start(
     return signal.aborted ? null : Conversation.parse(created).id;
   } catch (err) {
     if (signal.aborted) return null;
+    // A 401 has already signed the person out, and signing in again starts a new page: saying the
+    // conversation failed would blame the message for a session that had ended, as streaming does not.
+    if (err instanceof ApiError && err.status === 401) return null;
     onFailed({
       status: err instanceof ApiError ? err.status : null,
       detail: err instanceof Error ? err.message : 'The conversation could not be started.',

@@ -92,15 +92,20 @@ export function Sources({ citations, onOpen }: { citations: Citation[]; onOpen(p
   );
 }
 
-/** A refused or failed answer, with the reason the API gave and the reindex case named. */
-export function AnswerFailure({ error, onRetry }: { error: AnswerError; onRetry(): void }) {
+/**
+ * A refused or failed answer, with the reason the API gave and the reindex case named. `onRetry` is
+ * null when trying again would interrupt something, which is what Chat does while a reply streams.
+ */
+export function AnswerFailure({ error, onRetry }: { error: AnswerError; onRetry: (() => void) | null }) {
   const w = useCurrentWorkspace();
   const { title, body } = answerFailure(error, w.status);
   return (
     <Notice title={title} body={body} alert>
-      <Button variant="outline" size="sm" onClick={onRetry}>
-        Try again
-      </Button>
+      {onRetry && (
+        <Button variant="outline" size="sm" onClick={onRetry}>
+          Try again
+        </Button>
+      )}
     </Notice>
   );
 }

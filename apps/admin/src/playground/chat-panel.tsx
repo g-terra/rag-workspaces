@@ -36,7 +36,8 @@ export function ChatPanel() {
               key={i}
               turn={turn}
               onOpenPassage={setOpenPassage}
-              onRetry={() => chat.send(turn.question)}
+              // Retrying sends the question again, which would abort a reply still streaming.
+              onRetry={streaming ? null : () => chat.send(turn.question)}
             />
           ))}
         </div>
@@ -88,17 +89,19 @@ function Turn({
 }: {
   turn: ChatTurn;
   onOpenPassage(passageId: string | null): void;
-  onRetry(): void;
+  /** null while another reply is streaming, which retrying would abort. */
+  onRetry: (() => void) | null;
 }) {
   const citations = turn.reply?.citations ?? [];
+  const failed = turn.status === 'failed' && turn.error !== null;
   return (
     <div data-testid="turn" className="flex flex-col gap-3">
       <p className="bg-accent ml-auto max-w-150 rounded-xl rounded-br-sm px-4 py-2.5 text-[15px] whitespace-pre-wrap">
         {turn.question}
       </p>
-      {turn.status === 'failed' && turn.error ? (
-        <AnswerFailure error={turn.error} onRetry={onRetry} />
-      ) : (
+      {failed && turn.error && <AnswerFailure error={turn.error} onRetry={onRetry} />}
+      {/* A reply that failed part-way through still showed those words: they stay above the reason. */}
+      {(!failed || turn.text !== '') && (
         <div className="flex flex-wrap items-start gap-4">
           <div className="bg-card flex min-w-0 flex-[999_1_460px] flex-col gap-3 rounded-xl border p-5">
             {turn.reply?.grounded === false ? (
@@ -118,7 +121,8 @@ function Turn({
             )}
             {turn.status === 'stopped' && (
               <p className="text-muted-foreground border-t pt-3 text-[13px]">
-                Stopped. What had arrived is above; the API still stored the whole reply.
+                Stopped. What had arrived is above; the API stopped generating too and stored the reply as it
+                stood.
               </p>
             )}
             {turn.reply && (

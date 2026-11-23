@@ -99,6 +99,17 @@ describe('chatReducer', () => {
     ]);
   });
 
+  // Sending aborts the request in flight, so the turn it was answering must not be left running.
+  it('stops a turn that was still streaming when the next message is sent', () => {
+    const state = run(
+      { type: 'sent', question: 'first' },
+      { type: 'token', text: 'on' },
+      { type: 'sent', question: 'second' },
+    );
+    expect(state.turns.map((t) => t.status)).toEqual(['stopped', 'streaming']);
+    expect(state.turns[0]!.text).toBe('on');
+  });
+
   it('starts from nothing when the chat is cleared', () => {
     const state = run({ type: 'sent', question: 'first' }, { type: 'cleared' });
     expect(state).toEqual(idleChat);

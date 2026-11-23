@@ -47,11 +47,17 @@ export function chatReducer(state: ChatState, event: ChatEvent): ChatState {
       error: null,
       status: 'streaming',
     };
-    return { turns: [...state.turns, turn] };
+    // Sending aborts whatever was streaming, so the turn it was answering is stopped, not still
+    // running: only the newest turn takes events, and a turn left `streaming` would never finish.
+    return { turns: [...state.turns.map(settle), turn] };
   }
   const turn = lastTurn(state);
   if (!turn || turn.status !== 'streaming') return state;
   return { turns: [...state.turns.slice(0, -1), answer(turn, event)] };
+}
+
+function settle(turn: ChatTurn): ChatTurn {
+  return turn.status === 'streaming' ? { ...turn, status: 'stopped' } : turn;
 }
 
 function answer(turn: ChatTurn, event: Exclude<ChatEvent, { type: 'sent' } | { type: 'cleared' }>) {
