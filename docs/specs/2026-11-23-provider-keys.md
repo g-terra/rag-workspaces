@@ -1,7 +1,7 @@
 ---
 title: save hosted provider keys per workspace
 date: 2026-11-23
-pr: pending
+pr: "#95"
 status: in review
 areas: [api, db, docs, infra]
 ---
