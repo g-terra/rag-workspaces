@@ -59,3 +59,33 @@ export function modelOptions(
 
   return { options, initialValue: ordered[0]! };
 }
+
+export type WhisperModel = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3';
+
+/** Whisper sizes for the transcription prompt: what each downloads and roughly needs in memory. */
+export function whisperModelOptions(): SelectOption<WhisperModel>[] {
+  return [
+    { value: 'tiny', label: 'tiny', hint: '75 MB download, ~1 GB RAM, quickest and roughest' },
+    { value: 'base', label: 'base', hint: '150 MB download, ~1 GB RAM, the default' },
+    { value: 'small', label: 'small', hint: '500 MB download, ~2 GB RAM, clearly better for lectures' },
+    { value: 'medium', label: 'medium', hint: '1.5 GB download, ~5 GB RAM, slow on a CPU' },
+    { value: 'large-v3', label: 'large-v3', hint: '3 GB download, ~10 GB RAM, very slow on a CPU' },
+  ];
+}
+
+const WHISPER_URL = 'http://whisper:9000';
+
+/**
+ * The .env values that turn video and audio transcription on or off. It is the compose `video`
+ * profile (the whisper service) plus `WHISPER_URL` for the API; other profiles are kept. Turning it
+ * off leaves `WHISPER_MODEL` alone, so turning it back on offers the same size.
+ */
+export function transcriptionEnv(on: boolean, model: string, profiles: string): Record<string, string> {
+  const list = profiles
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!on) return { COMPOSE_PROFILES: list.filter((s) => s !== 'video').join(','), WHISPER_URL: '' };
+  const withVideo = list.includes('video') ? list : [...list, 'video'];
+  return { COMPOSE_PROFILES: withVideo.join(','), WHISPER_URL, WHISPER_MODEL: model };
+}
