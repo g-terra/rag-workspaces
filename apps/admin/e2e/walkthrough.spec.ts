@@ -72,10 +72,22 @@ test('opens on first sign-in, is remembered once skipped, and replays from Help'
   }
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
-  // Escape also ends it.
+  // Escape also ends it, even right away: a quick Escape used to go to the Help menu, which was still
+  // closing (and still the top dismiss layer) when the welcome appeared.
   await page.getByRole('button', { name: 'Help' }).click();
-  await page.getByRole('button', { name: 'Show the walkthrough' }).click();
-  await expect(page.getByRole('dialog', { name: 'Welcome to rag-workspaces' })).toBeVisible();
-  await page.keyboard.press('Escape');
+  // Clicked and pressed inside the page, so the Escape lands on the very first frame the welcome is there.
+  await page.evaluate(async () => {
+    [...document.querySelectorAll('button')]
+      .find((b) => b.textContent?.includes('Show the walkthrough'))!
+      .click();
+    const welcome = () =>
+      [...document.querySelectorAll('[role="dialog"]')].find((d) =>
+        d.textContent?.includes('Welcome to rag-workspaces'),
+      );
+    while (!welcome()) await new Promise((resolve) => requestAnimationFrame(resolve));
+    document.activeElement!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
+  });
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
