@@ -60,6 +60,16 @@ documents and the raw request log — for one workspace (editors and admins) or 
 
 `docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
 
+### Updating an existing install
+
+Run `pnpm env:init` after pulling: it adds any new secret to your `.env` and leaves the rest alone. Keycloak
+imports `docker/keycloak/realm.json` only into an empty database, so a realm created before a change to that
+file keeps its old settings. The simplest fix on a test install is `docker compose down -v` (this deletes
+the stack's data) and `docker compose up -d --build`. To keep your data instead, make the change by hand in
+the Keycloak admin console; for the people list (`GET /v1/users`, added 2026-11-23) that means creating the
+`api-directory` client as `realm.json` describes it, with `KEYCLOAK_DIRECTORY_SECRET` from `.env` as its
+secret.
+
 ## Development
 
 Requirements: Node 22.18+ and pnpm 10 (`corepack enable` gives you the pinned version).
@@ -72,16 +82,20 @@ pnpm lint        # ESLint
 pnpm typecheck   # tsc --noEmit
 pnpm format      # Prettier
 pnpm smoke       # end to end on a throwaway compose stack with a stand-in model (needs Docker)
+pnpm e2e         # the admin UI's Playwright tests on that same throwaway stack (needs Docker)
 ```
 
-End-to-end tests drive the admin UI in a real browser against the running stack (`docker compose up -d --build`
-first). They sign in as the seeded admin from `.env`, and create and delete their own workspaces in whatever
-stack they point at:
+End-to-end tests drive the admin UI in a real browser. `pnpm e2e` starts the throwaway smoke stack, runs
+them against it and removes it again (`--keep` leaves it running; other arguments go to Playwright, e.g.
+`pnpm e2e upload.spec.ts`). CI runs the same command on pull requests that touch the admin UI or the stack.
+To run them against your own running stack instead (`docker compose up -d --build` first), where they sign
+in as the seeded admin from `.env` and create and delete their own workspaces:
 
 ```bash
 pnpm --filter @rag/admin exec playwright install chromium   # once
-set -a; source .env; set +a                                 # RW_ADMIN_USERNAME / RW_ADMIN_PASSWORD
-pnpm --filter @rag/admin e2e
+pnpm e2e                                                    # on the throwaway smoke stack
+set -a; source .env; set +a                                 # or: RW_ADMIN_USERNAME / RW_ADMIN_PASSWORD
+pnpm --filter @rag/admin e2e                                #     against your own stack
 ```
 
 | Path | What it is |
@@ -90,7 +104,7 @@ pnpm --filter @rag/admin e2e
 | `apps/api` | Fastify API: `pnpm --filter @rag/api dev`, then Swagger UI at http://localhost:3000/docs |
 | `packages/config` | Shared TypeScript, ESLint and Vitest settings |
 | `packages/db` | Drizzle schema, SQL migrations (`drizzle/`) and the Postgres connection. Migrations run when the API starts |
-| `scripts/smoke` | The compose smoke test: `stack.ts up` and `down` run the stack as project `rag-workspaces-smoke` with `docker-compose.smoke.yml`, `check.ts` the checks |
+| `scripts/smoke` | The compose smoke test: `stack.ts up` and `down` run the stack as project `rag-workspaces-smoke` with `docker-compose.smoke.yml`, `check.ts` the checks, `e2e.ts` the admin UI's Playwright tests on the same stack (`pnpm e2e`) |
 | `packages/langflow-client` | Typed client for Langflow's login, API key, flow and run/stream endpoints |
 | `packages/shared` | zod schemas shared by the API and the admin UI (the API contract) |
 | `docker-compose.yml`, `docker/` | The stack, the API image, the Postgres init script and the Keycloak realm |

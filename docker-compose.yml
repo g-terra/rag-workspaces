@@ -104,6 +104,8 @@ services:
       RW_ADMIN_EMAIL: ${RW_ADMIN_EMAIL:-admin@example.com}
       RW_ADMIN_PASSWORD: ${RW_ADMIN_PASSWORD:?run pnpm env:init}
       RW_ADMIN_UI_URL: ${ADMIN_UI_URL:-http://localhost:8080}
+      # Secret of the api-directory client the API lists people with (GET /v1/users).
+      RW_API_DIRECTORY_SECRET: ${KEYCLOAK_DIRECTORY_SECRET:?run pnpm env:init}
     volumes:
       - ./docker/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
     healthcheck:
@@ -144,6 +146,7 @@ services:
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080
       KEYCLOAK_REALM: rag-workspaces
       KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
+      KEYCLOAK_DIRECTORY_SECRET: ${KEYCLOAK_DIRECTORY_SECRET}
       LMSTUDIO_BASE_URL: ${LMSTUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
       DEFAULT_MIN_SCORE: ${DEFAULT_MIN_SCORE:-0.3}
       DEFAULT_CHAT_PROVIDER: ${DEFAULT_CHAT_PROVIDER:-lmstudio}

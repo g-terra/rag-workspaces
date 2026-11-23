@@ -32,12 +32,28 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Answer (+ feedback) | `/v1/workspaces/{slug}/answers` | reader; an answer is visible only to whoever asked and to admins |
 | Conversation (+ messages) | `/v1/workspaces/{slug}/conversations` | reader; a conversation is visible only to whoever started it and to admins |
 | Usage | `/v1/usage`, `/v1/workspaces/{slug}/usage` | admin (global), editor (own workspace) |
-| User *(planned)* | `/v1/users` | admin |
-| System *(planned)* | `/v1/system` | admin |
+| User | `/v1/users` | admin |
+| System | `/v1/system` | admin |
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
 
-Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow, Keycloak and the model provider, including whether the configured models are available.
+Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down.
+
+```json
+// GET /v1/system → 200 (admin only)
+{ "version": "0.4.0", "status": "degraded",
+  "services": [{ "name": "postgres", "ok": true, "latencyMs": 2, "error": null },
+               { "name": "langflow", "ok": false, "latencyMs": 15, "error": "flows missing in Langflow: rw-chat" }],
+  "langflowKey": "auto",
+  "providers": [{ "id": "lmstudio", "configured": true, "reachable": true, "error": null, "embeddings": true,
+                  "models": ["qwen2.5-7b-instruct", "text-embedding-nomic-embed-text-v1.5"] },
+                { "id": "openai", "configured": false, "reachable": null, "error": "OPENAI_API_KEY is not set",
+                  "embeddings": true, "models": [] }],
+  "defaults": { "chat": { "provider": "lmstudio", "model": "qwen2.5-7b-instruct", "available": true },
+                "embedding": { "provider": "lmstudio", "model": "text-embedding-nomic-embed-text-v1.5", "available": true } } }
+```
+
+`providers` always lists `lmstudio`, `openai`, `gemini` and `anthropic`; a hosted one is asked only when its key is set, and keys are never returned. `langflowKey` is `auto` (minted at start), `env` (`LANGFLOW_API_KEY`) or `none` (not yet). `/ready` does not ask the model providers, so a stopped LM Studio shows here but doesn't make the API unready.
 
 ## Workspaces
 
@@ -46,7 +62,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 | GET | `/v1/workspaces` | Workspaces the caller can see, each with `access`: `admin`, `editor` or `reader` |
 | POST | `/v1/workspaces` | Create: `{ "slug": "personal", "name": "Personal", "description": "…", "settings": { … } }` |
 | GET, PATCH, DELETE | `/v1/workspaces/{slug}` | Read, update name, description or settings; delete with all its data |
-| POST | `/v1/workspaces/{slug}/reindex` *(planned)* | Re-run ingestion for every document (needed after changing the embedding model or chunking). Returns `202`; the workspace is `reindexing` until every document is `ready` or `failed` |
+| POST | `/v1/workspaces/{slug}/reindex` | Admin. Empty the Chroma collection and re-run ingestion for every document, optionally with a new model: body `{ "embeddingProvider": "openai", "embeddingModel": "text-embedding-3-small" }`, or no body to keep the model (for example after changing chunking). Returns `202` with the workspace; it is `reindexing` until every document is `ready` or `failed`. `409` while a reindex runs, `422` for a provider whose key is not set, `400` for a provider without a model |
 | GET | `/v1/workspaces/{slug}/members` | People with access and their role |
 | PUT, DELETE | `/v1/workspaces/{slug}/members/{userId}` | Grant (`{ "role": "reader" | "editor" }`) or remove a person's access |
 
@@ -62,10 +78,10 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 ```
 
 - `slug` is 3 to 40 characters, lowercase letters, digits and hyphens, and cannot be changed after creation (the collection and the upload folder are named after it). A taken slug returns `409`.
-- `chatProvider` and `embeddingProvider` are one of the providers configured in `.env`: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the configured providers and their models; choosing one that is not configured returns `422`. Provider keys are never accepted or returned by the API.
-- `null` settings use the global defaults from `.env`. `embeddingProvider` and `embeddingModel` are the exception: they are filled in from the default when the workspace is created and are never `null` afterwards, so a later change to `.env` cannot silently break search in existing workspaces. `PATCH` refuses to change them (`400`); changing them will go through workspace reindex *(planned)*.
+- `chatProvider` and `embeddingProvider` are one of the providers configured in `.env`: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the providers and the models each offers; choosing one whose key is not set returns `422`. Provider keys are never accepted or returned by the API.
+- `null` settings use the global defaults from `.env`. `embeddingProvider` and `embeddingModel` are the exception: they are filled in from the default when the workspace is created and are never `null` afterwards, so a later change to `.env` cannot silently break search in existing workspaces. `PATCH` refuses to change them (`400`); change them with workspace reindex, since vectors from two models can't be compared.
 - `chunkSize` and `chunkOverlap` apply to documents ingested after the change; reindex applies them to everything.
-- `status` is `active` or `reindexing` *(planned; always `active` today)*. While reindexing, passages, answers and messages return `503` with `Retry-After`.
+- `status` is `active` or `reindexing`. While reindexing, passage search and reads, answers and chat messages return `503` with `Retry-After: 30`; the document list still works, so progress can be watched (each document goes `queued`, `processing`, `ready`).
 - Deleting a workspace removes its collection, files, documents, conversations and answers, and unbinds it from API keys; a key left with no workspace is revoked. Usage rows are kept with the workspace marked deleted.
 
 ## Asking
@@ -161,7 +177,13 @@ Question text is kept for a configurable time (`USAGE_QUESTION_RETENTION_DAYS`, 
 | GET, POST | `/v1/api-keys` | List keys (last used; request count planned); create one. The admin UI's "API keys" page drives these |
 | GET, PATCH, DELETE | `/v1/api-keys/{keyId}` | Read; rename, change workspaces or expiry (the role can't change: `400`); revoke (the key stays listed with `revokedAt`) |
 | GET | `/v1/me` | The signed-in user or the key, with roles and workspaces |
-| GET | `/v1/users` *(planned)* | People known to Keycloak (id, name, email, admin or not), read-only, so an admin can grant access before someone's first login |
+| GET | `/v1/users?search=…&limit=…&cursor=…` | People in Keycloak (id, username, name, email, admin or not, enabled), read-only, so an admin can grant access before someone's first login. Admins only; `503` when Keycloak can't be reached or the people list isn't set up |
+
+```json
+// GET /v1/users?search=ali → 200 (admin only). The id is the userId for workspace members.
+{ "data": [{ "id": "5b0d1c5e-…", "username": "alice", "email": "alice@example.com", "name": "Alice Example",
+  "isAdmin": false, "enabled": true }], "nextCursor": null }
+```
 
 ```json
 // POST /v1/api-keys → 201 (admin only)
@@ -179,11 +201,11 @@ Question text is kept for a configurable time (`USAGE_QUESTION_RETENTION_DAYS`, 
 | 401 | Missing, expired or revoked token or key |
 | 403 | Authenticated, in the workspace, but the role does not allow the action |
 | 404 | No such resource, or a workspace the caller has no access to |
-| 409 | Slug already taken; deleting or reindexing a document while it is processing; changing a revoked API key |
+| 409 | Slug already taken; deleting or reindexing a document while it is processing; reindexing a workspace that is already reindexing; changing a revoked API key |
 | 413, 415 | File too large; file type not supported |
 | 429 | Rate limit |
 | 502, 504 | Langflow failed (or the model returned an empty answer) or timed out |
-| 503 | Langflow not ready yet (with `Retry-After`) or unreachable; a provider key missing; Keycloak unreachable; workspace reindexing *(planned)* |
+| 503 | Langflow not ready yet (with `Retry-After`) or unreachable; a provider key missing; Keycloak unreachable; workspace reindexing |
 
 ## Mapping to the assignment brief
 

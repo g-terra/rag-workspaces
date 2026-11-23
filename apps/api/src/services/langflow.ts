@@ -4,7 +4,7 @@ import type { Config } from '../config.js';
 import { REQUIRED_FLOWS } from '../flows.js';
 import type { ReadinessCheck } from '../readiness.js';
 
-/** Where the API's Langflow key came from. Shown by `GET /v1/system` later. */
+/** Where the API's Langflow key came from. Shown by `GET /v1/system`. */
 export type KeySource = 'auto' | 'env' | 'none';
 
 export type LangflowServiceOptions = {

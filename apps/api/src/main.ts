@@ -55,6 +55,7 @@ const app = await buildApp({
     apiKeyAuthenticator(database.db),
     keycloakAuthenticator(keycloakOptionsFromConfig(config)),
   ],
+  langflowKey: () => langflow.keySource,
   checks: [
     { name: 'postgres', check: () => database.ping() },
     chromaCheck(config),

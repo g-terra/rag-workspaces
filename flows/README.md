@@ -27,6 +27,12 @@ regenerating the flows (`node poc/client/build-flows.ts`, with the stack up; set
    `api_key` and `base_url` as tweaks on the `LLM` node. Langflow refuses to send a key that
    matches one of its own environment values to a non-OpenAI host.
 7. **The API chooses `collection_name`** (`ws_<slug>`). It never comes from a caller.
+8. **A component whose outputs feed two different nodes sets `group_outputs=True` on them.**
+   Langflow draws outputs that don't as a single dropdown handle, pins it to the first output when
+   the flow opens in the editor, and removes the other output's connections ("Some connections were
+   removed because they were invalid"). `apps/api/src/flows.test.ts` checks every committed flow.
+9. **No legacy components.** The editor marks them "Legacy" and Langflow can drop them in a later
+   version; the same test checks for them.
 
 ## Flows
 
@@ -78,8 +84,7 @@ Same `Embeddings`, `Search`, `Prompt` and `LLM` tweaks as `rw-answer`, plus:
 | Node | Tweak fields |
 |---|---|
 | `ChatInput` | `input_value` (top-level) is **what to search for**: the latest message, plus the previous question so follow-ups find passages |
-| `Question` | `input_value`: the latest message alone, for the prompt |
-| `History` | `input_value`: earlier turns as `User: …` / `Assistant: …` lines |
+| `Prompt` | `question`: the latest message alone, for the prompt. `history`: earlier turns as `User: …` / `Assistant: …` lines |
 
 The prompt template uses `{history}`, `{context}` and `{question}`. Outputs are the same as `rw-answer`.
 The search hangs off the chat input on purpose: Langflow only returns outputs downstream of the chat

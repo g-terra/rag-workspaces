@@ -13,6 +13,7 @@ import { and, asc, desc, eq } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
+import { assertSearchable } from '../services/reindex.js';
 import type { Principal } from '../auth/principal.js';
 import { HttpProblem } from '../errors.js';
 import {
@@ -171,6 +172,7 @@ export const conversationRoutes: FastifyPluginAsyncZod<ConversationRoutesOptions
     },
     async (req, reply) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'reader');
+      assertSearchable(workspace);
       const conversation = await loadVisible(workspace.id, req.params.conversationId, req.principal!);
       const input = { workspace, conversation, content: req.body.content, requestId: req.id };
 

@@ -137,6 +137,29 @@ async function main() {
     const me = await call(token, 'GET', '/v1/me');
     expect(me.isAdmin === true, `expected isAdmin true, got ${JSON.stringify(me)}`);
   });
+  await step('GET /v1/users lists the admin, read through the api-directory service account', async () => {
+    const { data } = (await call(token, 'GET', `/v1/users?search=${env.RW_ADMIN_USERNAME}`)) as {
+      data: { username: string; isAdmin: boolean }[];
+    };
+    const admin = data.find((u) => u.username === env.RW_ADMIN_USERNAME);
+    expect(admin?.isAdmin === true, `expected the admin with isAdmin true, got ${JSON.stringify(data)}`);
+  });
+
+  await step('GET /v1/system: every service up, the stand-in lists the embedding model', async () => {
+    const system = await call(token, 'GET', '/v1/system');
+    const down = system.services.filter((s: { ok: boolean }) => !s.ok);
+    expect(!down.length, `services down: ${JSON.stringify(down)}`);
+    expect(system.langflowKey === 'auto', `expected a minted Langflow key, got ${system.langflowKey}`);
+    const lm = system.providers.find((p: { id: string }) => p.id === 'lmstudio');
+    expect(
+      lm?.reachable && lm.models.includes('standin-embed-a'),
+      `LM Studio stand-in: ${JSON.stringify(lm)}`,
+    );
+    expect(
+      system.defaults.embedding.available,
+      `embedding default: ${JSON.stringify(system.defaults.embedding)}`,
+    );
+  });
 
   const slug = `smoke-${Date.now()}`;
   const collection = `ws_${slug}`;
@@ -189,6 +212,34 @@ async function main() {
       }
     });
   }
+
+  await step('reindexed the workspace: search waits, then every passage is back', async () => {
+    const started = await call(token, 'POST', `/v1/workspaces/${slug}/reindex`);
+    expect(started.status === 'reindexing', `expected reindexing, got ${started.status}`);
+    const blocked = await fetch(`${API}/v1/workspaces/${slug}/passages?query=notes`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    // The stand-in model is quick, so the reindex may already be over.
+    expect([200, 503].includes(blocked.status), `passages during reindex: ${blocked.status}`);
+    const again = await waitUntilReady(
+      token,
+      slug,
+      docs.map((d) => d.id),
+    );
+    const deadline = Date.now() + READY_TIMEOUT_MS;
+    while ((await call(token, 'GET', `/v1/workspaces/${slug}`)).status !== 'active') {
+      expect(Date.now() < deadline, 'workspace still reindexing with every document ready');
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    for (const doc of again) {
+      const passages = await passagesOf(collection, doc.id);
+      expect(
+        passages.length === doc.passageCount,
+        `${doc.fileName} after reindex: API says ${doc.passageCount}, Chroma has ${passages.length}`,
+      );
+    }
+  });
 
   await step('deleted the workspace, its Chroma collection is gone', async () => {
     await call(token, 'DELETE', `/v1/workspaces/${slug}`);

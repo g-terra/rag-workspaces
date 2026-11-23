@@ -196,6 +196,74 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
     expect(seen).toContain('queued');
   });
 
+  describe('during a workspace reindex', () => {
+    async function reindexingWorkspace(docs: number) {
+      const ws = newId('workspace');
+      await db.insert(workspaces).values({
+        id: ws,
+        slug: ws.toLowerCase().replace(/[^a-z0-9]/g, ''),
+        name: 'Reindexing',
+        status: 'reindexing',
+        settings: { embeddingProvider: 'lmstudio', embeddingModel: 'nomic' },
+      });
+      const ids: string[] = [];
+      for (let i = 0; i < docs; i++) {
+        const id = newId('document');
+        await db.insert(documents).values({
+          id,
+          workspaceId: ws,
+          title: 'a',
+          fileName: 'a.md',
+          type: 'md',
+          sizeBytes: 1,
+          sha256: id,
+          storagePath: `x/${id}.md`,
+        });
+        ids.push(id);
+      }
+      const status = async () => (await db.select().from(workspaces).where(eq(workspaces.id, ws)))[0]!.status;
+      return { ids, status };
+    }
+
+    it('a run the reindex sent back to the queue leaves the row alone', async () => {
+      const { ids, status } = await reindexingWorkspace(1);
+      const id = ids[0]!;
+      f.during(() => db.update(documents).set({ status: 'queued', attempts: 0 }).where(eq(documents.id, id)));
+      expect(await processor().process(id)).toBe('gone');
+      expect(await get(id)).toMatchObject({ status: 'queued', attempts: 0, passageCount: null });
+      expect(f.calls.slice(-2)).toEqual(['chroma lookup', 'chroma delete vectors']);
+      expect(await status()).toBe('reindexing');
+    });
+
+    it('a superseded run that fails does not fail the requeued document', async () => {
+      const { ids } = await reindexingWorkspace(1);
+      const id = ids[0]!;
+      f.set('fail');
+      f.during(() => db.update(documents).set({ status: 'queued', attempts: 0 }).where(eq(documents.id, id)));
+      expect(await processor().process(id)).toBe('gone');
+      expect(await get(id)).toMatchObject({ status: 'queued', attempts: 0, error: null });
+    });
+
+    it('the workspace is active again once its last document finishes', async () => {
+      const { ids, status } = await reindexingWorkspace(2);
+      expect(await processor().process(ids[0]!)).toBe('ready');
+      expect(await status()).toBe('reindexing');
+      f.set('fail');
+      // INGEST_MAX_ATTEMPTS is 2: a retry keeps it pending, the second failure ends it.
+      expect(await processor().process(ids[1]!)).toBe('retry');
+      expect(await status()).toBe('reindexing');
+      expect(await processor().process(ids[1]!)).toBe('failed');
+      expect(await status()).toBe('active');
+    });
+
+    it('recovery closes a reindex whose documents all finished', async () => {
+      const { ids, status } = await reindexingWorkspace(1);
+      await db.update(documents).set({ status: 'ready' }).where(eq(documents.id, ids[0]!));
+      await processor().recover();
+      expect(await status()).toBe('active');
+    });
+  });
+
   it('the pg-boss queue processes an enqueued document, retrying until it fails for good', async () => {
     const queue = new PgBossIngestQueue(t.url, processor(), log, {
       maxAttempts: 2,

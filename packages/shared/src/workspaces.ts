@@ -55,6 +55,22 @@ export const UpdateWorkspace = z
   .partial();
 export type UpdateWorkspace = z.infer<typeof UpdateWorkspace>;
 
+/**
+ * `POST /v1/workspaces/{slug}/reindex`. Empty: ingest everything again with the current settings
+ * (after changing chunking). With a model: switch the workspace to it, the only way to change it.
+ */
+export const ReindexWorkspace = z
+  .object({
+    embeddingProvider: EmbeddingProvider.optional(),
+    embeddingModel: z.string().trim().min(1).max(200).optional(),
+  })
+  .strict()
+  .refine((b) => !b.embeddingProvider || b.embeddingModel, {
+    message: 'A new embedding provider needs its embeddingModel too.',
+    path: ['embeddingModel'],
+  });
+export type ReindexWorkspace = z.infer<typeof ReindexWorkspace>;
+
 export const WorkspaceMember = z.object({
   userId: z.string(),
   role: WorkspaceRole,
