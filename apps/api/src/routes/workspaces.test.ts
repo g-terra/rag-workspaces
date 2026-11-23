@@ -278,4 +278,105 @@ describe.skipIf(!url)('workspaces (against TEST_DATABASE_URL)', () => {
     const kept = (await call('GET', `/v1/api-keys/${both.id}`, 'admin')).json();
     expect(kept).toMatchObject({ revokedAt: null, workspaces: ['ouc'] });
   });
+  describe('composite workspaces', () => {
+    it('a composite names its sources in order, gets no collection, and has no embedding model', async () => {
+      const before = chromaFake.calls.length;
+      const res = await call('POST', '/v1/workspaces', 'admin', {
+        slug: 'study',
+        name: 'Study',
+        kind: 'composite',
+        sources: ['personal', 'ouc'],
+        settings: { topK: 6 },
+      });
+      expect(res.statusCode).toBe(201);
+      expect(res.json()).toMatchObject({
+        slug: 'study',
+        kind: 'composite',
+        sources: ['personal', 'ouc'],
+        settings: { topK: 6, embeddingProvider: null, embeddingModel: null },
+      });
+      expect(chromaFake.calls.slice(before)).toEqual([]);
+      const ouc = (await call('GET', '/v1/workspaces/ouc', 'admin')).json();
+      expect(ouc).toMatchObject({ kind: 'standard', sources: null });
+      const listed = (await call('GET', '/v1/workspaces', 'admin')).json().data;
+      expect(listed.find((w: { slug: string }) => w.slug === 'study').sources).toEqual(['personal', 'ouc']);
+    });
+
+    it('refuses fewer than two sources, unknown ones, repeats, composites and sources on a standard workspace', async () => {
+      await call('POST', '/v1/workspaces', 'admin', { slug: 'third', name: 'Third' });
+      const bad = [
+        { kind: 'composite', sources: ['ouc'] },
+        { kind: 'composite' },
+        { kind: 'composite', sources: ['ouc', 'nope'] },
+        { kind: 'composite', sources: ['ouc', 'ouc'] },
+        { kind: 'composite', sources: ['ouc', 'study'] },
+        { sources: ['ouc', 'personal'] },
+        { kind: 'composite', sources: ['ouc', 'personal'], settings: { chunkSize: 500 } },
+        { kind: 'composite', sources: ['ouc', 'personal'], settings: { embeddingModel: 'x' } },
+      ];
+      for (const extra of bad) {
+        const res = await call('POST', '/v1/workspaces', 'admin', { slug: 'bad', name: 'Bad', ...extra });
+        expect(res.statusCode, JSON.stringify(extra)).toBe(400);
+      }
+      expect((await call('GET', '/v1/workspaces/bad', 'admin')).statusCode).toBe(404);
+    });
+
+    it('PATCH replaces the sources of a composite and refuses them on a standard workspace', async () => {
+      const res = await call('PATCH', '/v1/workspaces/study', 'admin', { sources: ['ouc', 'third'] });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().sources).toEqual(['ouc', 'third']);
+      expect((await call('PATCH', '/v1/workspaces/study', 'admin', { sources: ['ouc'] })).statusCode).toBe(
+        400,
+      );
+      expect(
+        (await call('PATCH', '/v1/workspaces/study', 'admin', { settings: { minScore: 0.5 } })).statusCode,
+      ).toBe(400);
+      expect(
+        (await call('PATCH', '/v1/workspaces/ouc', 'admin', { sources: ['personal', 'third'] })).statusCode,
+      ).toBe(400);
+    });
+
+    it('PATCH refuses an unknown or composite source and keeps the old list', async () => {
+      await call('POST', '/v1/workspaces', 'admin', {
+        slug: 'nested',
+        name: 'Nested',
+        kind: 'composite',
+        sources: ['ouc', 'personal'],
+      });
+      for (const sources of [
+        ['ouc', 'nope'],
+        ['ouc', 'nested'],
+      ]) {
+        expect((await call('PATCH', '/v1/workspaces/study', 'admin', { sources })).statusCode).toBe(400);
+      }
+      expect((await call('GET', '/v1/workspaces/study', 'admin')).json().sources).toEqual(['ouc', 'third']);
+    });
+
+    it('changing only the sources still marks the composite updated', async () => {
+      const before = (await call('GET', '/v1/workspaces/study', 'admin')).json().updatedAt;
+      await new Promise((r) => setTimeout(r, 10));
+      const res = await call('PATCH', '/v1/workspaces/study', 'admin', { sources: ['third', 'ouc'] });
+      expect(res.json().updatedAt > before).toBe(true);
+      await call('PATCH', '/v1/workspaces/study', 'admin', { sources: ['ouc', 'third'] });
+    });
+
+    it('a reader of the composite sees its sources, even ones they cannot open', async () => {
+      await call('PUT', '/v1/workspaces/study/members/alice-1', 'admin', { role: 'reader' });
+      const got = await call('GET', '/v1/workspaces/study', 'alice');
+      expect(got.json()).toMatchObject({ kind: 'composite', sources: ['ouc', 'third'], access: 'reader' });
+      expect((await call('GET', '/v1/workspaces/third', 'alice')).statusCode).toBe(404);
+    });
+
+    it('a deleted source drops out of the composite', async () => {
+      expect((await call('DELETE', '/v1/workspaces/third', 'admin')).statusCode).toBe(204);
+      expect((await call('GET', '/v1/workspaces/study', 'admin')).json().sources).toEqual(['ouc']);
+    });
+
+    it('deleting a composite leaves its sources and makes no Chroma call', async () => {
+      const before = chromaFake.calls.length;
+      expect((await call('DELETE', '/v1/workspaces/study', 'admin')).statusCode).toBe(204);
+      expect(chromaFake.calls.slice(before)).toEqual([]);
+      expect((await call('GET', '/v1/workspaces/ouc', 'admin')).statusCode).toBe(200);
+    });
+  });
 });

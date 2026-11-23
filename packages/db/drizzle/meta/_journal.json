@@ -92,6 +92,13 @@
       "when": 1795471178404,
       "tag": "0012_sites",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795472277179,
+      "tag": "0013_composite_workspaces",
+      "breakpoints": true
     }
   ]
 }

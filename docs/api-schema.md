@@ -11,7 +11,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 |---|---|
 | Versioning | `/v1`; breaking changes go to `/v2` |
 | Auth | `Authorization: Bearer <token or key>`: a Keycloak access token (people) or an API key (agents and scripts) |
-| Isolation | A caller only sees workspaces it is granted; others return 404, not 403, so their existence is not revealed |
+| Isolation | A caller only sees workspaces it is granted; others return 404, not 403, so their existence is not revealed. The one exception: a [composite](#composite-workspaces) lists its sources' slugs to its own readers |
 | Ids | Prefixed ULIDs: `ws_`, `fld_`, `doc_`, `ans_`, `cnv_`, `msg_`, `key_`. Passages are `psg_<document ulid>_<chunk index>`, so they are stable across re-indexing with the same settings. Users are identified by their Keycloak user id. Workspaces are addressed by `slug` |
 | Fields | JSON, camelCase, ISO 8601 UTC timestamps |
 | Lists | `?limit=20&cursor=…` returns `{ "data": [...], "nextCursor": "…" | null }` |
@@ -66,7 +66,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 | Method | Path | Does |
 |---|---|---|
 | GET | `/v1/workspaces` | Workspaces the caller can see, each with `access`: `admin`, `editor` or `reader` |
-| POST | `/v1/workspaces` | Create: `{ "slug": "personal", "name": "Personal", "description": "…", "settings": { … } }` |
+| POST | `/v1/workspaces` | Create: `{ "slug": "personal", "name": "Personal", "description": "…", "settings": { … } }`, or a [composite](#composite-workspaces) with `"kind": "composite", "sources": ["ouc", "personal"]` |
 | GET, PATCH, DELETE | `/v1/workspaces/{slug}` | Read, update name, description or settings; delete with all its data. The admin UI's workspace Settings screen reads and writes these |
 | POST | `/v1/workspaces/{slug}/reindex` | Admin. Empty the Chroma collection and re-run ingestion for every document, optionally with a new model: body `{ "embeddingProvider": "openai", "embeddingModel": "text-embedding-3-small" }`, or no body to keep the model (for example after changing chunking). Returns `202` with the workspace; it is `reindexing` until every document is `ready` or `failed`. `409` while a reindex runs, `422` for a provider whose key is not set, `400` for a provider without a model |
 | GET | `/v1/workspaces/{slug}/members` | People with access and their role |
@@ -94,6 +94,28 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 - `style` is the response style slug answers and chat replies use when a request names none (`null`: no style). An unknown slug is `400`. See [Response styles](#response-styles).
 - `status` is `active` or `reindexing`. While reindexing, passage search and reads, answers and chat messages return `503` with `Retry-After: 30`; the document list still works, so progress can be watched (each document goes `queued`, `processing`, `ready`).
 - Deleting a workspace removes its collection, files, documents, conversations and answers, and unbinds it from API keys; a key left with no workspace is revoked. Usage rows are kept with the workspace marked deleted.
+
+### Composite workspaces
+
+A composite workspace holds no documents. It names two to ten standard workspaces as its `sources` and answers
+from their material, under its own slug, members, API keys, chat settings, style and usage (decision 25).
+
+```jsonc
+// POST /v1/workspaces
+{ "slug": "study", "name": "Study", "kind": "composite", "sources": ["ouc", "personal"], "settings": { "topK": 8 } }
+// → 201 { "slug": "study", "kind": "composite", "sources": ["ouc", "personal"],
+//         "settings": { "embeddingProvider": null, "embeddingModel": null, "topK": 8, … }, … }
+```
+
+- Every workspace has `kind` (`standard` or `composite`, fixed at creation) and `sources` (`null` for a standard
+  workspace; the source slugs in order for a composite).
+- A source must be an existing standard workspace, listed once. `PATCH` with `sources` replaces the whole list (composite
+  only). Deleting a source drops it from every composite, which can leave it with fewer than two.
+- A composite has no embedding model, chunking or `minScore`: each source searches with its own. Creating or patching a
+  composite with one of them is `400`. Its chat provider and model, system prompt, reasoning effort, style and `topK`
+  apply to its answers.
+- Access to a composite is enough to ask, chat and search across its sources. It grants nothing else in them.
+- Its document, folder and reindex routes (and a document's passages) answer `409`: those live in the sources.
 
 ### Provider keys per workspace
 

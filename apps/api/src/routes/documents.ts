@@ -16,6 +16,7 @@ import { and, desc, eq, inArray, isNull, notInArray, type SQL } from 'drizzle-or
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
+import { standardOnly } from '../services/composites.js';
 import { openEventStream } from '../sse.js';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
@@ -69,6 +70,8 @@ const MIME: Record<DocumentRow['type'], string> = {
 
 export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = async (app, opts) => {
   const { db, storage, chroma, queue, events, config } = opts;
+  // A composite has no documents: its sources do.
+  app.addHook('preHandler', standardOnly(db));
   await app.register(multipart, {
     limits: { fileSize: config.MAX_UPLOAD_BYTES, files: config.MAX_UPLOAD_FILES, fields: 20 },
   });

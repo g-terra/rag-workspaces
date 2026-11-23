@@ -27,6 +27,9 @@ const timestamps = {
 
 export const workspaceStatus = pgEnum('workspace_status', ['active', 'reindexing']);
 
+/** `standard` holds documents; `composite` holds none and answers from its sources (`compositeSources`). */
+export const workspaceKind = pgEnum('workspace_kind', ['standard', 'composite']);
+
 /** Optional per-workspace overrides; `null` or missing means the global default from `.env`. */
 export type WorkspaceSettings = {
   chatProvider?: string | null;
@@ -53,6 +56,8 @@ export const workspaces = pgTable(
     slug: text().notNull(),
     name: text().notNull(),
     description: text(),
+    /** Fixed at creation, like the slug. */
+    kind: workspaceKind().notNull().default('standard'),
     status: workspaceStatus().notNull().default('active'),
     settings: jsonb().$type<WorkspaceSettings>().notNull().default({}),
     ...timestamps,
@@ -61,6 +66,27 @@ export const workspaces = pgTable(
 );
 
 export type Workspace = typeof workspaces.$inferSelect;
+
+/**
+ * The standard workspaces a composite answers from, in the order the admin listed them. Deleting
+ * either side removes the row, so a deleted source drops out of every composite.
+ */
+export const compositeSources = pgTable(
+  'composite_sources',
+  {
+    compositeId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    sourceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    position: integer().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.compositeId, t.sourceId] }),
+    index('composite_sources_source_idx').on(t.sourceId),
+  ],
+);
 
 /** Inside a workspace, people and API keys are `reader` (ask, chat, search) or `editor` (also manage material). */
 export const workspaceRole = pgEnum('workspace_role', ['reader', 'editor']);

@@ -13,6 +13,7 @@ import { and, eq } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
+import { requireStandard } from '../services/composites.js';
 import { requireFolder } from '../services/folders.js';
 import { assertSearchable } from '../services/reindex.js';
 import type { Config } from '../config.js';
@@ -151,6 +152,7 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
     },
     async (req) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'reader');
+      requireStandard(workspace);
       assertSearchable(workspace);
       const document = await loadDocument(workspace, req.params.documentId);
       if (!document) throw new HttpProblem(404, `No document ${req.params.documentId}`);

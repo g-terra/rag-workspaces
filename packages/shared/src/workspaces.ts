@@ -17,13 +17,14 @@ export type EmbeddingProvider = z.infer<typeof EmbeddingProvider>;
 
 /**
  * Per-workspace settings. `null` means "use the global default from .env", except the
- * embedding provider and model, which are pinned when the workspace is created.
+ * embedding provider and model, which are pinned when the workspace is created (and are `null` for a
+ * composite, whose sources each search with their own).
  */
 export const WorkspaceSettings = z.object({
   chatProvider: ChatProvider.nullable(),
   chatModel: z.string().min(1).max(200).nullable(),
-  embeddingProvider: EmbeddingProvider,
-  embeddingModel: z.string().min(1).max(200),
+  embeddingProvider: EmbeddingProvider.nullable(),
+  embeddingModel: z.string().min(1).max(200).nullable(),
   /**
    * Text put before each document and query when embedding, pinned with the model (read-only).
    * `null` for a workspace not reindexed since prefixes were added: it embeds without them.
@@ -41,11 +42,31 @@ export const WorkspaceSettings = z.object({
 });
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettings>;
 
+/** `standard` holds documents; `composite` holds none and answers from its `sources`. */
+const WorkspaceKind = z.enum(['standard', 'composite']);
+
+/** A composite's sources: two to ten standard workspaces, by slug, in the order they are listed. */
+const CompositeSources = z
+  .array(WorkspaceSlug)
+  .min(2)
+  .max(10)
+  .refine((s) => new Set(s).size === s.length, { message: 'A workspace can be a source only once.' });
+
+/** Settings that belong to a source's material, never to a composite. */
+const SOURCE_ONLY = ['embeddingProvider', 'embeddingModel', 'chunkSize', 'chunkOverlap', 'minScore'] as const;
+
+function sourceOnlySet(settings: object | undefined): string | undefined {
+  return SOURCE_ONLY.find((k) => settings && (settings as Record<string, unknown>)[k] != null);
+}
+
 export const Workspace = z.object({
   id: z.string(),
   slug: WorkspaceSlug,
   name: z.string(),
   description: z.string().nullable(),
+  kind: WorkspaceKind,
+  /** A composite's source workspaces, by slug, in order; `null` for a standard workspace. */
+  sources: z.array(WorkspaceSlug).nullable(),
   status: z.enum(['active', 'reindexing']),
   settings: WorkspaceSettings,
   /** What the caller may do here: `admin` (global admins), `editor` or `reader`. */
@@ -55,19 +76,39 @@ export const Workspace = z.object({
 });
 export type Workspace = z.infer<typeof Workspace>;
 
-export const CreateWorkspace = z.object({
-  slug: WorkspaceSlug,
-  name: z.string().trim().min(1).max(100),
-  description: z.string().trim().max(1000).nullable().optional(),
-  settings: WorkspaceSettings.partial().optional(),
-});
+export const CreateWorkspace = z
+  .object({
+    slug: WorkspaceSlug,
+    name: z.string().trim().min(1).max(100),
+    description: z.string().trim().max(1000).nullable().optional(),
+    /** Default `standard`. */
+    kind: WorkspaceKind.optional(),
+    /** Required for a composite, refused for a standard workspace. */
+    sources: CompositeSources.optional(),
+    settings: WorkspaceSettings.partial().optional(),
+  })
+  .superRefine((b, ctx) => {
+    if (b.kind === 'composite' && !b.sources)
+      ctx.addIssue({ code: 'custom', path: ['sources'], message: 'A composite needs its sources.' });
+    if (b.kind !== 'composite' && b.sources)
+      ctx.addIssue({ code: 'custom', path: ['sources'], message: 'Only a composite has sources.' });
+    const own = b.kind === 'composite' && sourceOnlySet(b.settings);
+    if (own)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['settings', own],
+        message: `A composite has no ${own}: each source uses its own.`,
+      });
+  });
 export type CreateWorkspace = z.infer<typeof CreateWorkspace>;
 
 /** The embedding provider and model are pinned at creation: changing them needs a re-index, so PATCH refuses them. */
 export const UpdateWorkspace = z
   .object({
-    name: CreateWorkspace.shape.name,
-    description: CreateWorkspace.shape.description,
+    name: z.string().trim().min(1).max(100),
+    description: z.string().trim().max(1000).nullable().optional(),
+    /** A composite's new list of sources, replacing the old one. Refused for a standard workspace. */
+    sources: CompositeSources,
     settings: WorkspaceSettings.omit({
       embeddingProvider: true,
       embeddingModel: true,
