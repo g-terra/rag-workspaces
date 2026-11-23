@@ -112,3 +112,28 @@ input, so a separate text input for the query loses `ChatOutput-citations`.
 | `Delete` | `collection_name`, `document_id` |
 
 Output `ChatOutput-result`: `{ document_id, deleted }`.
+
+### `rw-fetch`: one web page, or a site's sitemap
+
+The API's crawler (`apps/api/src/services/crawl.ts`) runs this once per URL of an imported website, so the
+API never fetches the web itself. Every request goes through Langflow's SSRF guard (private and internal
+addresses are refused unless their host is in `LANGFLOW_SSRF_ALLOWED_HOSTS`; each redirect hop is checked
+again), with a 15 s timeout, a 5 MB body cap and the user agent `rag-workspaces-crawler`. robots.txt is
+honoured and cached per site for ten minutes.
+
+| Node | Tweak fields |
+|---|---|
+| `Fetch` | `url`, `mode` (`page` or `sitemap`), `prefer_markdown` (try `<url>.md` first: the site publishes `llms.txt`), `want_links` (also read the HTML page for its links when the Markdown twin was used) |
+
+Output `ChatOutput-result`:
+
+- `page`: `{ url, finalUrl, status, title, markdown, links, canonical, blocked, skipped, error }`. `markdown` is the
+  page's main content (`main`, else `article`, else `[role=main]`, else `body`) without navigation, headers,
+  footers, sidebars, tables of contents and similar chrome, converted with markitdown; or the page's own
+  Markdown twin, without the "Documentation Index" note some generators put first. `links` are every link
+  on the page, absolute, collected before cleaning. `blocked` is true when robots.txt disallows the page,
+  `skipped` names the content type of something that is not a page, `error` says why nothing could be read
+  (`status` is then 0).
+- `sitemap` (`url` is the site's scope): `{ urls, crawlDelay, hasLlmsTxt, sitemaps, errors }`, from robots.txt's
+  `Sitemap:` lines, `<scope>sitemap.xml` and `/sitemap.xml`, following sitemap indexes on the same origin (at
+  most 50 files, gzip allowed).
