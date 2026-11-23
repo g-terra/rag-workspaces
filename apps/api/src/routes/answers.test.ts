@@ -2,12 +2,12 @@ import { answers, documents, newId, workspaces } from '@rag/db';
 import { createTestDatabase } from '@rag/db/testing';
 import { LangflowClient } from '@rag/langflow-client';
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp, type App } from '../app.js';
 import { apiKeyAuthenticator } from '../auth/api-keys.js';
 import { keycloakAuthenticator } from '../auth/keycloak.js';
 import { loadConfig } from '../config.js';
-import { NOT_FOUND_TEXT } from '../services/answers.js';
+import { AnswerService, NOT_FOUND_TEXT } from '../services/answers.js';
 import { ChromaService } from '../services/chroma.js';
 import { testKeycloak } from '../test/tokens.js';
 
@@ -16,16 +16,17 @@ const url = process.env.TEST_DATABASE_URL;
 type Run = { flow: string; body: { input_value: string; tweaks: Record<string, Record<string, unknown>> } };
 
 const output = (outputs: Record<string, string>, usage?: unknown) =>
-  Response.json({
-    outputs: [
-      {
-        outputs: Object.entries(outputs).map(([component_id, text]) => ({
-          component_id,
-          results: { message: { text, properties: { usage } } },
-        })),
-      },
-    ],
-  });
+  Response.json(outputBody(outputs, usage));
+const outputBody = (outputs: Record<string, string>, usage?: unknown) => ({
+  outputs: [
+    {
+      outputs: Object.entries(outputs).map(([component_id, text]) => ({
+        component_id,
+        results: { message: { text, properties: { usage } } },
+      })),
+    },
+  ],
+});
 const fenced = (v: unknown) => '```json\n' + JSON.stringify(v) + '\n```';
 
 describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
@@ -37,11 +38,34 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
   let hits: unknown[] = [];
   let answerReply: () => Response;
   let kc: Awaited<ReturnType<typeof testKeycloak>>;
+  let streamEvents: () => unknown[];
+  /** When set, the streamed run sends one token and then waits until it is aborted. */
+  let hangAfterFirstToken = false;
 
   const langflowFetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const flow = /\/run\/([^?]+)/.exec(String(input))![1]!;
     runs.push({ flow, body: JSON.parse(String(init?.body)) });
     if (flow === 'rw-retrieve') return output({ 'ChatOutput-passages': fenced({ passages: hits }) });
+    if (String(input).includes('stream=true') && hangAfterFirstToken) {
+      const signal = init?.signal;
+      return new Response(
+        new ReadableStream({
+          start(c) {
+            c.enqueue(
+              new TextEncoder().encode(JSON.stringify({ event: 'token', data: { chunk: 'RAG ' } }) + '\n\n'),
+            );
+            signal?.addEventListener('abort', () => c.error(signal.reason));
+          },
+        }),
+      );
+    }
+    if (String(input).includes('stream=true')) {
+      return new Response(
+        streamEvents()
+          .map((e) => JSON.stringify(e) + '\n\n')
+          .join(''),
+      );
+    }
     return answerReply();
   }) as typeof fetch;
 
@@ -113,8 +137,17 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
       chunk_index: 4,
     };
     hits = [passage];
-    answerReply = () =>
-      output(
+    hangAfterFirstToken = false;
+    streamEvents = () => [
+      { event: 'add_message', data: {} },
+      { event: 'token', data: { chunk: 'RAG combines ' } },
+      { event: 'token', data: { chunk: '' } },
+      { event: 'token', data: { chunk: 'retrieval [1].' } },
+      { event: 'end', data: { result: JSON.parse(JSON.stringify(answerBody())) } },
+    ];
+    answerReply = () => Response.json(answerBody());
+    const answerBody = () =>
+      outputBody(
         {
           'ChatOutput-answer': 'RAG combines retrieval with generation [1].',
           'ChatOutput-citations': fenced({ passages: [passage] }),
@@ -330,5 +363,106 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
 
   it('400 for an empty question', async () => {
     expect((await ask({ question: '   ' })).statusCode).toBe(400);
+  });
+
+  /** Parse an event stream body into `[event, data]` pairs. */
+  const events = (body: string) =>
+    body
+      .split('\n\n')
+      .filter(Boolean)
+      .map((block) => {
+        const event = /^event: (.*)$/m.exec(block)![1]!;
+        return [event, JSON.parse(/^data: (.*)$/m.exec(block)![1]!)] as const;
+      });
+
+  const askStream = (question: string) =>
+    app.inject({
+      method: 'POST',
+      url: '/v1/workspaces/ouc/answers',
+      headers: { authorization: auth.reader, accept: 'text/event-stream' },
+      payload: { question },
+    });
+
+  it('streams tokens, then citations, then the stored answer', async () => {
+    const res = await askStream('Stream it');
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/event-stream');
+    const ev = events(res.body);
+    expect(ev.map(([e]) => e)).toEqual(['token', 'token', 'citations', 'done']);
+    expect(ev[0]![1]).toEqual({ text: 'RAG combines ' });
+    const done = ev[3]![1] as { id: string; text: string; timeToFirstTokenMs: number | null };
+    expect(done.text).toBe('RAG combines retrieval with generation [1].');
+    expect(done.timeToFirstTokenMs).toEqual(expect.any(Number));
+    expect(runs[1]!.body.tweaks.LLM).toMatchObject({ stream: true });
+    const [stored] = await t.db.select().from(answers).where(eq(answers.id, done.id));
+    expect(stored!.timeToFirstTokenMs).toEqual(expect.any(Number));
+  });
+
+  it('a stream that fails midway ends with an error event, and the answer is stored as failed', async () => {
+    streamEvents = () => [
+      { event: 'token', data: { chunk: 'RAG ' } },
+      { event: 'error', data: { text: 'Connection error.\n' } },
+      { event: 'error', data: { error: '500: long trace' } },
+    ];
+    const res = await askStream('Fail midway');
+    const ev = events(res.body);
+    expect(ev.map(([e]) => e)).toEqual(['token', 'error']);
+    const problem = ev[1]![1] as { status: number; detail: string; answerId: string };
+    expect(problem).toMatchObject({ status: 502, detail: expect.stringContaining('Connection error.') });
+    const [stored] = await t.db.select().from(answers).where(eq(answers.id, problem.answerId));
+    expect(stored).toMatchObject({ status: 'failed', error: 'Connection error.' });
+  });
+
+  it('a failure before the first token is a plain HTTP error, not a stream', async () => {
+    streamEvents = () => [{ event: 'error', data: { text: 'model not loaded' } }];
+    const res = await askStream('Fail early');
+    expect(res.statusCode).toBe(502);
+    expect(res.headers['content-type']).toContain('application/problem+json');
+  });
+
+  it('an unexpected error after the stream opened still ends it, with an error event', async () => {
+    const spy = vi.spyOn(AnswerService.prototype, 'ask').mockImplementation(async (input) => {
+      input.onToken?.('RAG ');
+      throw new Error('database went away');
+    });
+    try {
+      const ev = events((await askStream('Break after a token')).body);
+      expect(ev.map(([e]) => e)).toEqual(['token', 'error']);
+      expect(ev[1]![1]).toMatchObject({ status: 500 });
+      expect(JSON.stringify(ev[1]![1])).not.toContain('database went away');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('when the caller hangs up mid-stream, the run is stopped and the answer stored as failed', async () => {
+    hangAfterFirstToken = true;
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const ctrl = new AbortController();
+    const res = await fetch(`${address}/v1/workspaces/ouc/answers`, {
+      method: 'POST',
+      headers: {
+        authorization: auth.reader,
+        accept: 'text/event-stream',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ question: 'Hang up' }),
+      signal: ctrl.signal,
+    });
+    const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+    expect((await reader.read()).value).toContain('event: token');
+    ctrl.abort();
+    await expect
+      .poll(async () => (await t.db.select().from(answers).where(eq(answers.question, 'Hang up')))[0], {
+        timeout: 5_000,
+      })
+      .toMatchObject({ status: 'failed', error: 'The caller left before the answer finished.' });
+  });
+
+  it('an ungrounded answer streams its fixed text as one token', async () => {
+    hits = [];
+    const ev = events((await askStream('Off topic')).body);
+    expect(ev.map(([e]) => e)).toEqual(['token', 'citations', 'done']);
+    expect(ev[0]![1]).toEqual({ text: NOT_FOUND_TEXT });
   });
 });

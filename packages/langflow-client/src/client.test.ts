@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { provisionApiKey } from './bootstrap.js';
-import { LangflowClient } from './client.js';
+import { LangflowClient, parseEventStream } from './client.js';
 import { LangflowError } from './errors.js';
 import { messageText, messageUsage, outputsByComponent, parseJsonMessage } from './output.js';
 
@@ -164,5 +164,26 @@ describe('output helpers', () => {
       completionTokens: null,
     });
     expect(messageUsage(undefined)).toEqual({ promptTokens: null, completionTokens: null });
+  });
+});
+
+describe('parseEventStream', () => {
+  it('yields events split across chunks and skips junk lines', async () => {
+    const enc = new TextEncoder();
+    const parts = [
+      '{"event":"token","data":{"chunk":"He"}}\n\n{"event":"tok',
+      'en","data":{"chunk":"llo"}}\n',
+      'not json\n',
+      'data: {"event":"end","data":{}}',
+    ];
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        for (const p of parts) c.enqueue(enc.encode(p));
+        c.close();
+      },
+    });
+    const events = [];
+    for await (const ev of parseEventStream(body)) events.push(ev);
+    expect(events.map((e) => e.event)).toEqual(['token', 'token', 'end']);
   });
 });

@@ -31,7 +31,12 @@ export class HttpProblem extends Error {
   }
 }
 
-function problem(req: FastifyRequest, status: number, detail?: string, extra?: Partial<Problem>): Problem {
+export function problem(
+  req: FastifyRequest,
+  status: number,
+  detail?: string,
+  extra?: Partial<Problem>,
+): Problem {
   return {
     type: 'about:blank',
     title: TITLES[status] ?? 'Error',
