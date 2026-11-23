@@ -1,8 +1,8 @@
 ---
 title: Keep focus on the page after deleting a conversation
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#108"
+status: in review
 areas: [admin]
 ---
 
