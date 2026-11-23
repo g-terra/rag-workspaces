@@ -8,6 +8,7 @@ import { SignIn } from '@/routes/sign-in';
 import { WorkspaceHome } from '@/routes/workspace-home';
 import { WorkspaceLayout } from '@/routes/workspace-layout';
 import { Documents } from '@/routes/documents';
+import { Playground } from '@/routes/playground';
 import { Upload } from '@/routes/upload';
 import { Workspaces } from '@/routes/workspaces';
 
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
               { index: true, element: <WorkspaceHome /> },
               { path: 'upload', element: <Upload /> },
               { path: 'documents', element: <Documents /> },
+              { path: 'playground', element: <Playground /> },
             ],
           },
           { path: '*', element: <NotFound /> },
