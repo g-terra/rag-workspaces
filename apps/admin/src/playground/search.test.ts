@@ -26,6 +26,7 @@ describe('formatScore', () => {
 describe('parseMode', () => {
   it('reads the mode from the URL, and falls back to asking', () => {
     expect(parseMode('search')).toBe('search');
+    expect(parseMode('chat')).toBe('chat');
     expect(parseMode('ask')).toBe('ask');
     expect(parseMode(null)).toBe('ask');
     expect(parseMode('nonsense')).toBe('ask');
