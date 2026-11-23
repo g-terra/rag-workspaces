@@ -12,16 +12,20 @@ export function parseEnv(text: string): Record<string, string> {
 
 /**
  * Set values in a .env file's text: an existing line is changed where it is, so comments and order
- * stay; a key the file doesn't have yet is added at the end.
+ * stay. A key that is only there commented out (`# KEY=example`, as in .env.example) is uncommented in
+ * place. A key the file doesn't have at all is added at the end.
  */
 export function setEnv(text: string, values: Record<string, string>): string {
   const pending = new Map(Object.entries(values));
+  const live = new Set(Object.keys(parseEnv(text)));
   const lines = text.split('\n').map((line) => {
     const key = /^([A-Z0-9_]+)=/.exec(line)?.[1];
-    if (!key || !pending.has(key)) return line;
-    const value = pending.get(key)!;
-    pending.delete(key);
-    return `${key}=${value}`;
+    const commented = /^# ?([A-Z0-9_]+)=/.exec(line)?.[1];
+    const target = key ?? (commented && !live.has(commented) ? commented : undefined);
+    if (!target || !pending.has(target)) return line;
+    const value = pending.get(target)!;
+    pending.delete(target);
+    return `${target}=${value}`;
   });
   let out = lines.join('\n');
   if (pending.size) {
