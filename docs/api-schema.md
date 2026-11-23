@@ -150,7 +150,7 @@ Same routes globally (admins) and per workspace:
 | GET | `…/usage/top-documents` | Most cited documents |
 | GET | `…/usage/requests?route=…&status=…&apiKeyId=…&userId=…` | Raw request log, paginated |
 
-Global routes (`/v1/usage/…`) are admin only; per-workspace routes are for that workspace's editors and admins. `from` and `to` default to the last 7 days; `from` after `to` is `400`. Timeseries buckets are UTC. Every `/v1` request is logged after its response (route pattern, never the raw path; a caller who hangs up is logged as `499`).
+Global routes (`/v1/usage/…`) are admin only; per-workspace routes are for that workspace's editors and admins. The admin UI reads both through its "Usage" pages (`/usage` and `/w/{slug}/usage`). `from` and `to` default to the last 7 days; `from` after `to` is `400`. Timeseries buckets are UTC, and only buckets that saw traffic are returned, so a reader filling a chart has to add the quiet ones. `route=` matches a whole route pattern, not a substring. Every `/v1` request is logged after its response (route pattern, never the raw path; a caller who hangs up is logged as `499`).
 
 Question text is kept for a configurable time (`USAGE_QUESTION_RETENTION_DAYS`, default 90); after that the row stays for counts and latency with the text removed.
 

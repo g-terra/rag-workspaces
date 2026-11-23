@@ -1,4 +1,4 @@
-import { KeyRound, Layers, LogOut } from 'lucide-react';
+import { BarChart3, KeyRound, Layers, LogOut } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '@/auth/auth-context';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,9 @@ export function AppLayout() {
             </NavLink>
             <NavLink to="/api-keys" className={navItemClass}>
               <KeyRound className="size-4" /> API keys
+            </NavLink>
+            <NavLink to="/usage" className={navItemClass}>
+              <BarChart3 className="size-4" /> Usage
             </NavLink>
           </nav>
         )}
