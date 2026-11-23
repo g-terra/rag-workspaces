@@ -378,8 +378,11 @@ async function main() {
       `/v1/workspaces/${slug}/passages?query=chroma+embeddings+metadata`,
     );
     expect(
-      found.data.some((p: { documentId: string }) => p.documentId === doc!.id),
-      'search did not find the transcript',
+      found.data.some(
+        (p: { documentId: string; startSeconds: number | null }) =>
+          p.documentId === doc!.id && typeof p.startSeconds === 'number',
+      ),
+      `search did not find the transcript with its start time: ${JSON.stringify(found.data)}`,
     );
   });
 

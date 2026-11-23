@@ -128,6 +128,8 @@ WHISPER_URL=http://whisper:9000
   more accurate and slower than `base`; `tiny` is quicker and rougher.
 - A file shows `transcribing`, then `processing`, then `ready`. The transcript is kept next to the file, so a
   reindex or retry doesn't transcribe again. `GET …/documents/{id}/transcript` returns it with timings.
+- Search results and citations from a recording carry `startSeconds`, the second their passage starts at
+  (`page` stays `null`), so you can jump to that moment.
 - Without the profile, video and audio uploads are refused with `415` and a message pointing here.
 - Files can be up to `MAX_UPLOAD_BYTES` (see `.env`). For very long videos, uploading just the audio is
   quicker: `ffmpeg -i lecture.mp4 -vn -c:a libmp3lame -b:a 64k lecture.mp3`.

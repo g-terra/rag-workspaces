@@ -189,6 +189,7 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
       documentId: docId,
       documentTitle: 'Week 3 slides',
       page: 12,
+      startSeconds: null,
       score: 0.83,
     });
     expect(body.citations[0].snippet.length).toBeLessThanOrEqual(241);
@@ -279,6 +280,30 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
     expect((await get('reader')).statusCode).toBe(200);
     expect((await get('admin')).statusCode).toBe(200);
     expect((await get('other')).statusCode).toBe(404);
+  });
+
+  it('a citation from a transcript carries the second its passage starts at', async () => {
+    hits = [{ ...(hits[0] as object), page: null, start_seconds: 754.2 }];
+    answerReply = () =>
+      output({
+        'ChatOutput-answer': 'At this point [1].',
+        'ChatOutput-citations': fenced({ passages: hits }),
+      });
+    const body = (await ask({ question: 'When?' })).json();
+    expect(body.citations[0]).toMatchObject({ page: null, startSeconds: 754.2 });
+  });
+
+  it('an answer stored before start times existed reads back with startSeconds null', async () => {
+    const id = (await ask({ question: 'old one' })).json().id;
+    const [row] = await t.db.select().from(answers).where(eq(answers.id, id));
+    const old = row!.citations.map(({ startSeconds: _, ...c }) => c);
+    await t.db.update(answers).set({ citations: old }).where(eq(answers.id, id));
+    const res = await app.inject({
+      url: `/v1/workspaces/ouc/answers/${id}`,
+      headers: { authorization: auth.reader },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().citations[0]).toMatchObject({ page: 12, startSeconds: null });
   });
 
   it('feedback is stored, and rating again replaces it', async () => {

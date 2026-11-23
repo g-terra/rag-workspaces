@@ -49,7 +49,8 @@ The API's list of names is `apps/api/src/flows.ts`; `/ready` fails if one is mis
 
 Output `ChatOutput-result`: `{ collection, document_id, chunks, pages }` (`pages` is `null` for non-PDFs). Re-ingesting a document deletes its
 vectors first, so retries never duplicate. Vector ids are `<document_id>:<chunk index>`, with metadata
-`document_id`, `filename`, `folder`, `chunk_index` and `page` (PDF only, otherwise `null`).
+`document_id`, `filename`, `folder`, `chunk_index`, `page` (PDF only) and, for a transcript,
+`start_seconds` and `end_seconds` of the row the chunk came from.
 A failure (for example, file not found) comes back as HTTP 500 with the reason in `detail.message`.
 
 ### `rw-retrieve`: best matching passages, no generation
@@ -61,7 +62,7 @@ A failure (for example, file not found) comes back as HTTP 500 with the reason i
 | `Search` | `collection_name`, `top_k`, `min_score`, `folder` |
 
 Output `ChatOutput-passages`: `{ collection, query, passages }`, where `passages` is a list of
-`{ rank, id, text, score, document_id, filename, folder, page, chunk_index }`, best first; `score` is cosine
+`{ rank, id, text, score, document_id, filename, folder, page, start_seconds, chunk_index }`, best first; `score` is cosine
 similarity and hits below `min_score` are left out. An unknown collection returns an empty list.
 
 ### `rw-answer`: retrieve, prompt, generate (streams)

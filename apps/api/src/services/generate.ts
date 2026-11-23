@@ -27,6 +27,11 @@ export const DEFAULT_SYSTEM_PROMPT =
 
 const SNIPPET_CHARS = 240;
 
+/** A stored citation as the API returns it: ones stored before start times existed have none. */
+export function withStartSeconds(c: StoredCitation) {
+  return { ...c, startSeconds: c.startSeconds ?? null };
+}
+
 export type GenerateConfig = Pick<
   Config,
   | 'DEFAULT_TOP_K'
@@ -179,6 +184,7 @@ export class Generator {
           documentId: p.documentId,
           documentTitle: p.documentTitle,
           page: p.page,
+          startSeconds: p.startSeconds,
           snippet: p.text.length > SNIPPET_CHARS ? `${p.text.slice(0, SNIPPET_CHARS)}…` : p.text,
           score: p.score,
         })),

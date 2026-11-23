@@ -10,6 +10,8 @@ export const Passage = z.object({
   documentTitle: z.string(),
   /** 1-based page for PDFs, otherwise `null`. */
   page: z.number().int().nullable(),
+  /** For a video or audio transcript, the second the passage starts at; otherwise `null`. */
+  startSeconds: z.number().nullable(),
   chunkIndex: z.number().int(),
   text: z.string(),
 });

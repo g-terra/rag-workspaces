@@ -35,6 +35,7 @@ export type FlowPassage = {
   filename: string | null;
   folder: string | null;
   page: number | null;
+  start_seconds?: number | null;
   chunk_index: number | null;
 };
 
@@ -134,6 +135,7 @@ export async function resolveHits(
         documentId: h.document_id,
         documentTitle: title,
         page: typeof h.page === 'number' ? h.page : null,
+        startSeconds: typeof h.start_seconds === 'number' ? h.start_seconds : null,
         chunkIndex: index,
         text: h.text,
         score: h.score,

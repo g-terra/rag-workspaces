@@ -206,6 +206,8 @@ export type StoredCitation = {
   documentId: string;
   documentTitle: string;
   page: number | null;
+  /** Missing on citations stored before transcripts had start times; read it as `null`. */
+  startSeconds?: number | null;
   snippet: string;
   score: number;
 };
