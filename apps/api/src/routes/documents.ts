@@ -14,6 +14,7 @@ import { HttpProblem } from '../errors.js';
 import { ChromaService } from '../services/chroma.js';
 import type { DocumentEvents } from '../services/document-events.js';
 import type { IngestQueue } from '../services/ingest-queue.js';
+import { finishReindexIfDone } from '../services/reindex.js';
 import type { UploadStorage } from '../services/storage.js';
 import { FileTooLarge, detectType } from '../services/storage.js';
 
@@ -345,6 +346,8 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
       await db.delete(documents).where(eq(documents.id, doc.id));
       await storage.remove(doc.storagePath);
       events.emit({ workspaceId: workspace.id, document: doc, removed: true });
+      // Deleting the last document a reindex was waiting for finishes the reindex.
+      await finishReindexIfDone(db, workspace.id);
       return reply.status(204).send(null);
     },
   );

@@ -46,7 +46,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 | GET | `/v1/workspaces` | Workspaces the caller can see, each with `access`: `admin`, `editor` or `reader` |
 | POST | `/v1/workspaces` | Create: `{ "slug": "personal", "name": "Personal", "description": "…", "settings": { … } }` |
 | GET, PATCH, DELETE | `/v1/workspaces/{slug}` | Read, update name, description or settings; delete with all its data |
-| POST | `/v1/workspaces/{slug}/reindex` *(planned)* | Re-run ingestion for every document (needed after changing the embedding model or chunking). Returns `202`; the workspace is `reindexing` until every document is `ready` or `failed` |
+| POST | `/v1/workspaces/{slug}/reindex` | Admin. Empty the Chroma collection and re-run ingestion for every document, optionally with a new model: body `{ "embeddingProvider": "openai", "embeddingModel": "text-embedding-3-small" }`, or no body to keep the model (for example after changing chunking). Returns `202` with the workspace; it is `reindexing` until every document is `ready` or `failed`. `409` while a reindex runs, `422` for a provider whose key is not set, `400` for a provider without a model |
 | GET | `/v1/workspaces/{slug}/members` | People with access and their role |
 | PUT, DELETE | `/v1/workspaces/{slug}/members/{userId}` | Grant (`{ "role": "reader" | "editor" }`) or remove a person's access |
 
@@ -63,9 +63,9 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 
 - `slug` is 3 to 40 characters, lowercase letters, digits and hyphens, and cannot be changed after creation (the collection and the upload folder are named after it). A taken slug returns `409`.
 - `chatProvider` and `embeddingProvider` are one of the providers configured in `.env`: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the configured providers and their models; choosing one that is not configured returns `422`. Provider keys are never accepted or returned by the API.
-- `null` settings use the global defaults from `.env`. `embeddingProvider` and `embeddingModel` are the exception: they are filled in from the default when the workspace is created and are never `null` afterwards, so a later change to `.env` cannot silently break search in existing workspaces. `PATCH` refuses to change them (`400`); changing them will go through workspace reindex *(planned)*.
+- `null` settings use the global defaults from `.env`. `embeddingProvider` and `embeddingModel` are the exception: they are filled in from the default when the workspace is created and are never `null` afterwards, so a later change to `.env` cannot silently break search in existing workspaces. `PATCH` refuses to change them (`400`); change them with workspace reindex, since vectors from two models can't be compared.
 - `chunkSize` and `chunkOverlap` apply to documents ingested after the change; reindex applies them to everything.
-- `status` is `active` or `reindexing` *(planned; always `active` today)*. While reindexing, passages, answers and messages return `503` with `Retry-After`.
+- `status` is `active` or `reindexing`. While reindexing, passage search and reads, answers and chat messages return `503` with `Retry-After: 30`; the document list still works, so progress can be watched (each document goes `queued`, `processing`, `ready`).
 - Deleting a workspace removes its collection, files, documents, conversations and answers, and unbinds it from API keys; a key left with no workspace is revoked. Usage rows are kept with the workspace marked deleted.
 
 ## Asking
@@ -185,11 +185,11 @@ Question text is kept for a configurable time (`USAGE_QUESTION_RETENTION_DAYS`, 
 | 401 | Missing, expired or revoked token or key |
 | 403 | Authenticated, in the workspace, but the role does not allow the action |
 | 404 | No such resource, or a workspace the caller has no access to |
-| 409 | Slug already taken; deleting or reindexing a document while it is processing; changing a revoked API key |
+| 409 | Slug already taken; deleting or reindexing a document while it is processing; reindexing a workspace that is already reindexing; changing a revoked API key |
 | 413, 415 | File too large; file type not supported |
 | 429 | Rate limit |
 | 502, 504 | Langflow failed (or the model returned an empty answer) or timed out |
-| 503 | Langflow not ready yet (with `Retry-After`) or unreachable; a provider key missing; Keycloak unreachable; workspace reindexing *(planned)* |
+| 503 | Langflow not ready yet (with `Retry-After`) or unreachable; a provider key missing; Keycloak unreachable; workspace reindexing |
 
 ## Mapping to the assignment brief
 

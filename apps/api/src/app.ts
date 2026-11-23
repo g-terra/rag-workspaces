@@ -145,7 +145,7 @@ export async function buildApp({
   await app.register(meRoutes);
   await app.register(userRoutes, { directory });
   if (db) {
-    await app.register(workspaceRoutes, { db, chroma, storage, config });
+    await app.register(workspaceRoutes, { db, chroma, storage, queue, events, config });
     await app.register(documentRoutes, { db, storage, chroma, queue, events, config });
     await app.register(apiKeyRoutes, { db });
     await app.register(usageRoutes, { db });
