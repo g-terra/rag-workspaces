@@ -1,7 +1,7 @@
 ---
 title: list the people in Keycloak with GET /v1/users
 date: 2026-11-23
-pr: pending
+pr: "#44"
 status: in review
 areas: [api, infra, docs]
 ---
