@@ -92,26 +92,29 @@ export async function workspaceProviders(
 }
 
 /**
- * Asks a hosted provider for its models with a key. `422` when the provider turned the key down,
- * `504` when it didn't answer in time, `502` when it failed otherwise (down, busy).
+ * Asks a hosted provider for its models with a key, which is not stored. `422` when the provider
+ * turned the key down, `504` when it didn't answer in time, `502` when it failed otherwise (down,
+ * busy). `outcome` starts the error: what did not happen because of it.
  */
-async function checkProviderKey(
+export async function checkProviderKey(
   config: KeyConfig,
-  provider: HostedProvider,
+  provider: ModelProviderId,
   apiKey: string,
   fetchFn: typeof fetch,
   signal: AbortSignal,
+  outcome = 'The key was not saved',
 ): Promise<ProviderStatus> {
+  if (!isHosted(provider)) throw new HttpProblem(400, 'LM Studio runs on this machine and takes no API key.');
   const { status, refused } = await new ModelCatalog(
     { ...config, [KEY_NAME[provider]]: apiKey },
     fetchFn,
   ).check(provider, signal);
   if (status.reachable) return status;
-  if (refused) throw new HttpProblem(422, `The key was not saved: ${status.error}.`);
+  if (refused) throw new HttpProblem(422, `${outcome}: ${status.error}.`);
   const timedOut = signal.aborted || /timeout|aborted/i.test(status.error ?? '');
   throw new HttpProblem(
     timedOut ? 504 : 502,
-    `The key was not saved, because ${provider} couldn't be asked whether it works: ${status.error}. Try again.`,
+    `${outcome}, because ${provider} couldn't be asked whether it works: ${status.error}. Try again.`,
   );
 }
 

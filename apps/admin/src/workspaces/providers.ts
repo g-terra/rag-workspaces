@@ -74,3 +74,19 @@ export function useRemoveProviderKey(slug: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: providersKey(slug) }),
   });
 }
+
+/**
+ * `POST /v1/providers/{provider}/models`: checks a key typed in the create-workspace wizard and lists
+ * the provider's models, before the workspace (and so a place to save the key) exists.
+ */
+export function useCheckProviderKey() {
+  const { api } = useAuth();
+  return useMutation({
+    mutationFn: ({ provider, apiKey }: { provider: HostedProvider; apiKey: string }) =>
+      api<ProviderStatus>(`/v1/providers/${provider}/models`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ apiKey }),
+      }),
+  });
+}

@@ -257,6 +257,29 @@ describe.skipIf(!url)('provider keys per workspace (against TEST_DATABASE_URL)',
     expect(await t.db.select().from(providerKeys).where(eq(providerKeys.provider, 'openai'))).toEqual([]);
   });
 
+  it('checks a key before any workspace exists, listing its models and storing nothing', async () => {
+    const ok = await call('POST', '/v1/providers/openai/models', 'admin', {
+      apiKey: 'ws-openai-key-00000005678',
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toMatchObject({ id: 'openai', reachable: true, models: ['models/model-2'] });
+    const refused = await call('POST', '/v1/providers/openai/models', 'admin', {
+      apiKey: 'sk-wrong-key-0000000000',
+    });
+    expect(refused.statusCode).toBe(422);
+    expect(refused.json().detail).toMatch(/^The key doesn't work: OpenAI refused the key/);
+    expect(refused.body).not.toContain('sk-wrong-key');
+    const lm = await call('POST', '/v1/providers/lmstudio/models', 'admin', {
+      apiKey: 'whatever-key-0000000000',
+    });
+    expect(lm.statusCode).toBe(400);
+    const member = await call('POST', '/v1/providers/openai/models', 'alice', {
+      apiKey: 'ws-openai-key-00000005678',
+    });
+    expect(member.statusCode).toBe(403);
+    expect(await t.db.select().from(providerKeys).where(eq(providerKeys.provider, 'openai'))).toEqual([]);
+  });
+
   it('cannot save keys without SECRETS_KEY', async () => {
     const kc = await testKeycloak();
     const bare = await buildApp({

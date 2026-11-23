@@ -1,11 +1,19 @@
 import type { Database } from '@rag/db';
-import { ModelProviderId, SetProviderKey, WorkspaceProvider, WorkspaceSlug } from '@rag/shared';
+import {
+  ModelProviderId,
+  ProviderStatus,
+  SetProviderKey,
+  WorkspaceProvider,
+  WorkspaceSlug,
+} from '@rag/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
+import { requireAdmin } from '../auth/plugin.js';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
 import {
+  checkProviderKey,
   removeProviderKey,
   saveProviderKey,
   workspaceProviders,
@@ -33,6 +41,34 @@ export const providerRoutes: FastifyPluginAsyncZod<ProviderRoutesOptions> = asyn
 ) => {
   const signal = () => AbortSignal.timeout(config.READY_TIMEOUT_MS);
   const list = (workspaceId: string) => workspaceProviders(db, config, workspaceId, fetchFn, signal());
+
+  app.post(
+    '/v1/providers/:provider/models',
+    {
+      preHandler: requireAdmin,
+      schema: {
+        tags: ['system'],
+        security: [{ bearerAuth: [] }],
+        summary: 'Check a provider API key and list its models, without saving it (admins only)',
+        description:
+          'For setting up a workspace before it exists: the key is used for this one call to the ' +
+          "provider's model list and is neither stored nor logged. `422` when the provider refuses it, " +
+          '`502` or `504` when it fails or is too slow to answer, `400` for `lmstudio`.',
+        params: z.object({ provider: ModelProviderId }),
+        body: SetProviderKey,
+        response: { 200: ProviderStatus },
+      },
+    },
+    async (req) =>
+      checkProviderKey(
+        config,
+        req.params.provider,
+        req.body.apiKey,
+        fetchFn,
+        signal(),
+        "The key doesn't work",
+      ),
+  );
 
   app.get(
     '/v1/workspaces/:slug/providers',
