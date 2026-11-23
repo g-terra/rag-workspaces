@@ -7,7 +7,8 @@ test('the System page shows what the API depends on', async ({ page }) => {
   await signIn(page, '/workspaces');
 
   // The admin nav leads to it.
-  await page.getByRole('link', { name: 'System' }).click();
+  // Scoped to the sidebar: the banner shows a link to the same page whenever something is down.
+  await page.getByRole('navigation', { name: 'Admin' }).getByRole('link', { name: 'System' }).click();
   await expect(page).toHaveURL(/\/system$/);
   await expect(page.getByRole('heading', { name: 'System', exact: true })).toBeVisible();
 
