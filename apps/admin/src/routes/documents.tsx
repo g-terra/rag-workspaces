@@ -2,6 +2,7 @@ import type { Document } from '@rag/shared';
 import { Search, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
+import { DocumentPreviewDialog, type PreviewTarget } from '@/components/document-preview-dialog';
 import { ErrorState, Loading, Notice } from '@/components/states';
 import { StatusBadge } from '@/components/status-badge';
 import { TopBar } from '@/components/top-bar';
@@ -9,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { formatBytes, isMedia, statusLabel } from '@/documents/files';
+import { canPreview } from '@/documents/preview';
 import {
   filterDocuments,
   isIngesting,
@@ -29,7 +31,7 @@ import { formatRelative } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { useCurrentWorkspace } from '@/workspaces/current';
 
-/** `/w/:slug/documents`: every document in the workspace, live, with download, reindex and delete. */
+/** `/w/:slug/documents`: every document in the workspace, live, with preview (PDFs), download, reindex and delete. */
 export function Documents() {
   const w = useCurrentWorkspace();
   // A fresh page per workspace, so the selection, filters and search don't carry over.
@@ -228,6 +230,7 @@ function DocumentDetail({
   const reindex = useReindexDocument(slug);
   const download = useDownloadDocument(slug);
   const [confirming, setConfirming] = useState(false);
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
   const error = reindex.error ?? download.error;
   const facts: [string, string][] = [
     ['Id', doc.id],
@@ -279,6 +282,15 @@ function DocumentDetail({
             {doc.status === 'failed' ? 'Retry' : 'Reindex'}
           </Button>
         )}
+        {canPreview(doc.type) && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPreview({ id: doc.id, title: doc.title, page: null })}
+          >
+            Preview
+          </Button>
+        )}
         <Button
           variant="outline"
           size="sm"
@@ -319,6 +331,7 @@ function DocumentDetail({
           onDeleted={onDeleted}
         />
       )}
+      <DocumentPreviewDialog slug={slug} target={preview} onClose={() => setPreview(null)} />
     </>
   );
 }

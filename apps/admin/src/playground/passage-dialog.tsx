@@ -1,6 +1,7 @@
-import { FileText } from 'lucide-react';
+import { BookOpen, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { DocumentPreviewDialog, type PreviewTarget } from '@/components/document-preview-dialog';
 import { ErrorState, Loading } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -9,7 +10,8 @@ import { usePassage } from './queries';
 
 /**
  * The passage behind a citation or a search hit, with the passages just before and after it so the
- * sentence can be read in context, and a link to its document in the library.
+ * sentence can be read in context, and a link to its document in the library. A PDF passage also opens
+ * the PDF itself, on its page, without leaving the dialog's page.
  */
 export function PassageDialog({
   slug,
@@ -27,6 +29,7 @@ export function PassageDialog({
   if (passageId !== null && passageId !== shown) setShown(passageId);
   const passage = usePassage(slug, shown);
   const found = passage.data?.passage;
+  const [preview, setPreview] = useState<PreviewTarget | null>(null);
 
   return (
     <Dialog open={passageId !== null} onOpenChange={(open) => !open && onClose()}>
@@ -61,14 +64,37 @@ export function PassageDialog({
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-muted-foreground font-mono text-xs">{passage.data.passage.id}</p>
-              <Button variant="outline" size="sm" asChild>
-                <Link to={`/w/${slug}/documents?doc=${encodeURIComponent(passage.data.passage.documentId)}`}>
-                  <FileText /> Open the document
-                </Link>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                {/* Only PDF passages carry a page, so a page means there is a PDF to show. */}
+                {passage.data.passage.page !== null && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setPreview({
+                        id: passage.data.passage.documentId,
+                        title: passage.data.passage.documentTitle,
+                        page: passage.data.passage.page,
+                      })
+                    }
+                  >
+                    <BookOpen /> View page {passage.data.passage.page}
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" asChild>
+                  <Link
+                    to={`/w/${slug}/documents?doc=${encodeURIComponent(passage.data.passage.documentId)}`}
+                  >
+                    <FileText /> Open the document
+                  </Link>
+                </Button>
+              </div>
             </div>
           </>
         )}
+        {/* Inside the content, so Radix stacks it on this dialog: a click in the preview isn't a click
+            outside the passage, which would close both. */}
+        <DocumentPreviewDialog slug={slug} target={preview} onClose={() => setPreview(null)} />
       </DialogContent>
     </Dialog>
   );

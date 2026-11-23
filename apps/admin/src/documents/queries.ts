@@ -57,23 +57,32 @@ export function useDeleteDocument(slug: string) {
   });
 }
 
+/** The original file, fetched with the bearer token a plain link or frame can't send. */
+async function fetchFile(
+  slug: string,
+  id: string,
+  token: string | null,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const res = await fetch(`/api${documentsPath(slug)}/${encodeURIComponent(id)}/file`, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+    signal,
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { detail?: string } | null;
+    throw new Error(body?.detail ?? res.statusText);
+  }
+  return res.blob();
+}
+
 /**
- * Downloads the original file. A plain link can't send the bearer token, so this fetches it, then saves
- * the blob under the document's `fileName`.
+ * Downloads the original file: fetches it, then saves the blob under the document's `fileName`.
  */
 export function useDownloadDocument(slug: string) {
   const { getToken } = useAuth();
   return useMutation({
     mutationFn: async (doc: Document) => {
-      const token = await getToken();
-      const res = await fetch(`/api${documentsPath(slug)}/${encodeURIComponent(doc.id)}/file`, {
-        headers: token ? { authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { detail?: string } | null;
-        throw new Error(body?.detail ?? res.statusText);
-      }
-      const url = URL.createObjectURL(await res.blob());
+      const url = URL.createObjectURL(await fetchFile(slug, doc.id, await getToken()));
       const a = document.createElement('a');
       a.href = url;
       a.download = doc.fileName;
@@ -92,5 +101,20 @@ export function useTranscript(slug: string, documentId: string) {
   return useQuery({
     queryKey: ['workspaces', slug, 'transcripts', documentId],
     queryFn: () => api<Transcript>(`${documentsPath(slug)}/${encodeURIComponent(documentId)}/transcript`),
+  });
+}
+
+/**
+ * The original file as a blob, for the in-app preview. Cached per document, so opening a second
+ * citation from the same PDF doesn't download it again. `id` null fetches nothing.
+ */
+export function useDocumentFile(slug: string, id: string | null) {
+  const { getToken } = useAuth();
+  return useQuery({
+    // Not under documentsKey: a library refresh invalidates that, and must not download the file again.
+    queryKey: ['workspaces', slug, 'document-file', id],
+    queryFn: async ({ signal }) => fetchFile(slug, id!, await getToken(), signal),
+    enabled: id !== null,
+    staleTime: Infinity,
   });
 }

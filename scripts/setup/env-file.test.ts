@@ -23,6 +23,19 @@ describe('setEnv', () => {
     const text = 'A=1\nB=2\n';
     assert.equal(setEnv(text, { A: '1' }), text);
   });
+  it('uncomments a key that is only there as a commented-out example', () => {
+    const before =
+      '# Uncomment both to transcribe:\n# COMPOSE_PROFILES=video\n# WHISPER_URL=http://whisper:9000\n';
+    const after = setEnv(before, { COMPOSE_PROFILES: 'video', WHISPER_URL: 'http://whisper:9000' });
+    assert.equal(
+      after,
+      '# Uncomment both to transcribe:\nCOMPOSE_PROFILES=video\nWHISPER_URL=http://whisper:9000\n',
+    );
+  });
+
+  it('prefers the live line over a commented-out example of the same key', () => {
+    assert.equal(setEnv('# A=example\nA=1\n', { A: '2' }), '# A=example\nA=2\n');
+  });
 });
 
 describe('splitModels', () => {

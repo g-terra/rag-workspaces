@@ -29,9 +29,10 @@ pnpm run setup           # not `pnpm setup`, which is pnpm's own command
 
 It checks Node and Docker, checks the ports are free (naming the program that holds one), writes `.env`,
 asks for the chat and embedding provider and model (listing the models LM Studio has loaded, or asking for
-a hosted provider's key without showing it), starts the stack, waits for the API and prints where to sign
-in. Run it again at any time to change the models or fix a broken setup: it keeps every secret and offers
-the current values as defaults. `pnpm run setup --yes` asks nothing and keeps what `.env` has.
+a hosted provider's key without showing it), offers to turn on video and audio transcription, starts the
+stack, waits for the API and prints where to sign in. Run it again at any time to change the models or fix
+a broken setup: it keeps every secret and offers the current values as defaults. `pnpm run setup --yes`
+asks nothing and keeps what `.env` has.
 
 By hand, the same is:
 
@@ -87,7 +88,8 @@ running, or the model not loaded.
 1. Open http://rag.localhost and sign in as `RW_ADMIN_USERNAME` with `RW_ADMIN_PASSWORD` from `.env`. That
    account is the first admin.
 2. Create a workspace, for example `ouc`, from "All workspaces".
-3. Upload files from "Upload": PDF, DOCX, TXT and Markdown, up to 200 MB each and 20 per upload. Each one
+3. Upload files from "Upload": PDF, DOCX, TXT and Markdown, up to 2 GB each and 20 per upload
+   (`MAX_UPLOAD_BYTES` in `.env` changes the size limit, for the API and the admin UI alike). Each one
    goes `queued`, `processing`, `ready` (or `failed`, with the reason).
 
 People are created in Keycloak's own admin console (http://auth.rag.localhost/admin, sign in with
@@ -111,7 +113,9 @@ Claude Code and other MCP clients.
 
 MP4, MP3 and WAV files are transcribed by [Whisper](https://github.com/ahmetoner/whisper-asr-webservice)
 first, and the transcript is what gets searched. It is optional because the image is about 1 GB and
-transcribing takes a while. To turn it on, uncomment these two lines in `.env` and run `docker compose up -d`:
+transcribing takes a while. `pnpm run setup` asks whether to turn it on and which model to use, and starts
+the stack so the model is downloaded before the first upload. By hand, uncomment these two lines in `.env`
+and run `docker compose up -d`:
 
 ```bash
 COMPOSE_PROFILES=video

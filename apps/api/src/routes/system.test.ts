@@ -3,6 +3,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp, type App } from '../app.js';
 import { keycloakAuthenticator } from '../auth/keycloak.js';
 import { loadConfig } from '../config.js';
+import { DEFAULT_SYSTEM_PROMPT } from '../services/generate.js';
 import type { ReadinessCheck } from '../readiness.js';
 import { testKeycloak } from '../test/tokens.js';
 import { VERSION } from '../version.js';
@@ -13,6 +14,10 @@ const config = loadConfig({
   DEFAULT_CHAT_MODEL: 'qwen',
   DEFAULT_EMBEDDING_PROVIDER: 'lmstudio',
   DEFAULT_EMBEDDING_MODEL: 'nomic',
+  DEFAULT_CHUNK_SIZE: '900',
+  DEFAULT_CHUNK_OVERLAP: '120',
+  DEFAULT_TOP_K: '6',
+  DEFAULT_MIN_SCORE: '0.4',
 });
 let kc: Awaited<ReturnType<typeof testKeycloak>>;
 let app: App | undefined;
@@ -70,6 +75,13 @@ describe('GET /v1/system', () => {
       defaults: {
         chat: { provider: 'lmstudio', model: 'qwen', available: true },
         embedding: { provider: 'lmstudio', model: 'nomic', available: true },
+        workspace: {
+          chunkSize: 900,
+          chunkOverlap: 120,
+          topK: 6,
+          minScore: 0.4,
+          systemPrompt: DEFAULT_SYSTEM_PROMPT,
+        },
       },
     });
   });

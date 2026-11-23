@@ -13,8 +13,11 @@ import {
   CUSTOM_MODEL,
   modelOptions,
   providerOptions,
+  transcriptionEnv,
+  whisperModelOptions,
   type ModelKind,
   type Provider,
+  type WhisperModel,
 } from './setup/choices.ts';
 import { hostUrl, parseEnv, setEnv } from './setup/env-file.ts';
 import { portFree } from './setup/ports.ts';
@@ -327,7 +330,46 @@ async function chooseModels(env: Record<string, string>): Promise<Record<string,
   return changes;
 }
 
-// ---- 4. start ----
+// ---- 4. video and audio ----
+
+/** Whether to run Whisper for MP4, MP3 and WAV uploads, and which model; returns the .env changes. */
+async function chooseTranscription(env: Record<string, string>): Promise<Record<string, string>> {
+  if (yes) return {};
+  p.log.step('Video and audio');
+  p.note(
+    [
+      'Whisper turns MP4, MP3 and WAV uploads into timed transcripts, so lectures become searchable.',
+      'It adds the whisper container (an image of about 1 GB) plus the model you pick, which is',
+      'downloaded once when the stack starts, so the first upload does not wait for it.',
+      'It runs on the CPU: with "base", an hour of lecture takes very roughly 5 to 15 minutes.',
+    ].join('\n'),
+    'Transcription (optional)',
+  );
+  const on = unwrap(
+    await p.confirm({
+      message: 'Transcribe video and audio uploads with Whisper?',
+      initialValue: Boolean(env.WHISPER_URL),
+    }),
+  );
+  let model = env.WHISPER_MODEL || 'base';
+  if (on) {
+    const options = whisperModelOptions();
+    model = unwrap(
+      await p.select<WhisperModel>({
+        message: 'Whisper model (bigger is more accurate and slower)',
+        options,
+        initialValue: (options.find((o) => o.value === model)?.value ?? 'base') as WhisperModel,
+      }),
+    );
+  }
+  const changes: Record<string, string> = {};
+  for (const [k, v] of Object.entries(transcriptionEnv(on, model, env.COMPOSE_PROFILES ?? ''))) {
+    if ((env[k] ?? '') !== v) changes[k] = env[k] = v;
+  }
+  return changes;
+}
+
+// ---- 5. start ----
 
 async function start(env: Record<string, string>) {
   if (!yes) {
@@ -343,7 +385,11 @@ async function start(env: Record<string, string>) {
     }
   }
 
-  p.log.step('Starting the stack (first start pulls ~2 GB of images and may take a few minutes)');
+  p.log.step(
+    env.WHISPER_URL
+      ? `Starting the stack (first start pulls ~3 GB of images and the Whisper ${env.WHISPER_MODEL || 'base'} model, and may take a while)`
+      : 'Starting the stack (first start pulls ~2 GB of images and may take a few minutes)',
+  );
   if (!run('docker', ['compose', 'up', '--detach', '--build', '--wait', '--wait-timeout', '900']).ok) {
     fail('docker compose up failed. `docker compose ps` and `docker compose logs <service>` say why.');
   }
@@ -370,7 +416,7 @@ checkTools();
 await checkPorts(existsSync(envPath) ? parseEnv(readFileSync(envPath, 'utf8')) : {});
 writeSecrets();
 const env = parseEnv(readFileSync(envPath, 'utf8'));
-const changes = await chooseModels(env);
+const changes = { ...(await chooseModels(env)), ...(await chooseTranscription(env)) };
 if (Object.keys(changes).length) {
   writeFileSync(envPath, setEnv(readFileSync(envPath, 'utf8'), changes), { mode: 0o600 });
   p.log.success(`Updated .env: ${Object.keys(changes).join(', ')}`);

@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { CUSTOM_MODEL, modelOptions, providerOptions } from './choices.ts';
+import {
+  CUSTOM_MODEL,
+  modelOptions,
+  providerOptions,
+  transcriptionEnv,
+  whisperModelOptions,
+} from './choices.ts';
 
 describe('providerOptions', () => {
   it('offers all four providers for chat', () => {
@@ -61,5 +67,38 @@ describe('modelOptions', () => {
   it('returns null when no models are available for the chosen kind', () => {
     assert.equal(modelOptions('chat', 'lmstudio', [], '', 'qwen2.5-7b-instruct'), null);
     assert.equal(modelOptions('embedding', 'lmstudio', ['qwen2.5-7b-instruct'], '', 'nomic'), null);
+  });
+});
+
+describe('whisperModelOptions', () => {
+  it('lists the sizes smallest first, each with its download and memory cost', () => {
+    const options = whisperModelOptions();
+    assert.deepEqual(
+      options.map((o) => o.value),
+      ['tiny', 'base', 'small', 'medium', 'large-v3'],
+    );
+    assert.ok(options.every((o) => /MB|GB/.test(o.hint ?? '')));
+  });
+});
+
+describe('transcriptionEnv', () => {
+  it('turns the video profile on, points the API at the whisper service and sets the model', () => {
+    assert.deepEqual(transcriptionEnv(true, 'small', ''), {
+      COMPOSE_PROFILES: 'video',
+      WHISPER_URL: 'http://whisper:9000',
+      WHISPER_MODEL: 'small',
+    });
+  });
+
+  it('keeps other compose profiles and does not add video twice', () => {
+    assert.equal(transcriptionEnv(true, 'base', 'gpu').COMPOSE_PROFILES, 'gpu,video');
+    assert.equal(transcriptionEnv(true, 'base', 'video,gpu').COMPOSE_PROFILES, 'video,gpu');
+  });
+
+  it('turning it off removes only the video profile and the Whisper URL, keeping the model choice', () => {
+    assert.deepEqual(transcriptionEnv(false, 'small', 'gpu,video'), {
+      COMPOSE_PROFILES: 'gpu',
+      WHISPER_URL: '',
+    });
   });
 });

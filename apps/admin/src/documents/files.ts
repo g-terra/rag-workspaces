@@ -12,11 +12,14 @@ export function isMedia(type: Document['type']): boolean {
  * Video and audio need the server's `video` profile; without it the API's 415 says so.
  */
 export const ACCEPT = '.pdf,.docx,.txt,.md,.mp4,.mp3,.wav';
-/** The API's and nginx's default `MAX_UPLOAD_BYTES`. A larger limit on the server still answers 413 here. */
-const MAX_BYTES = 200 * 1024 * 1024;
+/**
+ * The default `MAX_UPLOAD_BYTES` of the API and nginx (2 GB, for video). This only saves a pointless
+ * upload; a lower limit set on the server answers 413, and its message says what the limit is.
+ */
+const MAX_BYTES = 2 * 1024 ** 3;
 
 const UNSUPPORTED = 'Not a supported file. Use PDF, DOCX, TXT, MD, MP4, MP3 or WAV.';
-const TOO_LARGE = 'Too large: the limit is 200 MB per file.';
+const TOO_LARGE = 'Too large: the limit is 2 GB per file.';
 
 /** Why this file can't be uploaded, or null when it can. */
 export function checkFile(file: { name: string; size: number }): string | null {
@@ -29,7 +32,7 @@ export function checkFile(file: { name: string; size: number }): string | null {
 
 /** A failed upload in words. `status` 0 means the request never got an answer. */
 export function uploadErrorMessage(status: number, detail: string): string {
-  if (status === 413) return TOO_LARGE;
+  if (status === 413) return detail ? `Too large: ${detail}` : TOO_LARGE;
   if (status === 415) return detail || UNSUPPORTED;
   if (status === 403) return "You can't upload to this workspace.";
   if (status === 0) return "Couldn't reach the API. Check your connection and try again.";
