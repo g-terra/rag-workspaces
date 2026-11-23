@@ -107,6 +107,27 @@ Agents and scripts use API keys, not people's accounts:
 Then follow [api.md](api.md) for the REST API, or the README's "Connect an agent (MCP)" for Claude Desktop,
 Claude Code and other MCP clients.
 
+## Video and audio
+
+MP4, MP3 and WAV files are transcribed by [Whisper](https://github.com/ahmetoner/whisper-asr-webservice)
+first, and the transcript is what gets searched. It is optional because the image is about 1 GB and
+transcribing takes a while. To turn it on, uncomment these two lines in `.env` and run `docker compose up -d`:
+
+```bash
+COMPOSE_PROFILES=video
+WHISPER_URL=http://whisper:9000
+```
+
+- The first start downloads the Whisper model (`WHISPER_MODEL`, `base` by default, about 150 MB) into the
+  `whisper-models` volume, so `whisper` takes a few minutes to become healthy.
+- Transcription runs on the CPU and takes a while for long recordings, so try one file first. `small` is
+  more accurate and slower than `base`; `tiny` is quicker and rougher.
+- A file shows `transcribing`, then `processing`, then `ready`. The transcript is kept next to the file, so a
+  reindex or retry doesn't transcribe again. `GET …/documents/{id}/transcript` returns it with timings.
+- Without the profile, video and audio uploads are refused with `415` and a message pointing here.
+- Files can be up to `MAX_UPLOAD_BYTES` (see `.env`). For very long videos, uploading just the audio is
+  quicker: `ffmpeg -i lecture.mp4 -vn -c:a libmp3lame -b:a 64k lecture.mp3`.
+
 ## Stopping, updating, starting over
 
 | To | Run |
