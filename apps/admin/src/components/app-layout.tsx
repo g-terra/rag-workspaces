@@ -1,4 +1,4 @@
-import { BarChart3, KeyRound, Layers, LogOut } from 'lucide-react';
+import { Activity, BarChart3, KeyRound, Layers, LogOut } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '@/auth/auth-context';
 import { HelpMenu } from '@/components/help-menu';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { WorkspaceNav } from '@/components/workspace-nav';
 import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import { navItemClass } from '@/lib/utils';
+import { APP_VERSION } from '@/lib/version';
 import { TourProvider } from '@/tour/tour';
 
 /** The sidebar from the approved mocks, with the signed-in person and sign-out at the bottom. */
@@ -21,7 +22,12 @@ export function AppLayout() {
             <span className="bg-primary text-primary-foreground inline-flex size-7 items-center justify-center rounded-md">
               <Layers className="size-4" />
             </span>
-            rag-workspaces
+            <span className="flex flex-col leading-tight">
+              rag-workspaces
+              <span className="text-muted-foreground text-xs font-normal" data-testid="app-version">
+                v{APP_VERSION}
+              </span>
+            </span>
           </div>
           <WorkspaceSwitcher />
           <WorkspaceNav />
@@ -36,6 +42,9 @@ export function AppLayout() {
               </NavLink>
               <NavLink to="/usage" className={navItemClass}>
                 <BarChart3 className="size-4" /> Usage
+              </NavLink>
+              <NavLink to="/system" className={navItemClass} data-tour="system">
+                <Activity className="size-4" /> System
               </NavLink>
             </nav>
           )}

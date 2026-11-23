@@ -49,7 +49,7 @@ const MARKER = /\[(\d+(?:\s*,\s*\d+)*)\]|【(\d+(?:\s*,\s*\d+)*)(?:†[^】]*)?�
  * that finds nothing to use in its passages says so without citing any (the system prompt asks it to
  * cite what it uses), so such a reply is not grounded, however well the passages scored.
  */
-export function citesAny(text: string, ranks: number[]): boolean {
+function citesAny(text: string, ranks: number[]): boolean {
   for (const m of text.matchAll(MARKER)) {
     const cited = (m[1] ?? m[2]!).split(',').map((n) => Number(n.trim()));
     if (cited.some((n) => ranks.includes(n))) return true;

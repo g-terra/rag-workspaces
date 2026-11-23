@@ -13,7 +13,7 @@ areas: [admin, docs]
 The first time someone signs in to the admin UI in a browser, a short guided tour opens. It starts with a
 welcome that explains workspaces, then points at the real sidebar items one by one: the workspace
 switcher (switch, or create one with the wizard), Upload, Documents, Playground, Conversations, workspace
-Settings, the admin pages (All workspaces, API keys) and finally a new **Help** button at
+Settings, the admin pages (All workspaces, API keys, System) and finally a new **Help** button at
 the bottom of the sidebar. Help replays the tour and links to the API docs. Skipping or finishing the
 tour is remembered for that account in that browser.
 
@@ -76,7 +76,7 @@ COS512 project, has nothing that says where to start or what a workspace is.
 - **Langflow**: None.
 - **Events and logs**: None.
 - `data-tour` values other code and tests rely on: `switcher`, `upload`, `documents`, `playground`,
-  `conversations`, `usage` (the workspace's Usage link), `settings`, `all-workspaces`, `api-keys`, `help`.
+  `conversations`, `usage` (the workspace's Usage link), `settings`, `all-workspaces`, `api-keys`, `system`, `help`.
 - The e2e helper `signIn()` (`apps/admin/e2e/sign-in.ts`) now skips the tour after signing in, since every
   Playwright test starts in a fresh browser where it opens.
 
@@ -101,7 +101,6 @@ None. Existing users see the tour once on their next sign-in in each browser.
 ## Out of scope and follow-ups
 
 - Remembering across browsers (would need the user record in the API).
-- A step for the System page, added with `data-tour="system"` once that page (PR #103) is on `main`.
 - Steps inside pages (the wizard's own fields, the playground's modes); the tour stops at the sidebar.
 - Separate tours per page or role-specific copy.
 

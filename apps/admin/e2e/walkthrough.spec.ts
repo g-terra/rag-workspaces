@@ -22,6 +22,7 @@ const adminInWorkspace = [
   'Workspace settings',
   'All workspaces',
   'API keys',
+  'System',
   'Help is here',
 ];
 

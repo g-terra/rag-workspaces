@@ -3,7 +3,7 @@ import { apiKeys, apiKeyWorkspaces, workspaces, type Database } from '@rag/db';
 import { eq } from 'drizzle-orm';
 import { InvalidCredentials, type Authenticator, type KeyPrincipal } from './principal.js';
 
-export const API_KEY_PREFIX = 'rw_';
+const API_KEY_PREFIX = 'rw_';
 /** How much of the secret is kept in clear for display (`rw_7Hk2`). */
 const DISPLAY_PREFIX_LENGTH = API_KEY_PREFIX.length + 4;
 /** Don't write `last_used_at` more often than this per key. */
