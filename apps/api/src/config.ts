@@ -60,7 +60,7 @@ const ConfigSchema = z.object({
 
   /** Used by workspaces that do not pick their own chat model. */
   DEFAULT_CHAT_PROVIDER: z.enum(['lmstudio', 'openai', 'anthropic', 'gemini']).default('lmstudio'),
-  DEFAULT_CHAT_MODEL: z.string().default('qwen2.5-7b-instruct'),
+  DEFAULT_CHAT_MODEL: z.string().default('openai/gpt-oss-20b'),
 
   DEFAULT_CHUNK_SIZE: z.coerce.number().int().positive().default(1200),
   DEFAULT_CHUNK_OVERLAP: z.coerce.number().int().nonnegative().default(200),
