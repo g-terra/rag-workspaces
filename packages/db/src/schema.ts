@@ -41,6 +41,8 @@ export type WorkspaceSettings = {
   topK?: number | null;
   minScore?: number | null;
   reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | null;
+  /** Response style slug used when a request names none. */
+  style?: string | null;
 };
 
 export const workspaces = pgTable(
@@ -312,6 +314,8 @@ export const answers = pgTable(
     /** `null` for an ungrounded answer (no model was called). */
     provider: text(),
     model: text(),
+    /** The response style slug used, or `null` for none. */
+    style: text(),
     promptTokens: integer(),
     completionTokens: integer(),
     latencyMs: integer().notNull(),
@@ -371,6 +375,8 @@ export const messages = pgTable(
     citations: jsonb().$type<StoredCitation[]>().notNull().default([]),
     provider: text(),
     model: text(),
+    /** Assistant replies: the response style slug used, or `null` for none. */
+    style: text(),
     promptTokens: integer(),
     completionTokens: integer(),
     latencyMs: integer(),

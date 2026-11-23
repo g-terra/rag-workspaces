@@ -1,6 +1,6 @@
 import type { SystemStatus } from '@rag/shared';
 import { describe, expect, it } from 'vitest';
-import { buildCreate, emptyWizard, missingKeys, modelsFor, stepOf, type WizardForm } from './wizard';
+import { buildCreate, emptyWizard, modelsFor, needsKey, stepErrors, stepOf, type WizardForm } from './wizard';
 
 const form = (over: Partial<WizardForm> = {}): WizardForm => ({
   ...emptyWizard(),
@@ -32,8 +32,10 @@ const system = {
   ],
 } as unknown as SystemStatus;
 
+const GEMINI_KEY = 'gem-key-000000000000000';
+
 describe('buildCreate', () => {
-  it('with only the basics, sends no settings, so every one is the default', () => {
+  it('with every choice left on its default, sends no settings', () => {
     expect(buildCreate(form(), {}, system)).toEqual({
       ok: true,
       body: { slug: 'thesis', name: 'Thesis research', description: null },
@@ -41,7 +43,7 @@ describe('buildCreate', () => {
     });
   });
 
-  it('sends the models and retrieval settings that were filled in, and nothing else', () => {
+  it('sends the models and retrieval settings that were chosen, and nothing else', () => {
     const result = buildCreate(
       form({
         chatProvider: 'gemini',
@@ -51,7 +53,7 @@ describe('buildCreate', () => {
         topK: '6',
         systemPrompt: 'Answer briefly.',
       }),
-      { gemini: 'gem-key-000000000000000', anthropic: 'unused-key-0000000000000' },
+      { gemini: GEMINI_KEY, anthropic: 'unused-key-0000000000000' },
       system,
     );
     expect(result).toEqual({
@@ -70,7 +72,7 @@ describe('buildCreate', () => {
         },
       },
       // Only keys for providers the workspace uses are saved.
-      keys: [{ provider: 'gemini', apiKey: 'gem-key-000000000000000' }],
+      keys: [{ provider: 'gemini', apiKey: GEMINI_KEY }],
     });
   });
 
@@ -81,48 +83,83 @@ describe('buildCreate', () => {
       step: 0,
       errors: { slug: 'Enter a slug.', chunkSize: 'Enter a number.' },
     });
-    const retrieval = buildCreate(form({ chunkSize: 'lots' }), {}, system);
-    expect(retrieval).toMatchObject({ ok: false, step: 2 });
+    expect(buildCreate(form({ chunkSize: 'lots' }), {}, system)).toMatchObject({ ok: false, step: 3 });
   });
 
-  it('wants a provider and a model together, for chat and for embedding', () => {
+  it('wants a provider and a model together, for chat and for embeddings', () => {
     expect(buildCreate(form({ embeddingProvider: 'openai' }), {}, system)).toMatchObject({
       ok: false,
-      step: 1,
+      step: 2,
       errors: { embeddingModel: 'Pick a model for this provider.' },
     });
     expect(buildCreate(form({ chatModel: 'gpt-x' }), {}, system)).toMatchObject({
       ok: false,
+      step: 1,
       errors: { chatProvider: 'Pick the provider this model belongs to.' },
     });
   });
 
-  it('refuses a hosted provider with no key anywhere', () => {
+  it('refuses a hosted provider with no key anywhere, on the step that chose it', () => {
     expect(
       buildCreate(form({ chatProvider: 'gemini', chatModel: 'gemini-2.5-flash' }), {}, system),
     ).toMatchObject({
       ok: false,
       step: 1,
-      errors: { keys: 'Add a key for gemini, or pick another provider.' },
+      errors: { chatKey: 'Add a gemini key and check it, or pick another provider.' },
+    });
+    expect(
+      buildCreate(form({ embeddingProvider: 'gemini', embeddingModel: 'gemini-embedding-001' }), {}, system),
+    ).toMatchObject({
+      ok: false,
+      step: 2,
+      errors: { embeddingKey: 'Add a gemini key and check it, or pick another provider.' },
+    });
+  });
+
+  it('reuses a key checked on the chat step for embeddings, and saves it once', () => {
+    const f = form({
+      chatProvider: 'gemini',
+      chatModel: 'gemini-2.5-flash',
+      embeddingProvider: 'gemini',
+      embeddingModel: 'gemini-embedding-001',
+    });
+    expect(buildCreate(f, { gemini: GEMINI_KEY }, system)).toMatchObject({
+      ok: true,
+      keys: [{ provider: 'gemini', apiKey: GEMINI_KEY }],
     });
   });
 });
 
-describe('missingKeys', () => {
-  it('lists the hosted providers in use with no key in .env and none typed', () => {
-    const f = form({ chatProvider: 'anthropic', embeddingProvider: 'gemini' });
-    expect(missingKeys(f, system, {})).toEqual(['anthropic', 'gemini']);
-    expect(missingKeys(f, system, { gemini: 'k' })).toEqual(['anthropic']);
-    expect(missingKeys(form({ chatProvider: 'openai' }), system, {})).toEqual([]);
+describe('stepErrors', () => {
+  it('holds a step back only for its own problems', () => {
+    const f = form({ chatProvider: 'gemini', chunkSize: 'lots' });
+    expect(stepErrors(0, f, {}, system)).toEqual({});
+    expect(stepErrors(1, f, {}, system)).toMatchObject({
+      chatKey: expect.any(String),
+      chatModel: expect.any(String),
+    });
+    expect(stepErrors(2, f, {}, system)).toEqual({});
+    expect(stepErrors(3, f, {}, system)).toEqual({ chunkSize: 'Enter a number.' });
   });
 
-  it('asks for nothing when the system status is unknown', () => {
-    expect(missingKeys(form({ chatProvider: 'gemini' }), undefined, {})).toEqual([]);
+  it('on the review step, is every problem', () => {
+    expect(Object.keys(stepErrors(4, form({ slug: '' }), {}, system))).toEqual(['slug']);
+  });
+});
+
+describe('needsKey', () => {
+  it('is true for a hosted provider with no key in .env and none checked here', () => {
+    expect(needsKey('gemini', system, {})).toBe(true);
+    expect(needsKey('gemini', system, { gemini: 'k' })).toBe(false);
+    expect(needsKey('openai', system, {})).toBe(false);
+    expect(needsKey('lmstudio', system, {})).toBe(false);
+    expect(needsKey('', system, {})).toBe(false);
+    expect(needsKey('gemini', undefined, {})).toBe(false);
   });
 });
 
 describe('modelsFor', () => {
-  it('prefers the models listed with a typed key over the system’s list', () => {
+  it('prefers the models listed with a checked key over the system’s list', () => {
     expect(modelsFor('gemini', system, { gemini: ['gemini-2.5-flash'] })).toEqual(['gemini-2.5-flash']);
     expect(modelsFor('openai', system, {})).toEqual(['gpt-x']);
     expect(modelsFor('', system, {})).toEqual([]);
@@ -130,5 +167,11 @@ describe('modelsFor', () => {
 });
 
 it('maps each field to its step', () => {
-  expect([stepOf('name'), stepOf('chatModel'), stepOf('keys'), stepOf('minScore')]).toEqual([0, 1, 1, 2]);
+  expect([
+    stepOf('name'),
+    stepOf('chatModel'),
+    stepOf('chatKey'),
+    stepOf('embeddingKey'),
+    stepOf('minScore'),
+  ]).toEqual([0, 1, 1, 2, 3]);
 });

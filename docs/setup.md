@@ -1,7 +1,7 @@
 # Setup
 
 How to run rag-workspaces on your own machine, from an empty clone to a first answer. The README has the
-short version; this page explains each step and what to do when one goes wrong.
+quick start; this page explains each step and what to do when one goes wrong.
 
 ## What you need
 
@@ -45,8 +45,28 @@ docker compose ps        # wait until every service says (healthy)
 `.env` holds every password and key the stack uses. It is ignored by Git; never commit it.
 `pnpm env:init` is safe to run again: it only adds values that are missing.
 
-The README's table lists every address. The usual ones are http://rag.localhost (admin UI),
-http://api.rag.localhost/docs (API and Swagger UI) and http://auth.rag.localhost/admin (Keycloak).
+### Where everything is
+
+| What | Where | Also at | Login |
+|---|---|---|---|
+| Admin UI | http://rag.localhost | http://localhost:8080 | `RW_ADMIN_USERNAME` / `RW_ADMIN_PASSWORD`, through Keycloak's sign-in page |
+| API and Swagger UI | http://api.rag.localhost/docs | http://localhost:3000/docs | a Keycloak token or an `rw_` API key |
+| Langflow editor | http://langflow.rag.localhost | http://localhost:7860 | `LANGFLOW_SUPERUSER` / `LANGFLOW_SUPERUSER_PASSWORD` from `.env` |
+| Keycloak admin console (create people here) | http://auth.rag.localhost/admin | http://localhost:8081/admin | `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` |
+| rag-workspaces sign-in (realm `rag-workspaces`) | http://auth.rag.localhost/realms/rag-workspaces/account | | `RW_ADMIN_USERNAME` / `RW_ADMIN_PASSWORD` |
+
+The names come from a small proxy (Caddy, `docker/caddy/Caddyfile`) on port 80, over plain HTTP. Chrome, Firefox
+and Edge send every `*.localhost` name to this machine by themselves, so there is nothing to set up. If a
+browser or tool doesn't open them (some Safari versions, older curl), add this line to `/etc/hosts`:
+
+```text
+127.0.0.1 rag.localhost api.rag.localhost auth.rag.localhost langflow.rag.localhost
+```
+
+If port 80 is taken, set `PROXY_PORT` in `.env` (for example `8088`) and add the port to `KEYCLOAK_PUBLIC_URL`,
+`ADMIN_UI_URL`, `PUBLIC_API_URL` and `LANGFLOW_PUBLIC_URL` (`http://rag.localhost:8088`,
+`http://langflow.rag.localhost:8088`), then `docker compose up -d --build`. The
+"Also at" ports keep working either way; Keycloak's pages always show at `KEYCLOAK_PUBLIC_URL`.
 
 ## 2. Set up the model
 
@@ -128,8 +148,8 @@ Agents and scripts use API keys, not people's accounts:
 2. Pick the role (`reader` to search and ask, `editor` to also upload) and the workspaces it may use.
 3. Copy the secret (`rw_…`). It is shown only once.
 
-Then follow [api.md](api.md) for the REST API, or the README's "Connect an agent (MCP)" for Claude Desktop,
-Claude Code and other MCP clients.
+Then follow [api.md](api.md) for the REST API, or [API keys and agents](guide/api-keys.md#connect-an-ai-agent-mcp)
+for Claude Desktop, Claude Code and other MCP clients.
 
 ## Video and audio
 
@@ -180,18 +200,38 @@ A workspace can import a documentation website: `POST /v1/workspaces/{slug}/site
 | Update | `git pull`, then `pnpm run setup --yes`, or `pnpm env:init` and `docker compose up -d --build` (migrations run when the API starts) |
 | Delete everything | `docker compose down -v` |
 
-Keycloak reads `docker/keycloak/realm.json` only into an empty database, so the README's "Updating an
-existing install" says what to change by hand when that file changes.
+
+### Updating an existing install
+
+Run `pnpm env:init` after pulling: it adds any new secret to your `.env` and leaves the rest alone. Keycloak
+imports `docker/keycloak/realm.json` only into an empty database, so a realm created before a change to that
+file keeps its old settings. The simplest fix on a test install is `docker compose down -v` (this deletes
+the stack's data) and `docker compose up -d --build`. To keep your data instead, make the change by hand in
+the Keycloak admin console; for the people list (`GET /v1/users`, added 2026-11-23) that means creating the
+`api-directory` client as `realm.json` describes it, with `KEYCLOAK_DIRECTORY_SECRET` from `.env` as its
+secret.
+For the sign-in page styled like the admin UI (added 2026-11-23), run `docker compose up -d` so Keycloak
+mounts the theme, then pick `rag-workspaces` as the login theme under Realm settings > Themes.
+
+An install from before the local names (2026-11-23) keeps its `localhost` URLs, because `pnpm env:init`
+never changes existing values, and keeps working as before. To move it to the names:
+
+1. In `.env`, set `KEYCLOAK_PUBLIC_URL=http://auth.rag.localhost`, `ADMIN_UI_URL=http://rag.localhost` and
+   `PUBLIC_API_URL=http://api.rag.localhost`.
+2. In the Keycloak admin console (realm `rag-workspaces`, client `admin-ui`), add `http://rag.localhost/*` to
+   the valid redirect URIs and post-logout redirect URIs, and `http://rag.localhost` to the web origins.
+3. Run `docker compose up -d --build` (the admin UI has the Keycloak URL built in).
 
 ## When something goes wrong
 
 | Symptom | Likely cause and fix |
 |---|---|
+| Something isn't working and you don't know what | Open "System" in the admin UI (admins): it shows each service and model provider with its error, and links to Langflow, Keycloak and Swagger |
 | `docker compose ps` shows a service `unhealthy` | `docker compose logs <service>`. Keycloak and Langflow are slow on the first start: give them a few minutes |
-| Port 80 or another port is taken | Set `PROXY_PORT` (and the ports in the URLs), `API_PORT`, `WEB_PORT`, `LANGFLOW_PORT` or `KEYCLOAK_PORT` in `.env`. A Langflow already running on the host often holds 7860 |
-| `rag.localhost` doesn't open | Some browsers and tools don't resolve `*.localhost`: add the `/etc/hosts` line from the README, or use the `localhost` ports |
+| Port 80 or another port is taken | Set `PROXY_PORT` (and the ports in the URLs, `LANGFLOW_PUBLIC_URL` included), `API_PORT`, `WEB_PORT`, `LANGFLOW_PORT` or `KEYCLOAK_PORT` in `.env`. A Langflow already running on the host often holds 7860 |
+| `rag.localhost` doesn't open | Some browsers and tools don't resolve `*.localhost`: add the `/etc/hosts` line from [Where everything is](#where-everything-is), or use the `localhost` ports |
 | Documents stay `failed` with an embedding error | LM Studio isn't running, or the embedding model id doesn't match `DEFAULT_EMBEDDING_MODEL`. Fix it, then reindex the document |
-| Answers fail with `502` or `504` | The chat model failed or timed out; check `GET /v1/system` and LM Studio's log |
+| Answers fail with `502` or `504` | The chat model failed or timed out; check the System page (`GET /v1/system`) and LM Studio's log |
 | `429 Too Many Requests` | A rate limit (600 requests, 30 model calls a minute per person or key). Wait for `Retry-After`, or raise `RATE_LIMIT_PER_MINUTE` and `RATE_LIMIT_MODEL_PER_MINUTE` in `.env` |
 | `503` on search right after a reindex | The workspace is `reindexing`; it answers again once every document is `ready` |
 | A workspace-wide search misses passages that a search inside one folder finds | The workspace was created before the search-recall settings (2026-11-23). Reindex it once (`POST /v1/workspaces/{slug}/reindex`, no body) |

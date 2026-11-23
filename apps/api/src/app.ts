@@ -24,6 +24,7 @@ import { folderRoutes } from './routes/folders.js';
 import { healthRoutes } from './routes/health.js';
 import { providerRoutes } from './routes/providers.js';
 import { siteRoutes } from './routes/sites.js';
+import { styleRoutes } from './routes/styles.js';
 import { systemRoutes } from './routes/system.js';
 import { meRoutes } from './routes/me.js';
 import { passageRoutes } from './routes/passages.js';
@@ -140,6 +141,10 @@ export async function buildApp({
         { name: 'sites', description: 'Documentation websites imported into a workspace, page by page' },
         { name: 'answers', description: 'Ask a question, get a cited answer, rate it' },
         { name: 'conversations', description: 'Chat with history; each reply is cited like an answer' },
+        {
+          name: 'styles',
+          description: 'Response styles: the tone, length and format of answers and chat replies',
+        },
         { name: 'passages', description: 'Search the material without an AI answer' },
         { name: 'usage', description: 'Analytics on API usage: per workspace (editors) or overall (admins)' },
         { name: 'api-keys', description: 'API keys for agents and scripts (admins only)' },
@@ -165,6 +170,7 @@ export async function buildApp({
   if (usageLog) await app.register(usageLogging, { usage: usageLog });
   await app.register(healthRoutes, { checks, timeoutMs: config.READY_TIMEOUT_MS });
   await app.register(meRoutes);
+  await app.register(styleRoutes);
   await app.register(systemRoutes, { checks, models, langflowKey, config });
   await app.register(userRoutes, { directory });
   if (db) {

@@ -13,6 +13,7 @@ import { streamGeneration } from './streaming.js';
 import type { AnswerService } from '../services/answers.js';
 import { canSee, toApiAnswer } from '../services/answers.js';
 import { flowProblem } from '../services/flow-errors.js';
+import { styleFor } from '../services/styles.js';
 import { answerUsage } from '../usage/details.js';
 
 export type AnswerRoutesOptions = { db: Database; answers: AnswerService };
@@ -53,6 +54,7 @@ export const answerRoutes: FastifyPluginAsyncZod<AnswerRoutesOptions> = async (a
         question: req.body.question,
         maxPassages: req.body.maxPassages,
         folderId: req.body.folderId && (await requireFolder(db, workspace.id, req.body.folderId)),
+        style: styleFor(req.body.style, workspace),
         requestId: req.id,
       };
 

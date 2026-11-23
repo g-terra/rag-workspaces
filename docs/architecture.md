@@ -12,7 +12,7 @@ rag-workspaces is a general tool; its first use is the COS512 Langflow assignmen
 4. A resource-oriented REST API documented with OpenAPI/Swagger ([schema](api-schema.md)).
 5. Keycloak login for people, workspace-scoped API keys for agents and scripts.
 6. Usage analytics per workspace, per key and per user.
-7. Admin UI with drag-and-drop upload and live ingestion progress.
+7. Admin UI with drag-and-drop upload of files or whole folders, and live ingestion progress.
 8. Provider as a setting: LM Studio on the host by default; OpenAI, Google Gemini, Anthropic or any OpenAI-compatible endpoint by config, globally or per workspace.
 9. Tests at every layer, running in CI.
 10. A submittable assignment early: the brief is fully covered once the API, flows, analytics, tests and docs exist (milestone M2 in the [work breakdown](work-breakdown.md)). The admin UI, video and the rest build on top and must not put the hand-in at risk.
@@ -70,7 +70,7 @@ flowchart LR
 | `web` | `apps/admin` | Admin UI (static build served by nginx, proxies `/api`) |
 | `langflow` | `langflowai/langflow:1.13.3` | Runs the ingest, retrieve, answer and chat flows; flow JSON in `flows/` is imported on every start, and our custom components in `langflow/components/` are loaded with it. Its own data lives in Postgres. Flow JSON is tied to the Langflow version, so upgrades are deliberate and re-export the flows |
 | `chroma` | `chromadb/chroma:1.5.9` (server mode) | Vector store; one collection per workspace |
-| `keycloak` | `keycloak/keycloak:26.8.2` (the official image, from Docker Hub) | Login; realm `rag-workspaces` imported from `docker/keycloak/realm.json` on first start |
+| `keycloak` | `keycloak/keycloak:26.8.2` (the official image, from Docker Hub) | Login; realm `rag-workspaces` imported from `docker/keycloak/realm.json` on first start, its sign-in pages styled like the admin UI by the login theme in `docker/keycloak/themes/rag-workspaces` |
 | `postgres` | `postgres:16.16-alpine` | App data and the ingestion queue (pg-boss), plus separate databases for Langflow and Keycloak (created by an init script on first start) |
 | `whisper` | faster-whisper ASR web service | Video and audio transcription; compose profile `video`, off by default |
 

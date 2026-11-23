@@ -6,7 +6,7 @@ import postgres from 'postgres';
 import * as schema from './schema.js';
 
 /** The migrations folder, shipped next to dist/ in this package. */
-export const MIGRATIONS_DIR = fileURLToPath(new URL('../drizzle', import.meta.url));
+const MIGRATIONS_DIR = fileURLToPath(new URL('../drizzle', import.meta.url));
 
 export type Database = ReturnType<typeof createDb>['db'];
 
