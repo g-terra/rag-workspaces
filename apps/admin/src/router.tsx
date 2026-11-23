@@ -10,6 +10,7 @@ import { WorkspaceLayout } from '@/routes/workspace-layout';
 import { Documents } from '@/routes/documents';
 import { Upload } from '@/routes/upload';
 import { Workspaces } from '@/routes/workspaces';
+import { ApiKeys } from '@/routes/api-keys';
 
 export const router = createBrowserRouter([
   { path: '/sign-in', element: <SignIn /> },
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <RootRedirect /> },
           { path: 'workspaces', element: <Workspaces /> },
+          { path: 'api-keys', element: <ApiKeys /> },
           {
             path: 'w/:slug',
             element: <WorkspaceLayout />,

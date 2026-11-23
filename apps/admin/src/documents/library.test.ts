@@ -1,12 +1,6 @@
 import type { Document } from '@rag/shared';
 import { describe, expect, it } from 'vitest';
-import {
-  applyDocumentEvent,
-  filterDocuments,
-  isIngesting,
-  librarySummary,
-  shortSha,
-} from './library';
+import { applyDocumentEvent, filterDocuments, isIngesting, librarySummary, shortSha } from './library';
 
 function doc(id: string, over: Partial<Document> = {}): Document {
   return {
@@ -101,7 +95,6 @@ describe('librarySummary', () => {
     expect(librarySummary([doc('a', { passageCount: 1 })])).toBe('1 document · 1 passage · 1 KB');
   });
 });
-
 
 describe('shortSha', () => {
   it('keeps the first and last four characters', () => {
