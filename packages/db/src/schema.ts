@@ -284,6 +284,8 @@ export type StoredCitation = {
   page: number | null;
   /** Missing on citations stored before transcripts had start times; read it as `null`. */
   startSeconds?: number | null;
+  /** The web page the passage came from. Missing on citations stored before websites; read it as `null`. */
+  sourceUrl?: string | null;
   snippet: string;
   score: number;
 };

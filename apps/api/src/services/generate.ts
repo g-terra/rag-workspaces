@@ -59,7 +59,7 @@ export function citesAny(text: string, ranks: number[]): boolean {
 
 /** A stored citation as the API returns it: ones stored before start times existed have none. */
 export function withStartSeconds(c: StoredCitation) {
-  return { ...c, startSeconds: c.startSeconds ?? null };
+  return { ...c, startSeconds: c.startSeconds ?? null, sourceUrl: c.sourceUrl ?? null };
 }
 
 export type GenerateConfig = Pick<
@@ -225,6 +225,7 @@ export class Generator {
           passageId: p.id,
           documentId: p.documentId,
           documentTitle: p.documentTitle,
+          sourceUrl: p.sourceUrl,
           page: p.page,
           startSeconds: p.startSeconds,
           snippet: p.text.length > SNIPPET_CHARS ? `${p.text.slice(0, SNIPPET_CHARS)}…` : p.text,
