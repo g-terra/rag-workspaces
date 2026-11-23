@@ -140,9 +140,9 @@ export class Generator {
         },
       };
       if (history !== undefined) {
-        // In rw-chat the chat input is the search query; the question and history go to the prompt.
-        tweaks.Question = { input_value: question };
-        tweaks.History = { input_value: history || '(this is the first message)' };
+        // In rw-chat the chat input is the search query; the question and history are set
+        // straight on the prompt's own fields, so the flow needs no extra input nodes.
+        tweaks.Prompt = { question, history: history || '(this is the first message)' };
       }
       const request: RunRequest = {
         input_value: history === undefined ? question : searchQuery,
