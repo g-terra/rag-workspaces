@@ -3,6 +3,7 @@
 // ingest flow wrote into Chroma. Exits non-zero at the first failed check.
 //   node scripts/smoke/check.ts
 import { readFileSync } from 'node:fs';
+import { request } from 'node:http';
 import { basename } from 'node:path';
 import { compose, smokeEnv } from './stack.ts';
 
@@ -130,7 +131,48 @@ async function passagesOf(collection: string, documentId: string): Promise<Passa
   return metadatas;
 }
 
+/**
+ * GET through the local-names proxy. Node doesn't resolve *.localhost on every system, so this
+ * connects to 127.0.0.1 and sends the name as the Host header, as a browser on this machine would.
+ */
+function viaProxy(host: string, path: string): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = request(
+      {
+        host: '127.0.0.1',
+        port: Number(env.PROXY_PORT),
+        path,
+        headers: { host },
+        timeout: REQUEST_TIMEOUT_MS,
+      },
+      (res) => {
+        let body = '';
+        res.on('data', (chunk) => (body += chunk));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, body }));
+      },
+    );
+    req.on('timeout', () => req.destroy(new Error(`${host}${path} timed out`)));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 async function main() {
+  await step('local names: the proxy reaches the admin UI, API, Keycloak and Langflow', async () => {
+    const routes = [
+      ['rag.localhost', '/', '<div id="root">'],
+      ['api.rag.localhost', '/health', '"ok"'],
+      ['auth.rag.localhost', '/realms/rag-workspaces/.well-known/openid-configuration', '"issuer"'],
+      ['langflow.rag.localhost', '/health_check', '"ok"'],
+    ] as const;
+    for (const [host, path, expected] of routes) {
+      const res = await viaProxy(host, path);
+      expect(
+        res.status === 200 && res.body.includes(expected),
+        `${host}${path}: ${res.status} ${res.body.slice(0, 200)}`,
+      );
+    }
+  });
   await step('password login enabled for admin-ui (this stack only)', async () => allowPasswordLogin());
   const token = await step('signed in through Keycloak', login);
   await step('GET /v1/me says admin', async () => {
