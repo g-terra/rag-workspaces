@@ -27,7 +27,7 @@ type Doc = {
   passageCount: number | null;
   error: string | null;
 };
-type Passage = { document_id: string; page: number | null };
+type Passage = { document_id: string; page: number | null; folder?: string };
 
 class CheckFailed extends Error {}
 
@@ -240,6 +240,28 @@ async function main() {
       );
     }
   });
+
+  await step(
+    'folders: a moved document takes its passages along, and back out when the folder goes',
+    async () => {
+      const doc = docs[0]!;
+      const folder = await call(token, 'POST', `/v1/workspaces/${slug}/folders`, { name: 'Week 1' });
+      await call(token, 'PATCH', `/v1/workspaces/${slug}/documents/${doc.id}`, { folderId: folder.id });
+      const inside = await passagesOf(collection, doc.id);
+      expect(
+        inside.length > 0 && inside.every((p) => p.folder === folder.id),
+        `after the move: ${JSON.stringify(inside.map((p) => p.folder))}`,
+      );
+      await call(token, 'DELETE', `/v1/workspaces/${slug}/folders/${folder.id}`);
+      const out = await passagesOf(collection, doc.id);
+      expect(
+        out.every((p) => p.folder === undefined),
+        `after deleting the folder: ${JSON.stringify(out.map((p) => p.folder))}`,
+      );
+      const again = await call(token, 'GET', `/v1/workspaces/${slug}/documents/${doc.id}`);
+      expect(again.folderId === null, `document still in folder ${again.folderId}`);
+    },
+  );
 
   await step('deleted the workspace, its Chroma collection is gone', async () => {
     await call(token, 'DELETE', `/v1/workspaces/${slug}`);

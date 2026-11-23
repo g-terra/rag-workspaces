@@ -13,6 +13,7 @@ function doc(id: string, over: Partial<Document> = {}): Document {
   return {
     id,
     workspace: 'ouc',
+    folderId: null,
     title: id,
     fileName: `${id}.md`,
     type: 'md',

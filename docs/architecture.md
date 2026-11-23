@@ -25,7 +25,7 @@ as a stack of PRs), and each change has a spec in [docs/specs/](specs/) saying w
 | Built | Not built yet |
 |---|---|
 | Compose stack, `pnpm env:init`, API skeleton, readiness, `GET /v1/users`, `GET /v1/system` | Rate limits |
-| Keycloak auth, API keys, workspaces and workspace reindex, members, isolation | Folders, document `PATCH` |
+| Keycloak auth, API keys, workspaces and workspace reindex, members, isolation, folders, document `PATCH` | Folder filter on search, answers and chat |
 | Upload, dedupe, pg-boss ingestion, SSE status | Whisper and the `video` profile, transcripts |
 | Passages, answers (+ streaming, feedback), conversations (`rw-chat`) | Workspace `stats`, per-key request counts |
 | Usage log and analytics, release versioning | `pnpm doctor`, `backup`/`restore`, `flows:export`/`flows:import`; admin UI screens (shell only) |
@@ -122,7 +122,7 @@ A workspace is the unit of isolation. Creating one (in the admin UI or `POST /v1
 | Analytics | Usage is logged with the workspace and can be viewed per workspace |
 | Settings (optional) | Chat model, embedding model, system prompt, chunk size, top-k; empty means the global defaults |
 
-Folders (for example a course code inside `ouc`) are optional groupings inside a workspace, usable as a filter when asking. They do not isolate anything.
+Folders (for example a course code inside `ouc`) are optional, flat groupings inside a workspace, usable as a filter when asking. They do not isolate anything. Passages carry the folder's id in their Chroma metadata (`folder`), written at ingestion; renaming a folder changes nothing there, and moving a document (or deleting its folder, which moves its documents to the top level) updates the metadata of its passages in place, without reindexing.
 
 The embedding model is fixed per workspace once it holds documents, because vectors from different models can't be compared. Changing it means re-indexing the workspace, which the API offers as one action.
 

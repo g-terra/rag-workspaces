@@ -1,4 +1,4 @@
-import { documents, newId, workspaces, type Database } from '@rag/db';
+import { documents, folders, newId, workspaces, type Database } from '@rag/db';
 import { createTestDatabase } from '@rag/db/testing';
 import { LangflowClient } from '@rag/langflow-client';
 import { eq } from 'drizzle-orm';
@@ -114,11 +114,20 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
     expect(await get(id)).toMatchObject({ status: 'ready', passageCount: 7, attempts: 1, error: null });
     expect(seen).toEqual(['processing', 'ready']);
     expect(f.runs[0]!.tweaks).toEqual({
-      Loader: { file_path: `ouc/${id}.pdf`, document_id: id, filename: 'notes.pdf' },
+      Loader: { file_path: `ouc/${id}.pdf`, document_id: id, filename: 'notes.pdf', folder: '' },
       Split: { chunk_size: 500, chunk_overlap: 100 },
       Embeddings: { model: 'nomic', base_url: 'http://host.docker.internal:1234/v1', api_key: 'lm-studio' },
       Upsert: { collection_name: 'ws_ouc', document_id: id },
     });
+  });
+
+  it("passes the document's folder to the loader, so its passages carry it", async () => {
+    const id = await newDocument();
+    const folderId = newId('folder');
+    await db.insert(folders).values({ id: folderId, workspaceId, name: 'COS512' });
+    await db.update(documents).set({ folderId }).where(eq(documents.id, id));
+    await processor().process(id);
+    expect(f.runs[0]!.tweaks.Loader).toMatchObject({ folder: folderId });
   });
 
   it("starts clean: the document's vectors are deleted before the flow runs", async () => {

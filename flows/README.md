@@ -42,7 +42,7 @@ The API's list of names is `apps/api/src/flows.ts`; `/ready` fails if one is mis
 
 | Node | Tweak fields the API sets |
 |---|---|
-| `Loader` | `file_path` (relative to `/data/uploads`), `document_id`, `filename`, `folder` |
+| `Loader` | `file_path` (relative to `/data/uploads`), `document_id`, `filename`, `folder` (the folder id, empty at the top level) |
 | `Split` | `chunk_size`, `chunk_overlap` |
 | `Embeddings` | `model`, `base_url` |
 | `Upsert` | `collection_name`, `document_id` |
