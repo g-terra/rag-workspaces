@@ -52,9 +52,7 @@ test.afterEach(async ({ page }) => {
   }
 });
 
-test('streams an answer with its sources, says when nothing matches, and stops on request', async ({
-  page,
-}) => {
+test('streams an answer with its sources, takes feedback, and stops on request', async ({ page }) => {
   // Signing in, ingesting two documents and three answers take longer than the default budget.
   test.setTimeout(240_000);
   await signIn(page, '/workspaces');
@@ -73,6 +71,19 @@ test('streams an answer with its sources, says when nothing matches, and stops o
   await expect(page.getByTestId('answer-meta')).toContainText(/\d+(\.\d+)? (ms|s)/, { timeout: 60_000 });
   await expect(page.getByText(/^ans_/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ask' })).toBeVisible();
+
+  // Rating the answer: thumbs down, then a comment, and the API has both afterwards.
+  const answerId = (await page.getByText(/^ans_/).textContent())!;
+  await page.getByRole('button', { name: 'Not helpful' }).click();
+  await expect(page.getByText('Thanks, feedback saved')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Not helpful' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByLabel('Feedback comment').fill('  it quoted the heading  ');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await expect(page.getByText('Thanks, feedback and comment saved')).toBeVisible();
+  const rated = await page.request.get(`/api/v1/workspaces/${loose.slug}/answers/${answerId}`, { headers });
+  expect(await rated.json()).toMatchObject({
+    feedback: { rating: 'down', comment: 'it quoted the heading' },
+  });
 
   // The passages the model was given are listed, and one opens with the text around it.
   const sources = page.getByRole('complementary', { name: 'Sources' });

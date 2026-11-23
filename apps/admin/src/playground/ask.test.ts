@@ -90,6 +90,17 @@ describe('askReducer', () => {
     });
   });
 
+  it('takes the rated answer back, and only for the answer on screen', () => {
+    const done = reduce(streaming, { type: 'done', answer });
+    const rated = {
+      ...answer,
+      feedback: { rating: 'up' as const, comment: null, createdAt: answer.createdAt },
+    };
+    expect(askReducer(done, { type: 'rated', answer: rated }).answer).toEqual(rated);
+    // A rating for an answer that is no longer on screen changes nothing.
+    expect(askReducer(done, { type: 'rated', answer: { ...rated, id: 'ans_old' } })).toEqual(done);
+  });
+
   it('ignores the tail of a run that was already stopped', () => {
     const stopped = reduce(streaming, { type: 'token', text: 'half' }, { type: 'stopped' });
     expect(reduce(stopped, { type: 'token', text: '!' }, { type: 'done', answer })).toEqual(stopped);

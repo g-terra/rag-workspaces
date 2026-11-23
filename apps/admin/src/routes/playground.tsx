@@ -1,13 +1,17 @@
-import type { Citation } from '@rag/shared';
-import { Search, Sparkles, SquareIcon, Upload } from 'lucide-react';
-import { useState } from 'react';
+import type { Answer, Citation } from '@rag/shared';
+import { Search, Sparkles, SquareIcon, ThumbsDown, ThumbsUp, Upload } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Notice } from '@/components/states';
+import { cn } from '@/lib/utils';
 import { TopBar } from '@/components/top-bar';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { answerMeta, answerParts } from '@/playground/answer';
 import { answerFailure, type AnswerError } from '@/playground/failure';
+import { feedbackNote, type Rating } from '@/playground/feedback';
 import { PassageDialog } from '@/playground/passage-dialog';
+import { useAnswerFeedback } from '@/playground/queries';
 import { useAsk } from '@/playground/use-ask';
 import { useCurrentWorkspace } from '@/workspaces/current';
 
@@ -126,6 +130,9 @@ function Ask() {
                     Stopped. What had arrived is above; the API still stored the whole answer.
                   </p>
                 )}
+                {ask.status === 'done' && ask.answer && (
+                  <AnswerFeedback answer={ask.answer} onRated={ask.rated} />
+                )}
               </div>
               {citations.length > 0 && <Sources citations={citations} onOpen={setOpenPassage} />}
             </div>
@@ -135,6 +142,99 @@ function Ask() {
         <PassageDialog slug={w.slug} passageId={openPassage} onClose={() => setOpenPassage(null)} />
       </div>
     </>
+  );
+}
+
+/** Thumbs up or down on an answer, with an optional comment after a thumbs down. */
+function AnswerFeedback({ answer, onRated }: { answer: Answer; onRated(answer: Answer): void }) {
+  const w = useCurrentWorkspace();
+  const feedback = useAnswerFeedback(w.slug);
+  const [comment, setComment] = useState('');
+  const rating = answer.feedback?.rating ?? null;
+  const rate = (next: Rating, withComment = comment) =>
+    feedback.mutate({ answerId: answer.id, rating: next, comment: withComment }, { onSuccess: onRated });
+
+  return (
+    <div className="flex flex-col gap-2.5 border-t pt-3.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-muted-foreground mr-1 text-[13px]">Was this helpful?</span>
+        <Thumb
+          label="Helpful"
+          pressed={rating === 'up'}
+          busy={feedback.isPending}
+          tone="bg-green-100 border-green-300 text-green-800"
+          onClick={() => rate('up')}
+        >
+          <ThumbsUp className="size-4" />
+        </Thumb>
+        <Thumb
+          label="Not helpful"
+          pressed={rating === 'down'}
+          busy={feedback.isPending}
+          tone="bg-red-100 border-red-300 text-red-800"
+          onClick={() => rate('down')}
+        >
+          <ThumbsDown className="size-4" />
+        </Thumb>
+        <span className="text-[13px] text-green-800">{feedbackNote(answer.feedback)}</span>
+      </div>
+      {rating === 'down' && (
+        <div className="flex flex-wrap gap-2">
+          <Input
+            className="flex-[1_1_240px]"
+            aria-label="Feedback comment"
+            placeholder="What was wrong? (optional, saved with the rating)"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={feedback.isPending || !comment.trim()}
+            onClick={() => rate('down')}
+          >
+            Send
+          </Button>
+        </div>
+      )}
+      {feedback.isError && (
+        <p className="text-[13px] text-red-800" role="alert">
+          {feedback.error.message}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Thumb({
+  label,
+  pressed,
+  busy,
+  tone,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed: boolean;
+  busy: boolean;
+  tone: string;
+  onClick(): void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={pressed}
+      disabled={busy}
+      onClick={onClick}
+      className={cn(
+        'hover:bg-accent inline-flex size-9 items-center justify-center rounded-lg border disabled:opacity-50',
+        pressed && tone,
+      )}
+    >
+      {children}
+    </button>
   );
 }
 

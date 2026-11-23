@@ -17,7 +17,9 @@ export type AskEvent =
   | { type: 'token'; text: string }
   | { type: 'done'; answer: Answer }
   | { type: 'failed'; error: AnswerError }
-  | { type: 'stopped' };
+  | { type: 'stopped' }
+  /** The answer as the API returned it after a rating, which carries the stored feedback. */
+  | { type: 'rated'; answer: Answer };
 
 export const idleAsk: AskState = {
   status: 'idle',
@@ -34,6 +36,10 @@ export const idleAsk: AskState = {
 export function askReducer(state: AskState, event: AskEvent): AskState {
   if (event.type === 'started') {
     return { status: 'streaming', question: event.question, text: '', answer: null, error: null };
+  }
+  // A rating lands after the answer is done, so it is the one event not about the running stream.
+  if (event.type === 'rated') {
+    return state.answer?.id === event.answer.id ? { ...state, answer: event.answer } : state;
   }
   if (state.status !== 'streaming') return state;
   switch (event.type) {
