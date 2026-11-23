@@ -142,7 +142,7 @@ const KEY_OF: Record<Exclude<Provider, 'lmstudio'>, string> = {
 };
 
 const SUGGESTED: Record<Provider, { chat?: string; embedding?: string }> = {
-  lmstudio: { chat: 'qwen2.5-7b-instruct', embedding: 'text-embedding-nomic-embed-text-v1.5' },
+  lmstudio: { chat: 'openai/gpt-oss-20b', embedding: 'text-embedding-nomic-embed-text-v1.5' },
   openai: { chat: 'gpt-4o-mini', embedding: 'text-embedding-3-small' },
   gemini: { chat: 'gemini-2.0-flash', embedding: 'text-embedding-004' },
   anthropic: { chat: 'claude-haiku-4-5' },
