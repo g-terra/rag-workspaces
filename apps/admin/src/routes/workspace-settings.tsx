@@ -281,13 +281,29 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
             <Field
               id="ws-embedding"
               label="Embedding model"
-              hint="Changing this rebuilds every vector, so it changes only through a reindex."
+              hint={
+                dirty
+                  ? 'Save your changes first: changing the model reindexes with the settings saved now.'
+                  : 'Changing it embeds every document again, and asking and search pause until that finishes.'
+              }
             >
-              <Input
-                id="ws-embedding"
-                value={`${workspace.settings.embeddingProvider} / ${workspace.settings.embeddingModel}`}
-                disabled
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="ws-embedding"
+                  value={`${workspace.settings.embeddingProvider} / ${workspace.settings.embeddingModel}`}
+                  disabled
+                />
+                <Button
+                  variant="outline"
+                  className="h-9 shrink-0"
+                  aria-label="Change embedding model"
+                  // Same rule as the Reindex button below: it ingests with the saved settings.
+                  disabled={workspace.status === 'reindexing' || dirty}
+                  onClick={() => setReindexing(true)}
+                >
+                  Change…
+                </Button>
+              </div>
             </Field>
 
             <div className="grid gap-3.5 sm:grid-cols-2">

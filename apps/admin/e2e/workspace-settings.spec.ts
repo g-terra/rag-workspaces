@@ -39,6 +39,14 @@ test('an admin changes a workspace’s name and retrieval settings, and they sti
   await expect(page.getByLabel('Slug')).toHaveValue(slug);
   await expect(page.getByLabel('Embedding model')).toBeDisabled();
 
+  // …and changes through a reindex, which the button beside it opens, with the model in use picked.
+  await page.getByRole('button', { name: 'Change embedding model' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Embedding provider')).toHaveValue('lmstudio');
+  await expect(dialog.getByLabel('Embedding model')).not.toHaveValue('');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+
   // An empty setting shows the API's own default as its placeholder, not just "Default".
   await expect(page.getByLabel('Chunk size')).toHaveAttribute('placeholder', /^Default: \d+$/);
   await expect(page.getByLabel('Top-k passages')).toHaveAttribute('placeholder', /^Default: \d+$/);

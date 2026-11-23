@@ -6,6 +6,7 @@ import {
   chatModelDefault,
   defaultPlaceholder,
   chatProviderChoices,
+  embeddingModelChoices,
   embeddingProviderChoices,
   formFor,
   hostedEmbeddingWarning,
@@ -425,5 +426,28 @@ describe('reasoningDefaultNote', () => {
     });
     expect(reasoningDefaultNote(set)).toBe('Default: none.');
     expect(reasoningDefaultNote(undefined)).toBe('Default: from the API’s environment.');
+  });
+});
+
+describe('embeddingModelChoices', () => {
+  const withModels = (models: string[]) => system({ providers: [provider({ id: 'lmstudio', models })] });
+
+  it('puts the models whose id says they embed first, then everything else', () => {
+    const s = withModels(['qwen3-8b', 'text-embedding-nomic-embed-text-v1.5', 'gpt-oss-20b', 'bge-m3-embed']);
+    expect(embeddingModelChoices(s, 'lmstudio', 'text-embedding-nomic-embed-text-v1.5')).toEqual({
+      embedding: ['text-embedding-nomic-embed-text-v1.5', 'bge-m3-embed'],
+      other: ['qwen3-8b', 'gpt-oss-20b'],
+    });
+  });
+
+  it('keeps the model in use even when the provider no longer lists it', () => {
+    expect(embeddingModelChoices(withModels(['qwen3-8b']), 'lmstudio', 'retired-embed')).toEqual({
+      embedding: ['retired-embed'],
+      other: ['qwen3-8b'],
+    });
+  });
+
+  it('gives empty lists without a system status, so the dialog asks for the id as text', () => {
+    expect(embeddingModelChoices(undefined, 'lmstudio', 'x')).toEqual({ embedding: [], other: [] });
   });
 });
