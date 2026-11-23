@@ -1,7 +1,7 @@
 ---
 title: keep the search cache across Langflow runs
 date: 2026-11-23
-pr: pending
+pr: "#90"
 status: in review
 areas: [flows, langflow, docs]
 ---
