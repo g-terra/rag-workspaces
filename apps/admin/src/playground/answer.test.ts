@@ -78,6 +78,18 @@ describe('answerMeta', () => {
     const notFound = { latencyMs: 120, model: null, provider: null, usage: { promptTokens: null, completionTokens: null } }; // prettier-ignore
     expect(answerMeta(notFound)).toBe('120 ms');
   });
+
+  // A chat reply carries no provider, and no latency at all when the run never started.
+  it('reads a chat reply, which has no provider', () => {
+    expect(answerMeta({ latencyMs: 2310, model: 'a-model', usage: meta.usage })).toBe(
+      '2.3 s · a-model · 1,840 + 212 tokens',
+    );
+  });
+
+  it('says nothing at all when the API reported nothing', () => {
+    const nothing = { latencyMs: null, model: null, usage: { promptTokens: null, completionTokens: null } };
+    expect(answerMeta(nothing)).toBe('');
+  });
 });
 
 describe('formatDuration', () => {

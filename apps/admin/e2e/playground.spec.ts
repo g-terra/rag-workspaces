@@ -44,6 +44,12 @@ const ask = async (page: Page, question: string) => {
   await page.getByRole('button', { name: 'Ask' }).click();
 };
 
+/** Chat mode's box is labelled "Message" for the first message and "Follow-up" after it. */
+const send = async (page: Page, message: string) => {
+  await page.getByLabel(/^(Message|Follow-up)$/).fill(message);
+  await page.getByRole('button', { name: 'Send' }).click();
+};
+
 test.afterEach(async ({ page }) => {
   const headers = await bearer(page);
   for (const slug of [loose.slug, strict.slug]) {
@@ -150,4 +156,52 @@ test('streams an answer with its sources, takes feedback, says when nothing matc
   // The API stored that answer too, so it can be rated like any other.
   await page.getByRole('button', { name: 'Helpful', exact: true }).click();
   await expect(page.getByText('Thanks, feedback saved')).toBeVisible();
+});
+
+test('holds a conversation, answers a follow-up from it and starts a new one', async ({ page }) => {
+  // Signing in, ingestion and two replies take longer than the default budget.
+  test.setTimeout(240_000);
+  await signIn(page, '/workspaces');
+  const headers = await bearer(page);
+  await fillWorkspace(page.request, headers, loose);
+
+  // Chat mode is linkable, like the other modes.
+  await page.goto(`/w/${loose.slug}/playground?mode=chat`);
+  await expect(page.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+
+  // The first message creates the conversation and streams the reply, with its sources.
+  await send(page, QUESTION);
+  await expect(page.getByTestId('reply')).not.toBeEmpty({ timeout: 60_000 });
+  await expect(page.getByTestId('reply-meta')).toContainText(/\d+(\.\d+)? (ms|s)/, { timeout: 60_000 });
+  await expect(page.getByTestId('conversation-id')).toHaveText(/^cnv_/);
+  await expect(page.getByRole('complementary', { name: 'Sources' }).getByTestId('source')).toHaveCount(1);
+  const conversationId = (await page.getByTestId('conversation-id').textContent())!;
+
+  // A follow-up joins the same conversation: the thread keeps the earlier turn above it.
+  await send(page, 'Why does that matter?');
+  await expect(page.getByTestId('turn')).toHaveCount(2);
+  await expect(page.getByTestId('reply').nth(1)).not.toBeEmpty({ timeout: 60_000 });
+  await expect(page.getByTestId('conversation-id')).toHaveText(conversationId);
+
+  // The API has the whole thread, both sides of both turns, under that one conversation.
+  const stored = await page.request.get(`/api/v1/workspaces/${loose.slug}/conversations/${conversationId}`, {
+    headers,
+  });
+  const thread = (await stored.json()) as { messages: { role: string; content: string | null }[] };
+  expect(thread.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
+  expect(thread.messages[2]!.content).toBe('Why does that matter?');
+
+  // Looking at another mode must not lose the thread: both panels stay mounted.
+  await page.getByRole('tab', { name: 'Ask' }).click();
+  await expect(page.getByLabel('Question')).toBeVisible();
+  await page.getByRole('tab', { name: 'Chat' }).click();
+  await expect(page.getByTestId('turn')).toHaveCount(2);
+
+  // A new conversation starts empty, and the next message gets a different id.
+  await page.getByRole('button', { name: 'New conversation' }).click();
+  await expect(page.getByTestId('turn')).toHaveCount(0);
+  await expect(page.getByTestId('conversation-id')).toHaveCount(0);
+  await send(page, QUESTION);
+  await expect(page.getByTestId('conversation-id')).toHaveText(/^cnv_/, { timeout: 60_000 });
+  expect(await page.getByTestId('conversation-id').textContent()).not.toBe(conversationId);
 });

@@ -1,9 +1,10 @@
 /** What the playground is doing, kept in the URL as `?mode=` so a tab can be linked to. */
-export type Mode = 'ask' | 'search';
+export type Mode = 'ask' | 'search' | 'chat';
 
 export const MODES: [Mode, string][] = [
   ['ask', 'Ask'],
   ['search', 'Search'],
+  ['chat', 'Chat'],
 ];
 
 /** The mode a `?mode=` value asks for; anything else is the default. */

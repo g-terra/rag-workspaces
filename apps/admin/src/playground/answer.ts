@@ -34,11 +34,15 @@ export function answerParts(text: string, ranks: number[]): AnswerPart[] {
   return parts;
 }
 
-type Meta = Pick<Answer, 'latencyMs' | 'model' | 'provider' | 'usage'>;
+/** A chat reply has no provider to fall back on, and no latency at all when the run never started. */
+type Meta = Pick<Answer, 'model' | 'usage'> & {
+  latencyMs: number | null;
+  provider?: string | null;
+};
 
 /** "2.3 s · a-model · 1,840 + 212 tokens", without the parts the API did not report. */
-export function answerMeta({ latencyMs, model, provider, usage }: Meta): string {
-  const parts = [formatDuration(latencyMs), model ?? provider];
+export function answerMeta({ latencyMs, model, provider = null, usage }: Meta): string {
+  const parts = [latencyMs === null ? null : formatDuration(latencyMs), model ?? provider];
   if (usage.promptTokens !== null && usage.completionTokens !== null) {
     parts.push(
       `${usage.promptTokens.toLocaleString('en')} + ${usage.completionTokens.toLocaleString('en')} tokens`,

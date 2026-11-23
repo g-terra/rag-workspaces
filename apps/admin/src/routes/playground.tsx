@@ -2,6 +2,7 @@ import { useSearchParams } from 'react-router';
 import { TopBar } from '@/components/top-bar';
 import { cn } from '@/lib/utils';
 import { AskPanel } from '@/playground/ask-panel';
+import { ChatPanel } from '@/playground/chat-panel';
 import { MODES, parseMode, type Mode } from '@/playground/search';
 import { SearchPanel } from '@/playground/search-panel';
 import { useCurrentWorkspace } from '@/workspaces/current';
@@ -70,6 +71,9 @@ function Panel({ mode }: { mode: Mode }) {
       </div>
       <div hidden={mode !== 'search'} className="flex flex-col gap-5">
         <SearchPanel />
+      </div>
+      <div hidden={mode !== 'chat'} className="flex flex-col gap-5">
+        <ChatPanel />
       </div>
     </>
   );
