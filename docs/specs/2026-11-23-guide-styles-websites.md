@@ -1,33 +1,33 @@
 ---
-title: cover website import and custom styles in the user guide
+title: cover custom styles and crawl settings in the user guide
 date: 2026-11-23
 pr: "#123"
 status: in review
 areas: [docs]
 ---
 
-# Cover website import and custom styles in the user guide
+# Cover custom styles and crawl settings in the user guide
 
 ## Summary
 
-The user guide catches up with features that merged after it: website import and page links in citations
-(#119, #120), custom response styles (#109) and the MCP `style` argument (#111). `docs/guide/adding-material.md`
-replaces its "Coming soon" note with an "Import a documentation website" section, `docs/guide/playground.md`
-adds custom styles and web-page sources, and `docs/guide/configuration.md` lists `CRAWL_ALLOWED_HOSTS`.
-Also marks the README spec merged. No code changed.
+The user guide catches up with features that merged after it: custom response styles (#109), the MCP
+`style` argument (#111) and page links in citations (#120). `docs/guide/playground.md` adds custom styles,
+the MCP tools and web-page sources, and `docs/guide/configuration.md` lists `CRAWL_ALLOWED_HOSTS`. Also marks
+the README spec merged. No code changed.
+
+The website import section in `docs/guide/adding-material.md` and the style picker lines came with their
+own PRs (#121, #112) while this one was open, so this PR keeps theirs and drops its own draft of the same.
 
 ## Why
 
 The user guide (2026-11-23-user-guide.md) left stubs for features still in review; the owner asked for the
-guide to follow each one as it merges. The admin UI parts (style picker #112, styles page #114, website page
-#121) are still open, so the guide describes the API and links those PRs.
+guide to follow each one as it merges. Custom styles are created through the API until the admin styles
+page (#114) lands.
 
 ## Design
 
-- `adding-material.md`: what a crawl does, a `curl` example for `POST …/sites`, the other site routes, and
-  the limits, pointing to `docs/setup.md#documentation-websites` for operations detail.
 - `playground.md`: sources can be a page address; admins' custom styles through `/v1/styles`; the MCP
-  `list_styles` tool and `style` argument; the picker's PR link.
+  `list_styles` tool and `style` argument.
 - `configuration.md`: a "Documentation websites" table with `CRAWL_ALLOWED_HOSTS`, the only crawl setting
   `docker-compose.yml` passes through from `.env`.
 
@@ -35,7 +35,7 @@ guide to follow each one as it merges. The admin UI parts (style picker #112, st
 
 | Decision | Alternatives considered | Why this one |
 | -------- | ----------------------- | ------------ |
-| Document the API now, UI later | Wait for the admin UI PRs | The features work today through the API and MCP; each UI PR adds a line and a screenshot |
+| Document custom styles through the API now | Wait for the styles page (#114) | They work today; #114 adds the UI steps |
 | Leave `CRAWL_DELAY_MS` and `CRAWL_FETCH_TIMEOUT_MS` out of the configuration page | List them | Compose doesn't pass them to the API, so setting them in `.env` has no effect |
 
 ## Interfaces and contracts
@@ -57,8 +57,9 @@ and `apps/api/src/routes/styles.ts`; links checked by script; `pnpm format:check
 
 ## Out of scope and follow-ups
 
-When #112, #114 and #121 merge, the guide gets the admin UI steps and screenshots for each.
+When #114 merges, the guide gets the admin styles page. Screenshots of the style picker and the website
+page can be added with the next screenshot pass.
 
 ## Docs updated
 
-`docs/guide/adding-material.md`, `docs/guide/playground.md`, `docs/guide/configuration.md`.
+`docs/guide/playground.md`, `docs/guide/configuration.md`.

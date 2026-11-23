@@ -60,11 +60,13 @@ Pick one per question with `"style": "concise"` on an answer or chat message, or
 with `PATCH /v1/workspaces/{slug} { "settings": { "style": "academic" } }`. A request's style wins over
 the workspace's; `"style": null` asks for none. `GET /v1/styles` lists them with their full instructions.
 
+In the playground, the "Response style" picker in Ask and in Chat chooses one for the next question:
+"Workspace default", "No style", or any built-in or custom style. Each answer shows the style it used.
+
 Admins can add their own styles with `POST /v1/styles` (a slug, name, description and instructions), and
 change or delete them with `PATCH` and `DELETE /v1/styles/{slug}`. A custom style works like a built-in one
 in every workspace, behind the same reminder of the grounding rules. Agents can pick one too: the MCP
 server has `list_styles`, and `ask` takes a `style` ([API keys and agents](api-keys.md#connect-an-ai-agent-mcp)).
-A style picker in the playground and settings is in review ([#112](https://github.com/g-terra/rag-workspaces/pull/112)); until it lands, the playground uses the workspace default.
 
 ## Conversations
 

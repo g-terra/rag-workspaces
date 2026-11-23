@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { ApiError, type ApiFetch } from '@/api/client';
 import { useAuth } from '@/auth/auth-context';
+import { styleRequest, WORKSPACE_DEFAULT } from '@/styles/styles';
 import { chatReducer, idleChat, type ChatState } from './chat';
 import type { AnswerError } from './failure';
 import { streamGeneration } from './stream';
@@ -10,7 +11,8 @@ import { streamGeneration } from './stream';
 export type Chat = ChatState & {
   /** The conversation the thread is stored in; null until the first message created one. */
   conversationId: string | null;
-  send(content: string): void;
+  /** `style` is the style picker's value (see `styleRequest`); left out, the workspace's default. */
+  send(content: string, style?: string): void;
   /** Aborts the reply; whatever had streamed stays on screen. */
   stop(): void;
   /** Starts a new, empty conversation: the next message creates it. */
@@ -38,7 +40,7 @@ export function useChat(slug: string, existing: string | null = null): Chat {
   useEffect(() => () => running.current?.abort(), []);
 
   const send = useCallback(
-    (content: string) => {
+    (content: string, style: string = WORKSPACE_DEFAULT) => {
       running.current?.abort();
       const controller = new AbortController();
       running.current = controller;
@@ -52,7 +54,7 @@ export function useChat(slug: string, existing: string | null = null): Chat {
         setConversationId(id);
         const outcome = await streamGeneration({
           path: `/v1/workspaces/${encodeURIComponent(slug)}/conversations/${encodeURIComponent(id)}/messages`,
-          body: { content },
+          body: { content, ...styleRequest(style) },
           result: Message,
           auth,
           signal: controller.signal,

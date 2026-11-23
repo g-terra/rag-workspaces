@@ -35,38 +35,32 @@ Through the API: `POST /v1/workspaces/{slug}/documents` with multipart `files` p
 Folders inside a workspace (for example one per course) exist in the API so far: `POST …/folders`, then
 upload with `?folderId=` ([Using the API](../api.md#add-material-editor)).
 
+## Websites
+
+**Add website** on the Documents page imports a documentation website. Give a start URL such as
+`https://auth0.com/docs`: pages under that path on the same host are fetched, each becomes a document of type
+`web`, and answers that cite one link back to the page. The crawl is polite (robots.txt and the sitemap are
+honoured, one request a second, one site at a time), stops at **Max pages**, and skips any paths you list under
+**Leave out**, such as translations (`/docs/fr-ca/`). When a site publishes `llms.txt`, each page's own Markdown is
+used instead of its HTML.
+
+The site's row above the library shows the crawl's progress and, when it ends, what changed. **Crawl again**
+fetches every page once more: changed pages are re-ingested, new pages added, and a page is removed only when it
+answers 404 or 410, robots.txt disallows it, or it now falls under **Leave out**. **Remove** deletes the site with
+all its pages. Pages that need JavaScript or a login to show their text are not supported, and a site on a
+private network needs `CRAWL_ALLOWED_HOSTS` ([Setup](../setup.md#documentation-websites)).
+
+Through the API: `POST /v1/workspaces/{slug}/sites` ([API schema](../api-schema.md#imported-websites)).
+
 ## Documents
 
 "Documents" lists everything in the workspace, live, with each document's type, number of passages, status and when it
-last changed. Everyone with access can preview and download a document: a PDF opens in a viewer inside
+last changed (a web page has a globe next to its title and a link to the page). Everyone with access can preview and download a document: a PDF opens in a viewer inside
 the app (from an answer's citation, on the cited page), and a recording shows its transcript with the time
 each line starts. Editors and admins can also
 reindex or delete one.
 
 ![Documents](../images/documents.png)
-
-## Import a documentation website
-
-Give a workspace the start URL of a documentation website and it is crawled politely: same host, under the
-start URL's path, robots.txt and the sitemap honoured, one request a second, within page and depth limits.
-Each page becomes a document of type `web`, turned into clean Markdown without the navigation, and its
-passages and citations carry the page's address (`sourceUrl`), so an answer links straight to the page.
-Crawling again refreshes changed pages, adds new ones and removes pages that are gone.
-
-So far this is in the API (editors and admins); a page for it in the admin UI is in review
-([#121](https://github.com/g-terra/rag-workspaces/pull/121)).
-
-```bash
-curl -s http://api.rag.localhost/v1/workspaces/ouc/sites -H "Authorization: Bearer rw_..." \
-  -H 'content-type: application/json' \
-  -d '{ "url": "https://docs.example.com/guide/", "maxPages": 50, "excludePaths": ["/guide/fr/"] }'
-```
-
-`GET …/sites/{siteId}` shows its status and counters, `POST …/sites/{siteId}/crawl` crawls it again,
-`PATCH` changes its limits or folder, and `DELETE` removes it with all its pages. Start with a small
-`maxPages` to check the result: a large site takes a while. Sites that need JavaScript or a login aren't
-supported, and private addresses are refused unless listed in `CRAWL_ALLOWED_HOSTS`
-([Setup](../setup.md#documentation-websites) has the details).
 
 ## Video and audio
 
