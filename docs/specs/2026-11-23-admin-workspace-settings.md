@@ -51,9 +51,12 @@ inside the size rule (AGENTS.md rule 2).
      model would therefore be answered by that provider using another provider's default model. The
      form sends **both or neither**: choosing a provider requires a model, and a model requires a
      provider, each reported under its own field.
-   - A model the workspace already uses stays on offer even when its provider has stopped listing it
-     (`modelChoices()` puts it first). Without that, saving an unrelated change would silently drop
-     the model, because the select would have fallen back to "Default".
+   - The model the *form* holds stays on offer even when the chosen provider does not list it
+     (`modelChoices()` puts it first), so a model typed while the status was unavailable, or one the
+     provider has stopped serving, does not vanish from the field that holds it. It is pinned on the
+     form's value, never on the saved one: a model belongs to the provider it was chosen under, and
+     offering a saved model under a newly picked provider would build exactly the mismatched pair the
+     rule above exists to prevent. Changing the provider therefore clears the model.
 4. **The pickers** (`src/system/queries.ts`, `src/workspaces/settings.ts`). `useSystem()` reads
    `GET /v1/system` once a minute at most — it asks four providers for their model lists, so it is
    not a cheap call. `chatProviderChoices()` labels a provider with why it may not work ("no API key
@@ -66,15 +69,26 @@ inside the size rule (AGENTS.md rule 2).
    (`docs/decisions.md` #19).
 5. **Reindex** (`src/components/reindex-dialog.tsx`, `src/workspaces/queries.ts`). One dialog for the
    one route: run every document through ingestion again with the settings the workspace has now, or
-   switch it to another embedding model, which a reindex is the only way to do. The model choices are
-   the providers that are configured, answered and can embed (`embeddingChoices()`); with none
-   available the select is disabled and says the current model is being kept. `useWorkspace()` gained
+   switch it to another embedding model, which a reindex is the only way to do. It opens on the
+   provider and model in use, so confirming it unchanged just redoes the chunking. The provider is a
+   select of the ones that are configured, answered and can embed (`embeddingProviderChoices()`, with
+   the one in use always included and all of them offered when the status could not be read); the
+   model is a **text field with the provider's catalogue as suggestions**, because `GET /v1/models`
+   does not say which models embed — `ProviderStatus.embeddings` is a fact about the provider, not
+   about each model — so the field says what the list is rather than pretending it is filtered, and
+   a model the list omits can still be named. Its warning is its own (`hostedEmbeddingWarning()`):
+   embedding sends the text of *every* document, not the passages one question retrieves.
+   The button on the page is disabled while the form has unsaved changes, because a reindex ingests
+   with the settings the workspace has when it starts. `useWorkspace()` gained
    a `refetchInterval` that polls every 5 s while `status === 'reindexing'`, because a reindex has no
    completion event of its own — the workspace returns to `active` when its last document finishes —
    and the page shows a banner meanwhile and disables the button, since a second reindex answers 409.
 6. **Saving.** The form is filled once and then belongs to the person typing, so a background
-   refetch cannot overwrite what they are in the middle of writing; a successful save refills it from
-   the workspace the API returned, which both shows anything it normalised and leaves the form clean.
+   refetch cannot overwrite what they are in the middle of writing. The page also keeps the workspace
+   the form was filled *from*, and measures "changed" against that snapshot rather than the live copy:
+   against the live copy, a rename saved in another tab would read as this person's edit and be sent
+   back, undoing it. A successful save refills the form and the snapshot from the workspace the API
+   returned, which both shows anything it normalised and leaves the form clean.
    `useUpdateWorkspace` writes that answer into the cache and invalidates `['workspaces']`, so the
    switcher and the breadcrumb show the new name at once.
 
@@ -84,12 +98,16 @@ inside the size rule (AGENTS.md rule 2).
 | --- | --- | --- |
 | Admins only, with a notice for everyone else | Show the form to editors as the mock does | Every route behind this screen requires `admin`; an editor's every save would 403, and a form that cannot save is worse than a sentence saying who can |
 | Chat provider and model sent as a pair | Let each fall back on its own, as the API does | The API resolves them separately, so half a pair answers with one provider and another provider's default model — a wrong answer that looks like a working one |
-| Keep an unlisted current model on offer | Let the select fall back to "Default" | Saving an unrelated change would silently drop the workspace's model the moment its provider went quiet |
+| Keep an unlisted model on offer, pinned on the form's value | Pin the saved model; let the select fall back to "Default" | A model must not vanish from the field holding it; pinning the *saved* one would offer it under a newly chosen provider, which is the mismatched pair the rule above forbids |
+| The embedding model is typed, with the provider's list as suggestions | A select of that list | `embeddings` is a provider-level flag and `/v1/models` returns the provider's whole catalogue, so a select would claim a filter that does not exist and let an admin pick a chat model — which only fails after the collection has been emptied and every document requeued |
+| Measure "changed" against the snapshot the form was filled from | Against the live, polled workspace | Otherwise a save elsewhere becomes this person's edit and is sent back, silently undoing it |
+| Reindex disabled while the form is dirty | Only the copy warning | A reindex ingests with the saved settings, so unsaved chunking would need a second destructive run |
 | Fall back to a text field when nothing can be listed | Disable the field; block the page on `/v1/system` | The system status is admin-only, cached and can fail; the model is a plain string to the API, so typing it must stay possible |
 | Only the changed fields in the `PATCH` body | Send the whole settings object | A full body rewrites every setting from fields a person never touched, and would fight anyone editing the same workspace |
 | Empty field = the global default | A separate "use default" checkbox per field | `null` already means that in `WorkspaceSettings`, and the hint names what the default is |
 | Overlap checked against the chunk size | Leave it to the API | Both pass the API's schemas separately, but an overlap as wide as the chunk leaves ingestion with no progress to make; only checked when both are set, since a default this page isn't told cannot be compared |
 | Reindex behind a dialog | A button that starts it at once | It empties the collection and pauses asking and search for the whole workspace; it is also where the embedding model changes |
+| A separate warning for a hosted embedding provider | Reuse the chat one | Embedding ships every document's full text, not the passages one question retrieves; the chat wording understates it at the one point the whole corpus leaves |
 | Poll the workspace while reindexing | A spinner until the page is reloaded by hand | There is no reindex event; the workspace's own `status` is the signal, and 5 s is cheap against one row |
 | The form is not refilled by a refetch | Re-derive it from the query on every render | A poll or another screen's invalidation would wipe half-typed text |
 | Members and delete in a later PR | One PR for the whole mock | Rule 2: this is already at the top of the 200–600 line range |
@@ -115,21 +133,23 @@ starting it again is safe.
 
 ## Testing
 
-- `apps/admin/src/workspaces/settings.test.ts` (40 cases): `formFor` both ways, `isDirty` including
+- `apps/admin/src/workspaces/settings.test.ts` (45 cases): `formFor` both ways, `isDirty` including
   whitespace, a body carrying only what changed, an emptied field sent as `null`, the provider/model
   pair refused half-set in either direction, the overlap rule and the case it cannot judge, every
   range message in words, a non-number and a fraction, the provider notes with and without a system
   status, `modelChoices` keeping an unlisted current model and giving nothing for a provider that did
-  not answer, `hostedWarning` for hosted providers only, `embeddingChoices` dropping providers that
-  are unconfigured, unreachable or cannot embed, `defaultsNote` including an unavailable default, and
-  the API's answers to a save and a reindex in words.
+  not answer, `hostedWarning` for hosted providers only and `hostedEmbeddingWarning` saying more,
+  `embeddingProviderChoices` dropping providers that are unconfigured, unreachable or cannot embed
+  while never dropping the one in use, `chatDefaultNote` including an unavailable default, and the
+  API's answers to a save and a reindex in words.
 - `apps/admin/e2e/workspace-settings.spec.ts` (3 tests, real stack): a throwaway workspace per run.
   The first changes the name and two numbers, sees "Settings saved.", reloads and finds them kept,
   then empties a number and finds the field back to its "Default" placeholder. The second checks that
   a provider with no model, an overlap as wide as the chunk, and a top-k above the API's maximum are
   each refused in the browser, and that reloading shows the workspace untouched — nothing reached the
-  API. The third reindexes an empty workspace and sees it ready for another run. Each deletes its
-  workspace afterwards.
+  API. The third opens the reindex dialog on the model in use, reindexes an empty workspace, sees it
+  ready for another run, and then sees the button disabled once a field is edited but unsaved. Each
+  deletes its workspace afterwards.
 
 By hand: open a workspace's Settings, pick a hosted provider and check the notice names it; clear the
 chat provider and check the model field empties with it. Upload a document, then reindex and watch the
@@ -141,6 +161,8 @@ should say admins only, and "Settings" should be absent from the workspace nav.
 Members and deleting a workspace, both in the mock, are the next PR. Also from the mock: the
 reindexing banner's "12 of 42 documents" progress (the workspace carries only a status; a count would
 mean paging the documents list and aggregating it in the browser) and the member-role inline select.
+An API that said which of a provider's models can embed would let the reindex dialog offer a filtered
+list instead of a typed field with suggestions; that belongs in `GET /v1/system`, not here.
 Not here either: a "Test this model" action, per-field defaults shown inline for chunking (the API
 does not report them), and chat-provider changes that need no reindex but do change existing answers.
 

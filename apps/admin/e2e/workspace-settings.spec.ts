@@ -105,8 +105,9 @@ test('an admin reindexes a workspace', async ({ page }) => {
   await page.getByRole('button', { name: 'Reindex workspace' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText(`Reindex "E2E settings ${run}"?`)).toBeVisible();
-  // The model it has is the default choice; changing it is the only thing this dialog decides.
-  await expect(dialog.getByLabel('Embedding model')).toHaveValue('');
+  // It opens on the model the workspace already uses, so confirming changes nothing but the chunking.
+  await expect(dialog.getByLabel('Embedding model')).not.toHaveValue('');
+  await expect(dialog.getByText(/Keeping the model it has/)).toBeVisible();
   await dialog.getByRole('button', { name: 'Reindex workspace' }).click();
 
   await expect(dialog).toBeHidden();
@@ -114,4 +115,9 @@ test('an admin reindexes a workspace', async ({ page }) => {
   // A workspace with no documents has nothing to wait for, so it is active again at once and the
   // button is ready for another run.
   await expect(page.getByRole('button', { name: 'Reindex workspace' })).toBeEnabled();
+
+  // Unsaved chunking would need a second run to apply, so the button waits for the save.
+  await page.getByLabel('Chunk size').fill('500');
+  await expect(page.getByRole('button', { name: 'Reindex workspace' })).toBeDisabled();
+  await expect(page.getByText(/Save your changes first/)).toBeVisible();
 });

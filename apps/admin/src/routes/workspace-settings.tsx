@@ -12,7 +12,7 @@ import { useCurrentWorkspace } from '@/workspaces/current';
 import { useUpdateWorkspace } from '@/workspaces/queries';
 import {
   chatProviderChoices,
-  defaultsNote,
+  chatDefaultNote,
   formFor,
   hostedWarning,
   isDirty,
@@ -53,17 +53,21 @@ export function WorkspaceSettings() {
 }
 
 function SettingsPage({ workspace }: { workspace: Workspace }) {
-  // Filled once and then owned by the person typing: a refetch (the reindex poll, another screen)
-  // must not overwrite what they are in the middle of writing. A save refills it from the answer.
+  // The form is filled once and then owned by the person typing: a refetch (the reindex poll, a
+  // mutation elsewhere) must not overwrite what they are in the middle of writing. `loaded` is the
+  // workspace it was filled from, and what "changed" is measured against — measuring against the
+  // live copy would make someone else's save look like this person's edit and send it back.
+  const [loaded, setLoaded] = useState(workspace);
   const [form, setForm] = useState<SettingsForm>(() => formFor(workspace));
   const [errors, setErrors] = useState<Errors>({});
   const [saved, setSaved] = useState(false);
   const [reindexing, setReindexing] = useState(false);
   const system = useSystem();
   const save = useUpdateWorkspace(workspace.slug);
-  const dirty = isDirty(form, workspace);
-  const defaults = defaultsNote(system.data);
-  const models = modelChoices(system.data, form.chatProvider, workspace.settings.chatModel ?? '');
+  const dirty = isDirty(form, loaded);
+  // Pinned on what the field holds now, not on what was saved: a model belongs to the provider it
+  // was chosen under, so the one saved for another provider must never be offered under this one.
+  const models = modelChoices(system.data, form.chatProvider, form.chatModel);
   const warning = hostedWarning(form.chatProvider);
 
   const set = (field: SettingsField) => (value: string) => {
@@ -73,7 +77,7 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
   };
 
   const submit = () => {
-    const checked = validateSettings(form, workspace);
+    const checked = validateSettings(form, loaded);
     if (!checked.ok) {
       setErrors(checked.errors);
       return;
@@ -83,6 +87,7 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
       // Refilled from what the API stored, so a value it normalised shows as it really is and the
       // form is clean again (which is what disables "Save changes").
       onSuccess: (updated) => {
+        setLoaded(updated);
         setForm(formFor(updated));
         setSaved(true);
       },
@@ -173,7 +178,7 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
                 id="ws-chat-provider"
                 label="Chat provider"
                 error={errors.chatProvider}
-                hint={defaults.chat}
+                hint={chatDefaultNote(system.data)}
               >
                 <select
                   id="ws-chat-provider"
@@ -319,18 +324,25 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
           >
             <p className="text-muted-foreground text-sm">
               The workspace's vectors are built from nothing, so asking, chatting and search answer 503 until
-              the last document is done. Save your changes first: a reindex uses the settings the workspace
-              has when it starts.
+              the last document is done.
             </p>
             <div>
               <Button
                 variant="outline"
                 size="sm"
-                disabled={workspace.status === 'reindexing'}
+                // A reindex ingests with the settings the workspace has when it starts, so unsaved
+                // chunking would take a second run to apply. Save first, then reindex.
+                disabled={workspace.status === 'reindexing' || dirty}
                 onClick={() => setReindexing(true)}
               >
                 {workspace.status === 'reindexing' ? 'Reindexing…' : 'Reindex workspace'}
               </Button>
+              {dirty && workspace.status !== 'reindexing' && (
+                <p role="status" className="text-muted-foreground mt-1.5 text-xs">
+                  Save your changes first: a reindex ingests with the settings the workspace has when it
+                  starts.
+                </p>
+              )}
             </div>
           </Section>
         </div>

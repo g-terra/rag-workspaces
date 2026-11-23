@@ -2,13 +2,15 @@ import type { SystemStatus, Workspace } from '@rag/shared';
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '@/api/client';
 import {
+  chatDefaultNote,
   chatProviderChoices,
-  defaultsNote,
-  embeddingChoices,
+  embeddingProviderChoices,
   formFor,
+  hostedEmbeddingWarning,
   hostedWarning,
   isDirty,
   modelChoices,
+  providerModels,
   reindexErrorMessage,
   saveErrorMessage,
   validateSettings,
@@ -231,12 +233,23 @@ describe('chatProviderChoices', () => {
   });
 });
 
+describe('providerModels', () => {
+  it('gives the provider’s whole catalogue, which is all the API knows about it', () => {
+    expect(providerModels(system(), 'openai')).toEqual(['hosted-a']);
+  });
+
+  it('gives nothing without a provider or a system status', () => {
+    expect(providerModels(system(), '')).toEqual([]);
+    expect(providerModels(undefined, 'openai')).toEqual([]);
+  });
+});
+
 describe('modelChoices', () => {
   it('lists the models the provider offers', () => {
     expect(modelChoices(system(), 'lmstudio', '')).toEqual(['local-a', 'local-b']);
   });
 
-  it('keeps the model the workspace is set to even when the provider no longer lists it', () => {
+  it('keeps the model the form already holds even when the provider does not list it', () => {
     expect(modelChoices(system(), 'lmstudio', 'retired-model')).toEqual([
       'retired-model',
       'local-a',
@@ -268,26 +281,35 @@ describe('hostedWarning', () => {
   });
 });
 
-describe('embeddingChoices', () => {
-  it('offers only providers that are configured, answered, and can embed', () => {
-    expect(embeddingChoices(system())).toEqual([
-      { provider: 'lmstudio', model: 'local-a' },
-      { provider: 'lmstudio', model: 'local-b' },
-      { provider: 'openai', model: 'hosted-a' },
-    ]);
+describe('hostedEmbeddingWarning', () => {
+  it('says the whole corpus leaves the machine, which is more than the chat warning', () => {
+    expect(hostedEmbeddingWarning('openai')).toContain('Every document');
+    expect(hostedEmbeddingWarning('openai')).toContain('leaves this machine');
   });
 
-  it('offers nothing without a system status, so the reindex keeps the current model', () => {
-    expect(embeddingChoices(undefined)).toEqual([]);
+  it('says nothing for the local provider', () => {
+    expect(hostedEmbeddingWarning('lmstudio')).toBeNull();
   });
 });
 
-describe('defaultsNote', () => {
-  it('names the defaults from .env, so an empty field says what it will use', () => {
-    expect(defaultsNote(system())).toEqual({
-      chat: 'Default: lmstudio / local-a',
-      embedding: 'Default: lmstudio / embed-small',
-    });
+describe('embeddingProviderChoices', () => {
+  it('offers the one in use first, then those configured, answering, and able to embed', () => {
+    expect(embeddingProviderChoices(system(), 'lmstudio')).toEqual(['lmstudio', 'openai']);
+  });
+
+  it('never leaves out the provider in use, even when it stopped answering', () => {
+    const down = system({ providers: [provider({ id: 'lmstudio', reachable: false, models: [] })] });
+    expect(embeddingProviderChoices(down, 'lmstudio')).toEqual(['lmstudio']);
+  });
+
+  it('offers every provider the API accepts when the system status could not be read', () => {
+    expect(embeddingProviderChoices(undefined, 'openai')).toEqual(['openai', 'lmstudio', 'gemini']);
+  });
+});
+
+describe('chatDefaultNote', () => {
+  it('names the default from .env, so an empty field says what it will use', () => {
+    expect(chatDefaultNote(system())).toBe('Default: lmstudio / local-a');
   });
 
   it('marks a default its provider cannot serve right now', () => {
@@ -297,11 +319,11 @@ describe('defaultsNote', () => {
         embedding: { provider: 'lmstudio', model: 'embed-small', available: true },
       },
     });
-    expect(defaultsNote(broken).chat).toBe('Default: openai / hosted-a (not available right now)');
+    expect(chatDefaultNote(broken)).toBe('Default: openai / hosted-a (not available right now)');
   });
 
   it('says nothing it cannot know', () => {
-    expect(defaultsNote(undefined)).toEqual({ chat: '', embedding: '' });
+    expect(chatDefaultNote(undefined)).toBe('');
   });
 });
 

@@ -202,13 +202,23 @@ function providerNote(p: ProviderStatus): string {
 }
 
 /**
- * The models to offer for a provider, the one the workspace already uses first even when the
- * provider has stopped listing it — otherwise saving any other change would silently drop it.
+ * Every model a provider lists right now, in the order it gave them. This is the provider's whole
+ * catalogue — chat, embedding, image and speech models alike — because `GET /v1/models` does not say
+ * what each one is for, so whoever shows the list has to say the same.
+ */
+export function providerModels(system: SystemStatus | undefined, provider: string): string[] {
+  if (!system || !provider) return [];
+  return system.providers.find((p) => p.id === provider)?.models ?? [];
+}
+
+/**
+ * The models to offer for the chat provider now chosen, with the model the form already holds first
+ * even when the provider does not list it: a model typed while the system status was unavailable,
+ * or one the provider has stopped serving, must not vanish from the field that holds it.
  * Empty when there is nothing to list, and the page asks for the model as text instead.
  */
 export function modelChoices(system: SystemStatus | undefined, provider: string, current: string): string[] {
-  if (!system || !provider) return [];
-  const listed = system.providers.find((p) => p.id === provider)?.models ?? [];
+  const listed = providerModels(system, provider);
   if (listed.length === 0) return [];
   const pinned = current.trim();
   return pinned && !listed.includes(pinned) ? [pinned, ...listed] : listed;
@@ -220,23 +230,41 @@ export function hostedWarning(provider: string): string | null {
   return `Questions and the passages retrieved to answer them are sent to ${provider}, so this workspace's material leaves this machine.`;
 }
 
+/**
+ * The same warning for an embedding provider, which is a bigger exposure and deserves its own
+ * words: embedding sends the text of *every* document, not the handful of passages a question
+ * retrieves.
+ */
+export function hostedEmbeddingWarning(provider: string): string | null {
+  if (provider === 'lmstudio') return null;
+  return `Every document in this workspace is sent to ${provider} to be embedded, so its full text — not just the passages a question retrieves — leaves this machine.`;
+}
+
 const canEmbed = (p: ProviderStatus): p is ProviderStatus & { id: EmbeddingProvider } =>
   (EmbeddingProvider.options as readonly string[]).includes(p.id);
 
-/** The embedding models a reindex could switch to: configured, answering, and able to embed. */
-export function embeddingChoices(system?: SystemStatus): { provider: EmbeddingProvider; model: string }[] {
-  if (!system) return [];
-  return system.providers
-    .filter((p) => p.configured && p.reachable && p.embeddings && canEmbed(p))
-    .flatMap((p) => p.models.map((model) => ({ provider: p.id as EmbeddingProvider, model })));
+/**
+ * The embedding providers a reindex could switch to: the one in use first, then the others that are
+ * configured, answered and can embed. Without a system status every provider the API accepts is
+ * offered, so a failed (admin-only) status call never leaves the model unchangeable.
+ */
+export function embeddingProviderChoices(
+  system: SystemStatus | undefined,
+  current: EmbeddingProvider,
+): EmbeddingProvider[] {
+  const others: readonly EmbeddingProvider[] = system
+    ? system.providers
+        .filter(canEmbed)
+        .flatMap((p) => (p.configured && p.reachable && p.embeddings ? [p.id] : []))
+    : EmbeddingProvider.options;
+  return [current, ...others.filter((id) => id !== current)];
 }
 
-/** What an empty model field will fall back to, for the hint under it. */
-export function defaultsNote(system?: SystemStatus): { chat: string; embedding: string } {
-  if (!system) return { chat: '', embedding: '' };
-  const note = (d: SystemStatus['defaults']['chat']) =>
-    `Default: ${d.provider} / ${d.model}${d.available ? '' : ' (not available right now)'}`;
-  return { chat: note(system.defaults.chat), embedding: note(system.defaults.embedding) };
+/** What an empty chat model field will fall back to, for the hint under it. */
+export function chatDefaultNote(system?: SystemStatus): string {
+  if (!system) return '';
+  const d = system.defaults.chat;
+  return `Default: ${d.provider} / ${d.model}${d.available ? '' : ' (not available right now)'}`;
 }
 
 /** The API's answer to `PATCH /v1/workspaces/{slug}`, in words. */
