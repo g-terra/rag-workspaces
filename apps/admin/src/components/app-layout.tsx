@@ -1,7 +1,8 @@
-import { BarChart3, KeyRound, Layers, LogOut } from 'lucide-react';
+import { Activity, BarChart3, KeyRound, Layers, LogOut } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '@/auth/auth-context';
 import { Button } from '@/components/ui/button';
+import { SystemBanner } from '@/components/system-banner';
 import { WorkspaceNav } from '@/components/workspace-nav';
 import { WorkspaceSwitcher } from '@/components/workspace-switcher';
 import { navItemClass } from '@/lib/utils';
@@ -33,6 +34,9 @@ export function AppLayout() {
             </NavLink>
             <NavLink to="/usage" className={navItemClass}>
               <BarChart3 className="size-4" /> Usage
+            </NavLink>
+            <NavLink to="/system" className={navItemClass}>
+              <Activity className="size-4" /> System
             </NavLink>
           </nav>
         )}
@@ -71,6 +75,7 @@ export function AppLayout() {
             Couldn't load your account from the API: {meError}
           </p>
         )}
+        <SystemBanner />
         <Outlet />
       </main>
     </div>

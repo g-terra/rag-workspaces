@@ -37,7 +37,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
 
-Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down. The admin UI's workspace Settings screen reads it for its provider and model pickers.
+Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down. The admin UI reads it on its System screen and for the workspace Settings screen's provider and model pickers, and warns admins above every page while it is `degraded`.
 
 ```json
 // GET /v1/system → 200 (admin only)
