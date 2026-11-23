@@ -1,8 +1,8 @@
 ---
 title: upload a whole folder from the admin UI
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#106"
+status: in review
 areas: [admin, docs]
 ---
 
