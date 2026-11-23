@@ -33,6 +33,8 @@ export type WorkspaceSettings = {
   chatModel?: string | null;
   embeddingProvider?: string;
   embeddingModel?: string;
+  /** Pinned with the model (at creation and reindex). Missing for workspaces made before prefixes: none. */
+  embeddingPrefixes?: { document: string; query: string };
   systemPrompt?: string | null;
   chunkSize?: number | null;
   chunkOverlap?: number | null;

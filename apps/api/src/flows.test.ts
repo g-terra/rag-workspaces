@@ -71,6 +71,14 @@ describe('flows/*.json', () => {
       }
     });
 
+    it('lets the API set the embedding prefixes on every Embeddings node', () => {
+      for (const node of flow.data.nodes.filter((n) => n.id === 'Embeddings')) {
+        const template = node.data.node.template as Record<string, unknown>;
+        expect(template, 'document_prefix').toHaveProperty('document_prefix');
+        expect(template, 'query_prefix').toHaveProperty('query_prefix');
+      }
+    });
+
     it('uses no legacy component', () => {
       const legacy = flow.data.nodes.filter((n) => n.data.node.legacy).map((n) => n.id);
       expect(legacy).toEqual([]);

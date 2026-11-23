@@ -81,6 +81,8 @@ describe.skipIf(!url)('workspaces (against TEST_DATABASE_URL)', () => {
       settings: {
         embeddingProvider: 'lmstudio',
         embeddingModel: 'text-embedding-nomic-embed-text-v1.5',
+        // Pinned with the model: the queries of this workspace must match how its documents were embedded.
+        embeddingPrefixes: { document: 'search_document: ', query: 'search_query: ' },
         topK: null,
       },
     });

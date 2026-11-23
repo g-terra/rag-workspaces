@@ -170,9 +170,44 @@ describe.skipIf(!url)('ingestion (against TEST_DATABASE_URL)', () => {
     expect(f.runs[0]!.tweaks).toEqual({
       Loader: { file_path: `ouc/${id}.pdf`, document_id: id, filename: 'notes.pdf', folder: '' },
       Split: { chunk_size: 500, chunk_overlap: 100 },
-      Embeddings: { model: 'nomic', base_url: 'http://host.docker.internal:1234/v1', api_key: 'lm-studio' },
+      // A workspace from before prefixes were pinned embeds without one, as it always did.
+      Embeddings: {
+        model: 'nomic',
+        base_url: 'http://host.docker.internal:1234/v1',
+        api_key: 'lm-studio',
+        document_prefix: '',
+        query_prefix: '',
+      },
       Upsert: { collection_name: 'ws_ouc', document_id: id },
     });
+  });
+
+  it('embeds with the prefixes pinned on the workspace', async () => {
+    const pinned = { document: 'search_document: ', query: 'search_query: ' };
+    await db
+      .update(workspaces)
+      .set({
+        settings: {
+          embeddingProvider: 'lmstudio',
+          embeddingModel: 'nomic',
+          chunkSize: 500,
+          embeddingPrefixes: pinned,
+        },
+      })
+      .where(eq(workspaces.id, workspaceId));
+    try {
+      const id = await newDocument();
+      expect(await processor().process(id)).toBe('ready');
+      expect(f.runs[0]!.tweaks.Embeddings).toMatchObject({
+        document_prefix: 'search_document: ',
+        query_prefix: 'search_query: ',
+      });
+    } finally {
+      await db
+        .update(workspaces)
+        .set({ settings: { embeddingProvider: 'lmstudio', embeddingModel: 'nomic', chunkSize: 500 } })
+        .where(eq(workspaces.id, workspaceId));
+    }
   });
 
   it('transcribes a video first, saves the transcript and ingests that instead', async () => {

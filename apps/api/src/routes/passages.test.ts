@@ -163,7 +163,11 @@ describe.skipIf(!url)('passages (against TEST_DATABASE_URL)', () => {
       min_score: 0.3,
       folder: '',
     });
-    expect(runs[0]!.tweaks.Embeddings).toMatchObject({ model: 'nomic' });
+    expect(runs[0]!.tweaks.Embeddings).toMatchObject({
+      model: 'nomic',
+      document_prefix: '',
+      query_prefix: '',
+    });
   });
 
   it('a passage from a transcript says the second it starts at', async () => {

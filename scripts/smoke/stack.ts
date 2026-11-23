@@ -28,6 +28,9 @@ const SMOKE_SETTINGS = {
   KEYCLOAK_PUBLIC_URL: 'http://localhost:18081',
   DEFAULT_EMBEDDING_PROVIDER: 'lmstudio',
   DEFAULT_EMBEDDING_MODEL: 'standin-embed-a',
+  // The stand-in has no prefixes of its own; these show they reach the model (check.ts).
+  EMBEDDING_PREFIXES: `'{"standin-embed-a": {"document": "passage: ", "query": "query: "}}'`,
+  STANDIN_PORT: '11234',
 };
 
 /** .env.example with fresh secrets (the same rule as scripts/env-init.ts), then the smoke settings. */

@@ -17,6 +17,11 @@ export const WorkspaceSettings = z.object({
   chatModel: z.string().min(1).max(200).nullable(),
   embeddingProvider: EmbeddingProvider,
   embeddingModel: z.string().min(1).max(200),
+  /**
+   * Text put before each document and query when embedding, pinned with the model (read-only).
+   * `null` for a workspace not reindexed since prefixes were added: it embeds without them.
+   */
+  embeddingPrefixes: z.object({ document: z.string(), query: z.string() }).nullable(),
   systemPrompt: z.string().max(10_000).nullable(),
   chunkSize: z.number().int().min(100).max(8000).nullable(),
   chunkOverlap: z.number().int().min(0).max(2000).nullable(),
@@ -52,7 +57,13 @@ export const UpdateWorkspace = z
   .object({
     name: CreateWorkspace.shape.name,
     description: CreateWorkspace.shape.description,
-    settings: WorkspaceSettings.omit({ embeddingProvider: true, embeddingModel: true }).partial().strict(),
+    settings: WorkspaceSettings.omit({
+      embeddingProvider: true,
+      embeddingModel: true,
+      embeddingPrefixes: true,
+    })
+      .partial()
+      .strict(),
   })
   .partial();
 export type UpdateWorkspace = z.infer<typeof UpdateWorkspace>;
