@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   release-please:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     outputs:
       released: ${{ steps.release.outputs.release_created }}
       version: ${{ steps.release.outputs.version }}
@@ -30,7 +30,7 @@ jobs:
     name: Publish images
     needs: release-please
     if: needs.release-please.outputs.released == 'true'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 30
     # Only this job pushes images.
     permissions:

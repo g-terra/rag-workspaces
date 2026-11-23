@@ -12,19 +12,8 @@ concurrency:
 jobs:
   check:
     name: Lint, typecheck, test, build
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
-    services:
-      # Throwaway Postgres for the @rag/db tests (migrations, constraints).
-      postgres:
-        image: postgres:16.16-alpine
-        env:
-          POSTGRES_PASSWORD: test
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
-    env:
-      TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -32,6 +21,17 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      # Throwaway Postgres for the @rag/db tests (migrations, constraints). A plain container rather
+      # than a job service, which only Linux runners support. Named per run and on a free port, so it
+      # never meets the dev stack or another job on the same machine.
+      - name: Start test Postgres
+        run: |
+          name="rw-ci-pg-${{ github.run_id }}-${{ github.run_attempt }}"
+          docker run -d --rm --name "$name" -e POSTGRES_PASSWORD=test -p 127.0.0.1::5432 postgres:16.16-alpine
+          echo "PG_CONTAINER=$name" >> "$GITHUB_ENV"
+          port=$(docker port "$name" 5432/tcp | head -n1 | sed 's/.*://')
+          echo "TEST_DATABASE_URL=postgres://postgres:test@127.0.0.1:$port/postgres" >> "$GITHUB_ENV"
+          for i in $(seq 60); do docker exec "$name" pg_isready -h 127.0.0.1 -U postgres && break; sleep 1; done
       - run: pnpm install --frozen-lockfile
       - run: pnpm format:check
       - run: pnpm lint
@@ -39,13 +39,18 @@ jobs:
       - run: pnpm test
       - run: pnpm test:scripts
       - run: pnpm build
+      - name: Stop test Postgres
+        if: always()
+        run: docker rm -f "$PG_CONTAINER" || true
 
   docker:
     name: Compose config and images
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - run: node scripts/env-init.ts
-      - run: docker compose config --quiet
-      - run: docker compose build api web
+      # Its own project name: the compose file names itself rag-workspaces, and building under that name
+      # would replace the images of a dev stack running on the same machine.
+      - run: docker compose --project-name rw-ci config --quiet
+      - run: docker compose --project-name rw-ci build api web
