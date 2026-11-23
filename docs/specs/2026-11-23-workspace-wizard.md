@@ -1,7 +1,7 @@
 ---
 title: set up a new workspace step by step
 date: 2026-11-23
-pr: pending
+pr: "#98"
 status: in review
 areas: [admin, api, docs]
 ---
