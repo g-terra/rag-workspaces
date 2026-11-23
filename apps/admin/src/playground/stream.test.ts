@@ -1,4 +1,4 @@
-import type { Answer } from '@rag/shared';
+import { Answer } from '@rag/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { streamGeneration } from './stream';
 
@@ -57,9 +57,9 @@ function harness(answers: Response[] = [], controller = new AbortController()) {
     streamGeneration<Answer>({
       path: '/v1/workspaces/ouc/answers',
       body: { question: 'What is RAG?' },
+      result: Answer,
       auth,
       signal: controller.signal,
-      idKey: 'answerId',
       onToken: (text) => tokenTexts.push(text),
       fetch,
     });
@@ -98,30 +98,72 @@ describe('streamGeneration', () => {
     expect(h.tokenTexts).toEqual(['RAG ', 'retrieves']);
   });
 
-  it('turns an error event into a failure with its detail and the record id', async () => {
+  it('turns an error event into a failure with its status and detail', async () => {
     const stream = openStream(new AbortController().signal);
     const h = harness([stream.response]);
     const running = h.run();
     stream.write(frame('token', { text: 'RAG ' }));
     stream.write(
-      frame('error', { title: 'Bad Gateway', detail: 'Answering failed in Langflow.', answerId: 'ans_9' }),
+      frame('error', {
+        status: 502,
+        title: 'Bad Gateway',
+        detail: 'Answering failed in Langflow.',
+        answerId: 'ans_9',
+      }),
     );
     stream.end();
 
     expect(await running).toEqual({
       kind: 'failed',
+      status: 502,
       detail: 'Answering failed in Langflow.',
-      id: 'ans_9',
     });
     expect(h.tokenTexts).toEqual(['RAG ']);
+  });
+
+  it('refuses a done record of the wrong shape instead of passing it on', async () => {
+    const stream = openStream(new AbortController().signal);
+    const h = harness([stream.response]);
+    const running = h.run();
+    stream.write(frame('done', { id: 'ans_1', latencyMs: 'soon' }));
+    stream.end();
+
+    expect(await running).toEqual({
+      kind: 'failed',
+      status: null,
+      detail: 'The answer came back in an unexpected shape.',
+    });
+  });
+
+  it('skips a token event without text rather than writing "undefined"', async () => {
+    const stream = openStream(new AbortController().signal);
+    const h = harness([stream.response]);
+    const running = h.run();
+    stream.write(frame('token', { nope: 1 }));
+    stream.write(frame('token', { text: 'RAG' }));
+    stream.write(frame('done', answer));
+    stream.end();
+
+    await running;
+    expect(h.tokenTexts).toEqual(['RAG']);
+  });
+
+  it('stops reading once done arrives, without waiting for the server to close', async () => {
+    const stream = openStream(new AbortController().signal);
+    const h = harness([stream.response]);
+    const running = h.run();
+    stream.write(frame('done', answer));
+    // The connection is deliberately left open, as an intermediary that buffers would leave it.
+
+    expect(await running).toEqual({ kind: 'done', result: answer });
   });
 
   it('reads the problem detail of an HTTP error before the stream opens', async () => {
     const refused = new Response(JSON.stringify({ detail: 'Langflow is still starting.' }), { status: 503 });
     expect(await harness([refused]).run()).toEqual({
       kind: 'failed',
+      status: 503,
       detail: 'Langflow is still starting.',
-      id: null,
     });
   });
 
@@ -134,8 +176,8 @@ describe('streamGeneration', () => {
 
     expect(await running).toEqual({
       kind: 'failed',
+      status: null,
       detail: 'The answer stopped before it finished.',
-      id: null,
     });
   });
 

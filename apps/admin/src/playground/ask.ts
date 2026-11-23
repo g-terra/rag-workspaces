@@ -1,4 +1,5 @@
 import type { Answer } from '@rag/shared';
+import type { AnswerError } from './failure';
 
 export type AskState = {
   status: 'idle' | 'streaming' | 'done' | 'failed' | 'stopped';
@@ -8,14 +9,14 @@ export type AskState = {
   text: string;
   /** The stored answer, once the API sent it; it carries the citations and the meta line. */
   answer: Answer | null;
-  error: string | null;
+  error: AnswerError | null;
 };
 
 export type AskEvent =
   | { type: 'started'; question: string }
   | { type: 'token'; text: string }
   | { type: 'done'; answer: Answer }
-  | { type: 'failed'; detail: string }
+  | { type: 'failed'; error: AnswerError }
   | { type: 'stopped' };
 
 export const idleAsk: AskState = {
@@ -41,7 +42,7 @@ export function askReducer(state: AskState, event: AskEvent): AskState {
     case 'done':
       return { ...state, status: 'done', text: event.answer.text ?? state.text, answer: event.answer };
     case 'failed':
-      return { ...state, status: 'failed', error: event.detail };
+      return { ...state, status: 'failed', error: event.error };
     case 'stopped':
       return { ...state, status: 'stopped' };
   }

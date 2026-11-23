@@ -36,4 +36,10 @@ describe('formatDuration', () => {
     expect(formatDuration(2310)).toBe('2.3 s');
     expect(formatDuration(64_200)).toBe('1 min 4 s');
   });
+
+  // Rounding the seconds remainder on its own would write "1 min 60 s" and "60.0 s".
+  it('carries the rounded seconds into the next minute', () => {
+    expect(formatDuration(119_600)).toBe('2 min 0 s');
+    expect(formatDuration(59_950)).toBe('1 min 0 s');
+  });
 });

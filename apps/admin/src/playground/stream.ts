@@ -1,44 +1,53 @@
+import type { ZodType } from 'zod';
+import { z } from 'zod';
 import { problemDetail } from '@/api/problem';
 import { createSseParser } from '@/api/sse';
 import { sendAuthorized, type TokenSource } from '@/auth/authorized';
 
-export interface GenerationRequest {
+export interface GenerationRequest<T> {
   /** The API path without the `/api` prefix, e.g. `/v1/workspaces/ouc/answers`. */
   path: string;
   body: unknown;
+  /** What the `done` event carries, so a record of the wrong shape is a failure, not a crash. */
+  result: ZodType<T>;
   auth: TokenSource;
   /** Aborting it ends the request; the outcome is then `aborted`. */
   signal: AbortSignal;
-  /** The field the `error` event carries the stored record's id in: `answerId` or `messageId`. */
-  idKey: string;
   onToken(text: string): void;
   fetch?: typeof globalThis.fetch;
 }
 
 export type GenerationOutcome<T> =
   | { kind: 'done'; result: T }
-  /** The API refused or the run failed; `id` is the stored (failed) record, when the API named one. */
-  | { kind: 'failed'; detail: string; id: string | null }
+  /** The API refused, or the run failed. `status` is the HTTP status, when the API gave one. */
+  | { kind: 'failed'; status: number | null; detail: string }
   /** The caller aborted, or the session ended; nothing to show. */
   | { kind: 'aborted' };
 
+const Token = z.object({ text: z.string() });
+const Problem = z.object({
+  status: z.number().int().optional(),
+  title: z.string().optional(),
+  detail: z.string().optional(),
+});
+
 /**
  * Asks the API to generate something and streams the result: `POST <path>` with
- * `Accept: text/event-stream`, then `token` events through `onToken` until `done` (the stored record) or
- * `error` (problem JSON plus the record's id). Reads with `fetch` because `EventSource` can't send the
- * bearer token, and because the request has a body.
+ * `Accept: text/event-stream`, then `token` events through `onToken` until `done` (the stored record)
+ * or `error` (problem JSON). Reads with `fetch` because `EventSource` can neither send the bearer token
+ * nor post a body.
  *
  * A failure before the stream opens is a normal HTTP error, so its problem JSON is read instead.
  */
 export async function streamGeneration<T>({
   path,
   body,
+  result,
   auth,
   signal,
-  idKey,
   onToken,
   fetch = globalThis.fetch,
-}: GenerationRequest): Promise<GenerationOutcome<T>> {
+}: GenerationRequest<T>): Promise<GenerationOutcome<T>> {
   try {
     const res = await sendAuthorized(auth, (token) =>
       fetch(`/api${path}`, {
@@ -54,36 +63,58 @@ export async function streamGeneration<T>({
     );
     // sendAuthorized has ended the session; signing in again starts a new page.
     if (res.status === 401) return { kind: 'aborted' };
-    if (!res.ok || !res.body) return { kind: 'failed', detail: await problemDetail(res), id: null };
+    if (!res.ok) return { kind: 'failed', status: res.status, detail: await problemDetail(res) };
+    if (!res.body) return { kind: 'failed', status: res.status, detail: 'The answer was empty.' };
 
     const parse = createSseParser();
     const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
     let outcome: GenerationOutcome<T> | null = null;
-    for (;;) {
+    // Stops at the first `done` or `error` rather than waiting for the server to close the
+    // connection, so an intermediary holding the socket open can't leave the caller streaming forever.
+    while (!outcome) {
       const { done, value } = await reader.read();
       if (done) break;
+      // `citations` is ignored: the `done` record carries the same citations.
       for (const event of parse(value)) {
-        // `citations` is ignored: the `done` record carries the same citations.
-        if (event.event === 'token') onToken((JSON.parse(event.data) as { text: string }).text);
-        else if (event.event === 'done') outcome = { kind: 'done', result: JSON.parse(event.data) as T };
-        else if (event.event === 'error') outcome = failure(event.data, idKey);
+        if (event.event === 'token') {
+          const token = Token.safeParse(json(event.data));
+          if (token.success) onToken(token.data.text);
+        } else if (event.event === 'done') {
+          const record = result.safeParse(json(event.data));
+          outcome = record.success
+            ? { kind: 'done', result: record.data }
+            : { kind: 'failed', status: null, detail: 'The answer came back in an unexpected shape.' };
+        } else if (event.event === 'error') {
+          outcome = failure(json(event.data));
+        }
       }
     }
-    return outcome ?? { kind: 'failed', detail: 'The answer stopped before it finished.', id: null };
+    void reader.cancel().catch(() => {});
+    return outcome ?? { kind: 'failed', status: null, detail: 'The answer stopped before it finished.' };
   } catch (err) {
     if (signal.aborted) return { kind: 'aborted' };
-    return { kind: 'failed', detail: err instanceof Error ? err.message : 'The request failed.', id: null };
+    return {
+      kind: 'failed',
+      status: null,
+      detail: err instanceof Error ? err.message : 'The request failed.',
+    };
   }
 }
 
-function failure<T>(data: string, idKey: string): GenerationOutcome<T> {
-  const body = JSON.parse(data) as Record<string, unknown>;
-  const detail = typeof body.detail === 'string' ? body.detail : undefined;
-  const title = typeof body.title === 'string' ? body.title : undefined;
-  const id = body[idKey];
+function json(data: string): unknown {
+  try {
+    return JSON.parse(data);
+  } catch {
+    return null;
+  }
+}
+
+function failure<T>(data: unknown): GenerationOutcome<T> {
+  const problem = Problem.safeParse(data);
+  const body = problem.success ? problem.data : {};
   return {
     kind: 'failed',
-    detail: detail ?? title ?? 'The answer failed.',
-    id: typeof id === 'string' ? id : null,
+    status: body.status ?? null,
+    detail: body.detail ?? body.title ?? 'The answer failed.',
   };
 }

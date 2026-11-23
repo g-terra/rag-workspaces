@@ -16,6 +16,9 @@ export function answerMeta({ latencyMs, model, provider, usage }: Meta): string 
 /** "840 ms" below a second, then "2.3 s", then "1 min 4 s". */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)} ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
-  return `${Math.floor(ms / 60_000)} min ${Math.round((ms % 60_000) / 1000)} s`;
+  // Round to the unit shown before splitting: rounding the remainder alone writes "1 min 60 s".
+  const tenths = Math.round(ms / 100);
+  if (tenths < 600) return `${(tenths / 10).toFixed(1)} s`;
+  const seconds = Math.round(ms / 1000);
+  return `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
 }

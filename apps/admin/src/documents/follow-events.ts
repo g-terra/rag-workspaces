@@ -1,4 +1,4 @@
-import { failureDetail } from '@/api/problem';
+import { problemDetail } from '@/api/problem';
 import { createSseParser, reconnectDelay } from '@/api/sse';
 import { sendAuthorized, type TokenSource } from '@/auth/authorized';
 import { toDocumentEvent, type DocumentEvent } from './events';
@@ -40,7 +40,7 @@ export async function followDocumentEvents({
       // sendAuthorized has ended the session; signing in again starts a new page.
       if (res.status === 401) return;
       if (res.status === 403 || res.status === 404) {
-        onStop(await refusal(res));
+        onStop(await problemDetail(res));
         return;
       }
       if (res.ok && res.body) {
@@ -71,16 +71,6 @@ function forWorkspace(event: DocumentEvent | null, slug: string): DocumentEvent 
   if (event?.type === 'snapshot')
     return { ...event, documents: event.documents.filter((d) => d.workspace === slug) };
   return event;
-}
-
-async function refusal(res: Response): Promise<string> {
-  let body: { detail?: string; title?: string } | null = null;
-  try {
-    body = (await res.json()) as { detail?: string; title?: string };
-  } catch {
-    // No problem JSON: use the status.
-  }
-  return failureDetail(body, res.status, res.statusText);
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {

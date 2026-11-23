@@ -5,11 +5,13 @@ import { Notice } from '@/components/states';
 import { TopBar } from '@/components/top-bar';
 import { Button } from '@/components/ui/button';
 import { answerMeta } from '@/playground/answer';
+import { answerFailure, type AnswerError } from '@/playground/failure';
 import { useAsk } from '@/playground/use-ask';
 import { useCurrentWorkspace } from '@/workspaces/current';
 
 /** How many passages the model is given. Leaving it out would use the workspace's own `topK`. */
-const PASSAGE_COUNTS = [5, 3, 8];
+const PASSAGE_COUNTS = [3, 5, 8];
+const DEFAULT_PASSAGES = 5;
 
 /** `/w/:slug/playground`: ask the workspace a question and watch the answer arrive. */
 export function Playground() {
@@ -22,7 +24,7 @@ function Ask() {
   const w = useCurrentWorkspace();
   const ask = useAsk(w.slug);
   const [question, setQuestion] = useState('');
-  const [maxPassages, setMaxPassages] = useState(PASSAGE_COUNTS[0]!);
+  const [maxPassages, setMaxPassages] = useState(DEFAULT_PASSAGES);
   const streaming = ask.status === 'streaming';
   const submit = () => {
     if (question.trim()) ask.ask(question.trim(), maxPassages);
@@ -48,7 +50,11 @@ function Ask() {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit();
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                // Otherwise the browser writes the newline into the box as well as submitting.
+                e.preventDefault();
+                submit();
+              }
             }}
             placeholder="What is retrieval-augmented generation?"
             className="min-h-16 resize-y text-base leading-relaxed outline-none"
@@ -78,13 +84,7 @@ function Ask() {
           </div>
         </div>
 
-        {ask.status === 'failed' && (
-          <Notice title="The answer failed" body={ask.error!} alert>
-            <Button variant="outline" size="sm" onClick={submit} disabled={!question.trim()}>
-              Try again
-            </Button>
-          </Notice>
-        )}
+        {ask.error && ask.status === 'failed' && <Failure error={ask.error} onRetry={submit} />}
 
         {ask.answer?.grounded === false ? (
           <NotFound slug={w.slug} question={ask.question} />
@@ -111,6 +111,19 @@ function Ask() {
         )}
       </div>
     </>
+  );
+}
+
+/** A refused or failed answer, with the reason the API gave and the reindex case named. */
+function Failure({ error, onRetry }: { error: AnswerError; onRetry(): void }) {
+  const w = useCurrentWorkspace();
+  const { title, body } = answerFailure(error, w.status);
+  return (
+    <Notice title={title} body={body} alert>
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        Try again
+      </Button>
+    </Notice>
   );
 }
 

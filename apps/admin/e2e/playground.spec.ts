@@ -72,11 +72,15 @@ test('streams an answer, says when nothing matches, and stops on request', async
   await expect(page.getByText(/^ans_/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ask' })).toBeVisible();
 
-  // Stop aborts the request at once, and asking is possible again straight away.
+  // Stop aborts the request. The route is held open rather than answered, so there is always a
+  // request in flight to abort: letting the real answer race the click makes the test flaky.
+  const answers = '**/v1/workspaces/*/answers';
+  await page.route(answers, () => {});
   await ask(page, QUESTION);
   await page.getByRole('button', { name: 'Stop' }).click();
   await expect(page.getByText(/^Stopped\./)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ask' })).toBeEnabled();
+  await page.unroute(answers);
 
   // Nothing is relevant enough in the strict workspace, so the API answers `grounded: false`.
   await page.goto(`/w/${strict.slug}/playground`);

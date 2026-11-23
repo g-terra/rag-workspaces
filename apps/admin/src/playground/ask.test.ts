@@ -68,14 +68,14 @@ describe('askReducer', () => {
     const state = reduce(
       streaming,
       { type: 'token', text: 'half' },
-      { type: 'failed', detail: 'Answering failed in Langflow.' },
+      { type: 'failed', error: { status: 502, detail: 'Answering failed in Langflow.' } },
     );
     expect(state).toEqual({
       status: 'failed',
       question: 'What is RAG?',
       text: 'half',
       answer: null,
-      error: 'Answering failed in Langflow.',
+      error: { status: 502, detail: 'Answering failed in Langflow.' },
     });
   });
 
