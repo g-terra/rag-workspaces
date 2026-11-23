@@ -137,6 +137,14 @@ async function main() {
     const me = await call(token, 'GET', '/v1/me');
     expect(me.isAdmin === true, `expected isAdmin true, got ${JSON.stringify(me)}`);
   });
+  await step('responses carry the rate limit headers', async () => {
+    const res = await fetch(`${API}/v1/me`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    const limit = res.headers.get('ratelimit-limit');
+    expect(limit === '600' && res.headers.get('ratelimit-remaining'), `RateLimit-Limit: ${limit}`);
+  });
   await step('GET /v1/users lists the admin, read through the api-directory service account', async () => {
     const { data } = (await call(token, 'GET', `/v1/users?search=${env.RW_ADMIN_USERNAME}`)) as {
       data: { username: string; isAdmin: boolean }[];
