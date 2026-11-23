@@ -1,7 +1,7 @@
 ---
 title: Find every best passage in a workspace-wide search
 date: 2026-11-23
-pr: pending
+pr: "#80"
 status: in review
 areas: [api, flows, docs]
 ---
