@@ -45,6 +45,7 @@ describe('messageBody', () => {
   it('shows what the model said', () => {
     expect(messageBody(message())).toEqual({
       text: 'Retrieval finds the passages first.',
+      error: null,
       failed: false,
     });
   });
@@ -52,23 +53,40 @@ describe('messageBody', () => {
   it('explains a reply that found nothing relevant enough, which has no text', () => {
     const body = messageBody(message({ grounded: false, content: null }));
     expect(body.failed).toBe(false);
+    expect(body.error).toBeNull();
     expect(body.text).toMatch(/close enough/);
   });
 
   it('gives the reason a reply failed', () => {
-    expect(messageBody(message({ status: 'failed', content: null, error: 'The provider timed out.' }))).toEqual({ text: 'The provider timed out.', failed: true }); // prettier-ignore
+    expect(
+      messageBody(message({ status: 'failed', content: null, error: 'The provider timed out.' })),
+    ).toEqual({ text: '', error: 'The provider timed out.', failed: true });
   });
 
   it('says a reply failed even when the API gave no reason', () => {
     expect(messageBody(message({ status: 'failed', content: null, error: null }))).toEqual({
-      text: 'The reply failed.',
+      text: '',
+      error: 'The reply failed.',
       failed: true,
     });
   });
 
   // A reply can fail part-way through generating, and then it has both text and a reason.
-  it('keeps the words a failed reply had written', () => {
+  it('keeps both the words a failed reply had written and the reason it failed', () => {
     const partial = message({ status: 'failed', content: 'Retrieval finds', error: 'Dropped.' });
-    expect(messageBody(partial)).toEqual({ text: 'Retrieval finds', failed: true });
+    expect(messageBody(partial)).toEqual({
+      text: 'Retrieval finds',
+      error: 'Dropped.',
+      failed: true,
+    });
+  });
+
+  it('falls back to a default failure reason when partial content has no error string', () => {
+    const partial = message({ status: 'failed', content: 'Retrieval finds', error: null });
+    expect(messageBody(partial)).toEqual({
+      text: 'Retrieval finds',
+      error: 'The reply failed.',
+      failed: true,
+    });
   });
 });

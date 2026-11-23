@@ -1,6 +1,6 @@
 import type { ConversationWithMessages, Message } from '@rag/shared';
 import { Trash2 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { conversationName, messageBody } from '@/conversations/thread';
 import { useConversation, useConversations, useDeleteConversation } from '@/conversations/queries';
@@ -19,9 +19,8 @@ import { useChat } from '@/playground/use-chat';
 import { useCurrentWorkspace } from '@/workspaces/current';
 
 /**
- * `/w/:slug/conversations`: the conversations you and your agents have had with this workspace, and one
- * of them in full. The open one is in the URL (`?c=cnv_…`), so the playground can link straight to the
- * conversation it just started.
+ * `/w/:slug/conversations`: your conversations with this workspace, and one of them in full. The open
+ * one is in the URL (`?c=cnv_…`), so the playground can link straight to the conversation it just started.
  */
 export function Conversations() {
   const w = useCurrentWorkspace();
@@ -36,8 +35,7 @@ export function Conversations() {
         <div>
           <h1 className="mb-1.5 text-2xl font-semibold tracking-tight">Conversations</h1>
           <p className="text-muted-foreground text-sm">
-            Every conversation held with this workspace, yours and your API keys', with the passages each
-            reply was given.
+            Your conversations with this workspace, with the passages each reply was given.
           </p>
         </div>
 
@@ -54,7 +52,7 @@ export function Conversations() {
             {list.data?.length === 0 && (
               <Notice
                 title="No conversations yet"
-                body="Chat mode in the playground starts one, and so does any agent that posts to the conversations route."
+                body="Start one in the playground's Chat mode to see it here."
               >
                 <Button variant="outline" size="sm" asChild>
                   <Link to={`/w/${w.slug}/playground?mode=chat`}>Open Chat</Link>
@@ -100,7 +98,12 @@ export function Conversations() {
               />
             ) : (
               // Keyed by conversation: each one has its own thread, and its own box to continue it.
-              <Thread key={openId} slug={w.slug} id={openId} onDeleted={() => setParams({})} />
+              <Thread
+                key={openId}
+                slug={w.slug}
+                id={openId}
+                onDeleted={() => setParams({}, { replace: true })}
+              />
             )}
           </div>
         </div>
@@ -186,14 +189,17 @@ function StoredMessage({
   message: Message;
   onOpenPassage(passageId: string | null): void;
 }) {
-  const { text, failed } = messageBody(message);
+  const { text, error } = messageBody(message);
   if (message.role === 'user') return <Sent>{text}</Sent>;
   return (
     <div data-testid="stored-reply" className="flex flex-wrap items-start gap-4">
       <div className="bg-card flex min-w-0 flex-[999_1_460px] flex-col gap-3 rounded-xl border p-5">
-        <p className={cn('text-[15px] leading-relaxed whitespace-pre-wrap', failed && 'text-destructive')}>
-          {text}
-        </p>
+        {text && <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{text}</p>}
+        {error && (
+          <p role="alert" className="text-destructive text-sm whitespace-pre-wrap">
+            {error}
+          </p>
+        )}
         <p className="text-muted-foreground border-t pt-3 text-xs">{answerMeta(message)}</p>
       </div>
       {message.citations.length > 0 && <Sources citations={message.citations} onOpen={onOpenPassage} />}
@@ -209,23 +215,16 @@ function DeleteDialog(props: {
   onDeleted(): void;
 }) {
   const remove = useDeleteConversation(props.slug);
-  const deleted = useRef(false);
   return (
     <Dialog
       open={props.open}
       onOpenChange={(open) => {
+        if (remove.isPending) return;
         remove.reset();
         props.onOpenChange(open);
       }}
     >
-      <DialogContent
-        onCloseAutoFocus={(e) => {
-          // The Delete button that opened the dialog is gone with the conversation.
-          if (!deleted.current) return;
-          e.preventDefault();
-          props.onDeleted();
-        }}
-      >
+      <DialogContent>
         <DialogTitle>Delete this conversation?</DialogTitle>
         <DialogDescription>
           "{conversationName(props.conversation)}" and its {props.conversation.messages.length} messages are
@@ -238,19 +237,21 @@ function DeleteDialog(props: {
         )}
         <div className="flex justify-end gap-2">
           <DialogClose asChild>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="outline" disabled={remove.isPending}>
+              Cancel
+            </Button>
           </DialogClose>
           <Button
             variant="destructive"
             disabled={remove.isPending}
-            onClick={() => {
-              // Set before the answer: on success this dialog unmounts with the thread at once.
-              deleted.current = true;
+            onClick={() =>
               remove.mutate(props.conversation.id, {
-                onSuccess: () => props.onOpenChange(false),
-                onError: () => (deleted.current = false),
-              });
-            }}
+                onSuccess: () => {
+                  props.onOpenChange(false);
+                  props.onDeleted();
+                },
+              })
+            }
           >
             {remove.isPending ? 'Deleting…' : 'Delete'}
           </Button>

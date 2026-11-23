@@ -84,11 +84,13 @@ test('lists conversations, opens one, carries it on and deletes it', async ({ pa
   await page.reload();
   await expect(page.getByTestId('stored-reply')).toHaveCount(2);
 
-  // Deleting asks first, then the conversation and its messages are gone.
+  // Deleting asks first, then the conversation and its messages are gone without showing a 404 error pane.
   await page.getByRole('button', { name: 'Delete' }).click();
   await expect(page.getByText(/This can't be undone/)).toBeVisible();
   await page.getByRole('button', { name: 'Delete', exact: true }).last().click();
   await expect(page.getByRole('heading', { name: 'No conversations yet' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Open a conversation' })).toBeVisible();
+  await expect(page.getByText('The conversation could not be loaded')).toHaveCount(0);
   const gone = await page.request.get(`/api/v1/workspaces/${ws.slug}/conversations/${conversationId}`, {
     headers,
   });

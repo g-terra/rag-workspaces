@@ -58,13 +58,20 @@ export function useChat(slug: string, existing: string | null = null): Chat {
           signal: controller.signal,
           onToken: (text) => dispatch({ type: 'token', text }),
         });
-        if (outcome.kind === 'done') dispatch({ type: 'done', reply: outcome.result });
-        else if (outcome.kind === 'failed') {
+        if (outcome.kind === 'done') {
+          dispatch({ type: 'done', reply: outcome.result });
+          // Refresh only the list so updatedAt and order stay current without refetching an open thread.
+          void queryClient.invalidateQueries({
+            queryKey: ['workspaces', slug, 'conversations'],
+            exact: true,
+          });
+        } else if (outcome.kind === 'failed') {
           dispatch({ type: 'failed', error: outcome });
           // A 503 is how the API answers while a workspace is reindexed, so read its status again:
           // what the failure means depends on it, and the copy we loaded may predate the reindex.
+          // `exact` keeps this from refetching an open conversation detail query and showing turns twice.
           if (outcome.status === 503) {
-            void queryClient.invalidateQueries({ queryKey: ['workspaces', slug] });
+            void queryClient.invalidateQueries({ queryKey: ['workspaces', slug], exact: true });
           }
         }
       })();

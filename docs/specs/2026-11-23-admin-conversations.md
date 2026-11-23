@@ -1,8 +1,8 @@
 ---
 title: The conversations screen in the admin UI
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#64"
+status: in review
 areas: [admin]
 ---
 
@@ -10,7 +10,7 @@ areas: [admin]
 
 ## Summary
 
-A new screen, `/w/:slug/conversations`: the conversations held with this workspace, most recently active
+A new screen, `/w/:slug/conversations`: your conversations with this workspace, most recently active
 first, and one of them in full — every message, the passages each reply was given, and a box to carry it
 on. A conversation can be deleted, after a confirmation. The open one is in the URL (`?c=cnv_…`), and
 Chat mode in the playground now links the conversation it started to this screen. Follows
@@ -19,7 +19,7 @@ Chat mode in the playground now links the conversation it started to this screen
 ## Why
 
 Milestone M4, and the owner's ask. Chat mode stores conversations that outlive the page it typed them
-in, and until now nothing in the UI could show them again: you could not read what an agent asked
+in, and until now nothing in the UI could show them again: you could not read what you asked
 yesterday, see which passages a reply was given, continue a thread, or clean up. The routes have existed
 since `2026-11-20-conversations.md`; this is their screen. Layout and copy follow the approved
 "Conversations" mock.
@@ -36,17 +36,19 @@ since `2026-11-20-conversations.md`; this is their screen. Layout and copy follo
    …/conversations/{id}` once: your messages as bubbles, replies as cards with their meta line and their
    sources beside them, through the same `Sources` the playground uses, so a citation opens the same
    passage preview. `messageBody()` (`src/conversations/thread.ts`) decides what a stored message shows:
-   what was written, the reason it failed, or why a reply that found nothing has no text.
+   what was written, the reason it failed (alongside any partial text when a reply failed part-way
+   through), or why a reply that found nothing has no text.
 3. **Carrying it on** (`src/playground/use-chat.ts`, `chat-view.tsx`). `useChat()` takes an optional
    conversation id, so the same hook that starts a conversation in the playground continues a stored one
    here; the component is keyed by conversation, which is how the id is read once. The stored messages
    are what was there when the screen opened and the live turns are what this page added, so nothing is
-   shown twice and no refetch is needed. The box and the turn view moved out of `chat-panel.tsx`
-   unchanged into `chat-view.tsx`, which both screens now render.
+   shown twice and no refetch is needed; finishing a reply refreshes only the exact list query, and a 503
+   refreshes only the exact workspace query so an open thread is never refetched underneath live turns.
+   The box and the turn view moved out of `chat-panel.tsx` unchanged into `chat-view.tsx`, which both
+   screens now render.
 4. **Deleting** (`src/conversations/queries.ts`). A confirmation dialog naming the conversation and how
-   many messages go with it, then `DELETE …/conversations/{id}`, the list invalidated and the selection
-   cleared. It follows the library's delete dialog, including returning focus to the list rather than to
-   a button that no longer exists.
+   many messages go with it, then `DELETE …/conversations/{id}`, removing the deleted detail query from
+   cache, invalidating only the exact list query, and clearing the URL selection with `{ replace: true }`.
 5. **Getting there** (`src/components/workspace-nav.tsx`, `src/playground/chat-panel.tsx`). A
    "Conversations" entry in the workspace nav for every access level — a reader's conversations are their
    own — and the conversation id in Chat mode's footer is now a link to `?c=` on this screen.

@@ -12,9 +12,12 @@ export function conversationName({ title }: Conversation): string {
  */
 export function messageBody({ content, status, grounded, error }: Message): {
   text: string;
+  error: string | null;
   failed: boolean;
 } {
-  if (status === 'failed') return { text: content ?? error ?? 'The reply failed.', failed: true };
-  if (grounded === false) return { text: content ?? NOT_GROUNDED, failed: false };
-  return { text: content ?? '', failed: false };
+  if (status === 'failed') {
+    return { text: content ?? '', error: error ?? 'The reply failed.', failed: true };
+  }
+  if (grounded === false) return { text: content ?? NOT_GROUNDED, error: null, failed: false };
+  return { text: content ?? '', error: null, failed: false };
 }

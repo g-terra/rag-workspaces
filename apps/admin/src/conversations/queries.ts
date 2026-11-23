@@ -3,7 +3,8 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { useAuth } from '@/auth/auth-context';
 
 const path = (slug: string) => `/v1/workspaces/${encodeURIComponent(slug)}/conversations`;
-const listKey = (slug: string) => ['workspaces', slug, 'conversations'];
+const listKey = (slug: string) => ['workspaces', slug, 'conversations'] as const;
+const detailKey = (slug: string, id: string | null) => ['workspaces', slug, 'conversations', id] as const;
 
 interface Page {
   data: Conversation[];
@@ -30,18 +31,22 @@ export function useConversations(slug: string) {
 export function useConversation(slug: string, id: string | null) {
   const { api } = useAuth();
   return useQuery({
-    queryKey: ['workspaces', slug, 'conversations', id],
+    queryKey: detailKey(slug, id),
     queryFn: () => api<ConversationWithMessages>(`${path(slug)}/${encodeURIComponent(id!)}`),
     enabled: id !== null,
   });
 }
 
-/** Deletes a conversation and its messages, then drops it from the list. */
+/** Deletes a conversation and its messages, drops its cached detail and refreshes the list. */
 export function useDeleteConversation(slug: string) {
   const { api } = useAuth();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api<null>(`${path(slug)}/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: listKey(slug) }),
+    onSuccess: (_data, id) => {
+      // Remove the detail entry instead of refetching it (it would 404), and refresh only the list.
+      queryClient.removeQueries({ queryKey: detailKey(slug, id), exact: true });
+      return queryClient.invalidateQueries({ queryKey: listKey(slug), exact: true });
+    },
   });
 }
