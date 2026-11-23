@@ -1,6 +1,7 @@
 import type { Document } from '@rag/shared';
 import { Upload as UploadIcon } from 'lucide-react';
 import { Fragment, useEffect, useReducer, useRef, useState, type DragEvent } from 'react';
+import { Link } from 'react-router';
 import { ApiError } from '@/api/client';
 import { useAuth } from '@/auth/auth-context';
 import { sendAuthorized } from '@/auth/authorized';
@@ -247,6 +248,9 @@ function Uploader({ slug }: { slug: string }) {
         <section className="bg-card rounded-xl border" aria-label="This session">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b px-5 py-3.5">
             <h2 className="text-sm font-semibold">This session · {sessionSummary(session)}</h2>
+            <Button variant="outline" size="sm" asChild>
+              <Link to={`/w/${slug}/documents`}>View in library</Link>
+            </Button>
           </div>
           <ul>
             {session.rows.map((row) => {

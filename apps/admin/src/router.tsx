@@ -7,6 +7,7 @@ import { RootRedirect } from '@/routes/root-redirect';
 import { SignIn } from '@/routes/sign-in';
 import { WorkspaceHome } from '@/routes/workspace-home';
 import { WorkspaceLayout } from '@/routes/workspace-layout';
+import { Documents } from '@/routes/documents';
 import { Upload } from '@/routes/upload';
 import { Workspaces } from '@/routes/workspaces';
 
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
             children: [
               { index: true, element: <WorkspaceHome /> },
               { path: 'upload', element: <Upload /> },
+              { path: 'documents', element: <Documents /> },
             ],
           },
           { path: '*', element: <NotFound /> },

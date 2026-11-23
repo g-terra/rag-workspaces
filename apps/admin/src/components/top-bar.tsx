@@ -1,8 +1,8 @@
-import { Fragment } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 
-/** The strip above every page: where you are, and the API's Swagger docs. */
-export function TopBar({ trail }: { trail: string[] }) {
+/** The strip above every page: where you are, the page's own actions, and the API's Swagger docs. */
+export function TopBar({ trail, children }: { trail: string[]; children?: ReactNode }) {
   return (
     <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b px-6 py-2">
       <p className="text-muted-foreground text-sm">
@@ -13,9 +13,12 @@ export function TopBar({ trail }: { trail: string[] }) {
           </Fragment>
         ))}
       </p>
-      <Button variant="outline" size="sm" asChild>
-        <a href="/api/docs/">API docs</a>
-      </Button>
+      <div className="flex gap-2">
+        {children}
+        <Button variant="outline" size="sm" asChild>
+          <a href="/api/docs/">API docs</a>
+        </Button>
+      </div>
     </div>
   );
 }
