@@ -70,6 +70,14 @@ const ConfigSchema = z.object({
    * passage out and an answer says the workspace does not cover the question.
    */
   DEFAULT_MIN_SCORE: z.coerce.number().min(0).max(1).default(0.3),
+  /**
+   * `reasoning_effort` sent to the chat model by workspaces that do not set their own, e.g. "none" to
+   * stop Qwen 3 thinking before every answer. Unset: nothing is sent.
+   */
+  DEFAULT_REASONING_EFFORT: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.enum(['none', 'minimal', 'low', 'medium', 'high']).optional(),
+  ),
 
   // --- Model providers (keys stay here, never in Langflow's environment) ---
   /** LM Studio's OpenAI-compatible server, as Langflow's container reaches it. */

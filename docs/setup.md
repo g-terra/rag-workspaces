@@ -73,6 +73,10 @@ when `lms` is installed.
 
 The containers reach LM Studio at `host.docker.internal:1234` (`LMSTUDIO_BASE_URL`).
 
+A thinking model such as Qwen 3 reasons before every answer by default, which can take minutes on a laptop.
+Set `DEFAULT_REASONING_EFFORT=none` in `.env` (or a workspace's reasoning effort) to turn that off; LM Studio
+honours it. Run `docker compose up -d api` after changing `.env`.
+
 ### A hosted provider instead
 
 Put the key in `.env` and point the defaults at it, then run `docker compose up -d api`:

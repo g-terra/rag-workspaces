@@ -4,6 +4,9 @@ The workspace's model provider is a setting (LM Studio by default; OpenAI,
 Anthropic or Gemini as options), so the API passes provider, model_name and
 api_key as tweaks and one answer flow serves every workspace. The API holds the
 provider keys and sends them per request; Langflow's environment holds none.
+
+`reasoning_effort`, when set, goes to LM Studio and OpenAI as the chat completions parameter of that name:
+"none" stops Qwen 3 thinking before it answers. Anthropic and Gemini are not sent it.
 """
 
 from lfx.base.models.model import LCModelComponent
@@ -29,6 +32,8 @@ class WorkspaceChatModel(LCModelComponent):
         MessageTextInput(name="base_url", display_name="Base URL", advanced=True,
                          info="Defaults: LM Studio on the host; each cloud provider's own endpoint."),
         FloatInput(name="temperature", display_name="Temperature", value=0.2),
+        MessageTextInput(name="reasoning_effort", display_name="Reasoning Effort", advanced=True,
+                         info="none, minimal, low, medium or high; empty sends nothing. LM Studio and OpenAI only."),
     ]
 
     def build_model(self) -> LanguageModel:
@@ -38,8 +43,10 @@ class WorkspaceChatModel(LCModelComponent):
         if provider in {"lmstudio", "openai"}:
             from langchain_openai import ChatOpenAI
 
+            effort = (self.reasoning_effort or "").strip()
+            extra = {"reasoning_effort": effort} if effort else {}
             return ChatOpenAI(model=self.model_name, api_key=self.api_key or "lm-studio", base_url=base_url,
-                              stream_usage=True, **common)
+                              stream_usage=True, **extra, **common)
         if provider == "anthropic":
             from langchain_anthropic import ChatAnthropic
 

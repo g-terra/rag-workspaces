@@ -6,6 +6,12 @@ export const ChatProvider = z.enum(['lmstudio', 'openai', 'anthropic', 'gemini']
 export type ChatProvider = z.infer<typeof ChatProvider>;
 /** Anthropic has no embedding models, so it is not an embedding provider. */
 export const EmbeddingProvider = z.enum(['lmstudio', 'openai', 'gemini']);
+/**
+ * How much a reasoning model thinks before it answers, sent as `reasoning_effort` to LM Studio and
+ * OpenAI. "none" turns thinking off (Qwen 3 in LM Studio honours it); other providers ignore it.
+ */
+export const ReasoningEffort = z.enum(['none', 'minimal', 'low', 'medium', 'high']);
+export type ReasoningEffort = z.infer<typeof ReasoningEffort>;
 export type EmbeddingProvider = z.infer<typeof EmbeddingProvider>;
 
 /**
@@ -27,6 +33,8 @@ export const WorkspaceSettings = z.object({
   chunkOverlap: z.number().int().min(0).max(2000).nullable(),
   topK: z.number().int().min(1).max(50).nullable(),
   minScore: z.number().min(0).max(1).nullable(),
+  /** `null`: the `.env` default (`DEFAULT_REASONING_EFFORT`), and when that is unset too, nothing is sent. */
+  reasoningEffort: ReasoningEffort.nullable(),
 });
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettings>;
 

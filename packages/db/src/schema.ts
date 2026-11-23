@@ -40,6 +40,7 @@ export type WorkspaceSettings = {
   chunkOverlap?: number | null;
   topK?: number | null;
   minScore?: number | null;
+  reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | null;
 };
 
 export const workspaces = pgTable(
