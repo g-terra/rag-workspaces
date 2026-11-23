@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
-import { Link, Outlet, useParams } from 'react-router';
+import { useEffect, type ReactNode } from 'react';
+import { Link, Navigate, Outlet, useParams } from 'react-router';
 import { ErrorState, Loading, Notice } from '@/components/states';
 import { Button } from '@/components/ui/button';
+import { useCurrentWorkspace } from '@/workspaces/current';
 import { rememberSlug } from '@/workspaces/landing';
 import { isMissingWorkspace, useWorkspace } from '@/workspaces/queries';
 
@@ -41,4 +42,14 @@ export function WorkspaceLayout() {
     );
   }
   return <Outlet context={workspace.data} />;
+}
+
+/**
+ * A screen for a workspace's own documents (Upload, Documents). A composite has none, so a bookmark or
+ * typed address goes to its overview, which lists the sources that hold them.
+ */
+export function StandardOnly({ children }: { children: ReactNode }) {
+  const workspace = useCurrentWorkspace();
+  if (workspace.kind === 'composite') return <Navigate to={`/w/${workspace.slug}`} replace />;
+  return children;
 }

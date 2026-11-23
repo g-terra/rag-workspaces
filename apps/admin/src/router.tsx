@@ -6,7 +6,7 @@ import { NotFound } from '@/routes/not-found';
 import { RootRedirect } from '@/routes/root-redirect';
 import { SignIn } from '@/routes/sign-in';
 import { WorkspaceHome } from '@/routes/workspace-home';
-import { WorkspaceLayout } from '@/routes/workspace-layout';
+import { StandardOnly, WorkspaceLayout } from '@/routes/workspace-layout';
 import { Conversations } from '@/routes/conversations';
 import { Documents } from '@/routes/documents';
 import { Playground } from '@/routes/playground';
@@ -38,8 +38,22 @@ export const router = createBrowserRouter([
             element: <WorkspaceLayout />,
             children: [
               { index: true, element: <WorkspaceHome /> },
-              { path: 'upload', element: <Upload /> },
-              { path: 'documents', element: <Documents /> },
+              {
+                path: 'upload',
+                element: (
+                  <StandardOnly>
+                    <Upload />
+                  </StandardOnly>
+                ),
+              },
+              {
+                path: 'documents',
+                element: (
+                  <StandardOnly>
+                    <Documents />
+                  </StandardOnly>
+                ),
+              },
               { path: 'playground', element: <Playground /> },
               { path: 'conversations', element: <Conversations /> },
               { path: 'usage', element: <Usage /> },

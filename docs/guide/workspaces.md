@@ -29,6 +29,21 @@ five steps. A timeline at the top shows where you are and lets you go back to an
 
 Through the API: `POST /v1/workspaces { "name": "OUC", "slug": "ouc" }`.
 
+## Composite workspaces (admins)
+
+A composite workspace has no documents of its own. It names two to ten ordinary workspaces as its
+**sources**, for example `study` = `ouc` + `personal`, and answers, chats and searches across all of them,
+with its own slug, members, API keys, chat model, system prompt, style and usage. One key for `study` is
+enough for an agent to ask about both; access to a composite gives nothing else in its sources.
+
+"New composite" on "All workspaces" asks for a name, a slug and the sources. A composite has no Upload or
+Documents page (add material to its sources), and its Settings have a Sources section instead of the
+embedding, chunking and threshold settings, which belong to each source. Each citation names the source
+workspace it came from.
+
+Through the API: `POST /v1/workspaces { "name": "Study", "slug": "study", "kind": "composite",
+"sources": ["ouc", "personal"] }`.
+
 ## The overview page
 
 Each workspace opens on an overview with its slug, its API base path, its status (`active` or

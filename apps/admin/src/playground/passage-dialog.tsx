@@ -5,6 +5,8 @@ import { DocumentPreviewDialog, type PreviewTarget } from '@/components/document
 import { ErrorState, Loading } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { documentHome } from '@/workspaces/composite';
+import { useWorkspaces } from '@/workspaces/queries';
 import { passageWhere } from './answer';
 import { usePassage } from './queries';
 
@@ -30,6 +32,10 @@ export function PassageDialog({
   const passage = usePassage(slug, shown);
   const found = passage.data?.passage;
   const [preview, setPreview] = useState<PreviewTarget | null>(null);
+  // The document lives in the passage's own workspace: through a composite, one of its sources, which
+  // the caller may not be able to open (then there is no document to link to).
+  const workspaces = useWorkspaces();
+  const home = found ? documentHome(found.workspace, workspaces.data ?? []) : null;
 
   return (
     <Dialog open={passageId !== null} onOpenChange={(open) => !open && onClose()}>
@@ -66,7 +72,7 @@ export function PassageDialog({
               <p className="text-muted-foreground font-mono text-xs">{passage.data.passage.id}</p>
               <div className="flex flex-wrap gap-2">
                 {/* Only PDF passages carry a page, so a page means there is a PDF to show. */}
-                {passage.data.passage.page !== null && (
+                {home && passage.data.passage.page !== null && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -88,20 +94,22 @@ export function PassageDialog({
                     </a>
                   </Button>
                 )}
-                <Button variant="outline" size="sm" asChild>
-                  <Link
-                    to={`/w/${slug}/documents?doc=${encodeURIComponent(passage.data.passage.documentId)}`}
-                  >
-                    <FileText /> Open the document
-                  </Link>
-                </Button>
+                {home && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link
+                      to={`/w/${home}/documents?doc=${encodeURIComponent(passage.data.passage.documentId)}`}
+                    >
+                      <FileText /> Open the document
+                    </Link>
+                  </Button>
+                )}
               </div>
             </div>
           </>
         )}
         {/* Inside the content, so Radix stacks it on this dialog: a click in the preview isn't a click
             outside the passage, which would close both. */}
-        <DocumentPreviewDialog slug={slug} target={preview} onClose={() => setPreview(null)} />
+        <DocumentPreviewDialog slug={home ?? slug} target={preview} onClose={() => setPreview(null)} />
       </DialogContent>
     </Dialog>
   );

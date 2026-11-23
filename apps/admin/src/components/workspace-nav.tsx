@@ -12,14 +12,17 @@ export function WorkspaceNav() {
   return (
     <nav aria-label="Workspace" className="flex flex-col gap-0.5">
       <p className="text-muted-foreground mb-1 px-2.5 text-xs font-medium">Workspace</p>
-      {workspace.access !== 'reader' && (
+      {/* A composite has no documents of its own: its sources hold them. */}
+      {workspace.kind === 'standard' && workspace.access !== 'reader' && (
         <NavLink to={`${base}/upload`} className={navItemClass} data-tour="upload">
           <Upload className="size-4" /> Upload
         </NavLink>
       )}
-      <NavLink to={`${base}/documents`} className={navItemClass} data-tour="documents">
-        <FileText className="size-4" /> Documents
-      </NavLink>
+      {workspace.kind === 'standard' && (
+        <NavLink to={`${base}/documents`} className={navItemClass} data-tour="documents">
+          <FileText className="size-4" /> Documents
+        </NavLink>
+      )}
       <NavLink to={`${base}/playground`} className={navItemClass} data-tour="playground">
         <Sparkles className="size-4" /> Playground
       </NavLink>

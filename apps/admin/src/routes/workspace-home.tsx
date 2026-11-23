@@ -10,6 +10,7 @@ export function WorkspaceHome() {
     ['API', `/v1/workspaces/${w.slug}`],
     ['Status', w.status],
     ['Your access', w.access],
+    ...(w.kind === 'composite' ? [['Sources', w.sources?.join(', ') || 'none'] as [string, string]] : []),
   ];
   return (
     <>

@@ -2,6 +2,7 @@ import { Search } from 'lucide-react';
 import { useState } from 'react';
 import { ErrorState, Loading, Notice } from '@/components/states';
 import { Button } from '@/components/ui/button';
+import { SourceWorkspace } from './answer-view';
 import { useCurrentWorkspace } from '@/workspaces/current';
 import { passageWhere } from './answer';
 import { PassageDialog } from './passage-dialog';
@@ -84,7 +85,8 @@ export function SearchPanel() {
                   className="text-[13px] font-semibold hover:underline"
                 >
                   {passageWhere(hit)}
-                </button>
+                </button>{' '}
+                <SourceWorkspace slug={hit.workspace} />
                 <p className="mt-1 line-clamp-3 text-sm leading-snug">{hit.text}</p>
               </div>
             </div>

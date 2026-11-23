@@ -1,4 +1,4 @@
-import type { Answer } from '@rag/shared';
+import type { Answer, Workspace } from '@rag/shared';
 import { Search, Sparkles, SquareIcon, ThumbsDown, ThumbsUp, Upload } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -62,7 +62,7 @@ export function AskPanel() {
       {ask.error && ask.status === 'failed' && <AnswerFailure error={ask.error} onRetry={submit} />}
 
       {ask.answer && foundNothing(ask.answer) ? (
-        <NotFound slug={w.slug} question={ask.question}>
+        <NotFound workspace={w} question={ask.question}>
           <AnswerFeedback answer={ask.answer} onRated={ask.rated} />
         </NotFound>
       ) : (
@@ -207,7 +207,17 @@ function Thumb({
  * still stored the answer, so it can be rated: a question the workspace should have covered is exactly
  * the one worth flagging.
  */
-function NotFound({ slug, question, children }: { slug: string; question: string; children: ReactNode }) {
+function NotFound({
+  workspace,
+  question,
+  children,
+}: {
+  workspace: Workspace;
+  question: string;
+  children: ReactNode;
+}) {
+  // A composite has no upload of its own: its material is added in its source workspaces.
+  const composite = workspace.kind === 'composite';
   return (
     <div className="bg-card flex flex-col gap-4 rounded-xl border p-7">
       <div className="flex flex-wrap items-start gap-4">
@@ -217,14 +227,18 @@ function NotFound({ slug, question, children }: { slug: string; question: string
         <div className="flex-[1_1_300px]">
           <h2 className="mb-1.5 text-[15px] font-semibold">Not found in this workspace</h2>
           <p className="text-muted-foreground mb-3.5 text-sm leading-relaxed">
-            No passage was close enough to “{question}”, so no answer was generated. Upload material that
-            covers it, or ask in the words the material uses.
+            No passage was close enough to “{question}”, so no answer was generated.{' '}
+            {composite
+              ? `Add material that covers it to one of its sources (${workspace.sources?.join(', ')}), or ask in the words the material uses.`
+              : 'Upload material that covers it, or ask in the words the material uses.'}
           </p>
-          <Button variant="outline" size="sm" asChild>
-            <Link to={`/w/${slug}/upload`}>
-              <Upload /> Upload material
-            </Link>
-          </Button>
+          {!composite && (
+            <Button variant="outline" size="sm" asChild>
+              <Link to={`/w/${workspace.slug}/upload`}>
+                <Upload /> Upload material
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
       {children}

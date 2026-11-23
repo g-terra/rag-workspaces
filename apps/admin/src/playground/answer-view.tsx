@@ -1,7 +1,10 @@
 import type { Citation } from '@rag/shared';
+import { useMatch } from 'react-router';
 import { Notice } from '@/components/states';
 import { Button } from '@/components/ui/button';
+import { sourceLabel } from '@/workspaces/composite';
 import { useCurrentWorkspace } from '@/workspaces/current';
+import { useWorkspaces } from '@/workspaces/queries';
 import { clock } from './answer';
 import { AnswerMarkdown } from './answer-markdown';
 import { answerFailure, type AnswerError } from './failure';
@@ -57,6 +60,13 @@ function CitationMarker({ rank, onOpen }: { rank: number; onOpen(): void }) {
   );
 }
 
+/** Which source workspace a passage came from, when it was found through a composite; nothing otherwise. */
+export function SourceWorkspace({ slug }: { slug: string }) {
+  const asked = useMatch('/w/:slug/*')?.params.slug ?? slug;
+  const label = sourceLabel(slug, asked, useWorkspaces().data ?? []);
+  return label ? <span className="text-muted-foreground text-xs">from {label}</span> : null;
+}
+
 /** The passages the model was given, best first, each opening its full text. */
 export function Sources({ citations, onOpen }: { citations: Citation[]; onOpen(passageId: string): void }) {
   return (
@@ -80,6 +90,7 @@ export function Sources({ citations, onOpen }: { citations: Citation[]; onOpen(p
             <span className="flex-1 truncate text-[13px] font-semibold">{c.documentTitle}</span>
             <span className="text-muted-foreground font-mono text-xs">{formatScore(c.score)}</span>
           </span>
+          <SourceWorkspace slug={c.workspace} />
           {c.sourceUrl && (
             <span className="text-muted-foreground truncate text-xs">{displayUrl(c.sourceUrl)}</span>
           )}
