@@ -15,7 +15,10 @@ export interface WizardForm extends SettingsForm {
   embeddingModel: string;
 }
 
-export const STEPS = ['Basics', 'Models', 'Retrieval', 'Review'] as const;
+export const STEPS = ['Basics', 'Chat', 'Embeddings', 'Retrieval', 'Review'] as const;
+
+/** The last step, where the workspace is created. */
+export const REVIEW = STEPS.length - 1;
 
 /** Keys typed in the wizard, by provider; held in memory until the workspace exists. */
 export type TypedKeys = Partial<Record<HostedProvider, string>>;
@@ -38,7 +41,7 @@ export function emptyWizard(): WizardForm {
   };
 }
 
-type ErrorField = keyof WizardForm | 'keys';
+type ErrorField = keyof WizardForm | 'chatKey' | 'embeddingKey';
 export type WizardErrors = Partial<Record<ErrorField, string>>;
 
 const STEP_OF: Record<ErrorField, number> = {
@@ -47,15 +50,16 @@ const STEP_OF: Record<ErrorField, number> = {
   description: 0,
   chatProvider: 1,
   chatModel: 1,
-  embeddingProvider: 1,
-  embeddingModel: 1,
-  keys: 1,
+  chatKey: 1,
   reasoningEffort: 1,
-  systemPrompt: 2,
-  chunkSize: 2,
-  chunkOverlap: 2,
-  topK: 2,
-  minScore: 2,
+  embeddingProvider: 2,
+  embeddingModel: 2,
+  embeddingKey: 2,
+  systemPrompt: 3,
+  chunkSize: 3,
+  chunkOverlap: 3,
+  topK: 3,
+  minScore: 3,
 };
 
 /** The step that shows a field, so a failed create can open the step with the problem. */
@@ -72,18 +76,14 @@ function chosenHosted(form: WizardForm): HostedProvider[] {
 }
 
 /**
- * The hosted providers the form uses that have no key: none in `.env` (the system status says so)
- * and none typed here. Without a system status nothing is known, so nothing is asked for.
+ * Whether a provider still needs a key typed and checked here: it is hosted, `.env` has none for it
+ * (the system status says so), and none was checked in this wizard. A key checked for one step counts
+ * for the other, so Gemini for chat and for embeddings asks once. Without a system status nothing is
+ * known, so nothing is asked for.
  */
-export function missingKeys(
-  form: WizardForm,
-  system: SystemStatus | undefined,
-  keys: TypedKeys,
-): HostedProvider[] {
-  if (!system) return [];
-  return chosenHosted(form).filter(
-    (id) => !keys[id] && !system.providers.find((p) => p.id === id)?.configured,
-  );
+export function needsKey(provider: string, system: SystemStatus | undefined, keys: TypedKeys): boolean {
+  if (!system || !isHosted(provider) || keys[provider]) return false;
+  return !system.providers.find((p) => p.id === provider)?.configured;
 }
 
 /** A provider's models: those listed when its typed key was checked, else the system's list. */
@@ -148,8 +148,9 @@ export function buildCreate(form: WizardForm, keys: TypedKeys, system: SystemSta
   if (!embeddingProvider && embeddingModel)
     errors.embeddingProvider = 'Pick the provider this model belongs to.';
 
-  const missing = missingKeys(form, system, keys);
-  if (missing.length > 0) errors.keys = `Add a key for ${missing.join(' and ')}, or pick another provider.`;
+  const keyNeeded = (provider: string) => `Add a ${provider} key and check it, or pick another provider.`;
+  if (needsKey(form.chatProvider, system, keys)) errors.chatKey = keyNeeded(form.chatProvider);
+  if (needsKey(form.embeddingProvider, system, keys)) errors.embeddingKey = keyNeeded(form.embeddingProvider);
 
   const fields = Object.keys(errors) as ErrorField[];
   if (!basics.ok || !settings.ok || fields.length > 0) {
@@ -165,4 +166,22 @@ export function buildCreate(form: WizardForm, keys: TypedKeys, system: SystemSta
     return apiKey ? [{ provider, apiKey }] : [];
   });
   return { ok: true, body, keys: saved };
+}
+
+/**
+ * What keeps the wizard on a step: that step's own problems, so Next waits until it is complete. On
+ * the review step, every problem, because that is where the workspace is created.
+ */
+export function stepErrors(
+  step: number,
+  form: WizardForm,
+  keys: TypedKeys,
+  system: SystemStatus | undefined,
+): WizardErrors {
+  const built = buildCreate(form, keys, system);
+  if (built.ok) return {};
+  if (step === REVIEW) return built.errors;
+  return Object.fromEntries(
+    Object.entries(built.errors).filter(([field]) => stepOf(field as ErrorField) === step),
+  ) as WizardErrors;
 }
