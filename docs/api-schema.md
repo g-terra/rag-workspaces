@@ -32,7 +32,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Answer (+ feedback) | `/v1/workspaces/{slug}/answers` | reader; an answer is visible only to whoever asked and to admins |
 | Conversation (+ messages) | `/v1/workspaces/{slug}/conversations` | reader; a conversation is visible only to whoever started it and to admins |
 | Usage | `/v1/usage`, `/v1/workspaces/{slug}/usage` | admin (global), editor (own workspace) |
-| User *(planned)* | `/v1/users` | admin |
+| User | `/v1/users` | admin |
 | System *(planned)* | `/v1/system` | admin |
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
@@ -161,7 +161,13 @@ Question text is kept for a configurable time (`USAGE_QUESTION_RETENTION_DAYS`, 
 | GET, POST | `/v1/api-keys` | List keys (last used; request count planned); create one |
 | GET, PATCH, DELETE | `/v1/api-keys/{keyId}` | Read; rename, change workspaces or expiry (the role can't change: `400`); revoke (the key stays listed with `revokedAt`) |
 | GET | `/v1/me` | The signed-in user or the key, with roles and workspaces |
-| GET | `/v1/users` *(planned)* | People known to Keycloak (id, name, email, admin or not), read-only, so an admin can grant access before someone's first login |
+| GET | `/v1/users?search=…&limit=…&cursor=…` | People in Keycloak (id, username, name, email, admin or not, enabled), read-only, so an admin can grant access before someone's first login. Admins only; `503` when Keycloak can't be reached or the people list isn't set up |
+
+```json
+// GET /v1/users?search=ali → 200 (admin only). The id is the userId for workspace members.
+{ "data": [{ "id": "5b0d1c5e-…", "username": "alice", "email": "alice@example.com", "name": "Alice Example",
+  "isAdmin": false, "enabled": true }], "nextCursor": null }
+```
 
 ```json
 // POST /v1/api-keys → 201 (admin only)

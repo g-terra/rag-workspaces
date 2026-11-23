@@ -137,6 +137,13 @@ async function main() {
     const me = await call(token, 'GET', '/v1/me');
     expect(me.isAdmin === true, `expected isAdmin true, got ${JSON.stringify(me)}`);
   });
+  await step('GET /v1/users lists the admin, read through the api-directory service account', async () => {
+    const { data } = (await call(token, 'GET', `/v1/users?search=${env.RW_ADMIN_USERNAME}`)) as {
+      data: { username: string; isAdmin: boolean }[];
+    };
+    const admin = data.find((u) => u.username === env.RW_ADMIN_USERNAME);
+    expect(admin?.isAdmin === true, `expected the admin with isAdmin true, got ${JSON.stringify(data)}`);
+  });
 
   const slug = `smoke-${Date.now()}`;
   const collection = `ws_${slug}`;
