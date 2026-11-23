@@ -115,6 +115,12 @@ from their material, under its own slug, members, API keys, chat settings, style
   apply to its answers.
 - Access to a composite is enough to ask, chat and search across its sources. It grants nothing else in them.
 - Its document, folder and reindex routes (and a document's passages) answer `409`: those live in the sources.
+- Answers, chat messages and passage search search each source with that source's own embedding model, prefixes,
+  provider keys and `minScore` (for up to the composite's `topK`), skip a source that is reindexing, and fuse the lists
+  by rank (RRF, k = 60): with sources that share no passages, they take turns, best first. The composite's chat model
+  then answers through the `rw-generate` flow. `minScore` in a composite's passage search is `400`.
+- Every passage and citation has `workspace`: the slug of the workspace it comes from (for a composite, a source). A
+  cited passage can be read through the composite (`GET /v1/workspaces/{composite}/passages/{passageId}`).
 
 ### Provider keys per workspace
 
@@ -155,7 +161,7 @@ A hosted provider's key can be saved for one workspace from the admin UI, and th
 // 201
 { "id": "ans_01J…", "workspace": "ouc", "question": "…", "text": "Retrieval-augmented generation combines …",
   "status": "complete", "grounded": true,
-  "citations": [ { "rank": 1, "passageId": "psg_01J…", "documentId": "doc_01J…", "documentTitle": "Week 3 slides",
+  "citations": [ { "rank": 1, "workspace": "ouc", "passageId": "psg_01J…", "documentId": "doc_01J…", "documentTitle": "Week 3 slides",
                    "page": 12, "startSeconds": null, "snippet": "RAG retrieves relevant passages …", "score": 0.83 } ],
   "provider": "lmstudio", "model": "openai/gpt-oss-20b", "style": "academic",
   "usage": { "promptTokens": 1840, "completionTokens": 212 },

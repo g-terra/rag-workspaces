@@ -105,6 +105,20 @@ The prompt template uses `{history}`, `{context}` and `{question}`. Outputs are 
 The search hangs off the chat input on purpose: Langflow only returns outputs downstream of the chat
 input, so a separate text input for the query loses `ChatOutput-citations`.
 
+### `rw-generate`: answer from passages the API gives it (streams)
+
+Used for [composite workspaces](../docs/api-schema.md#composite-workspaces): the API searches each source with
+`rw-retrieve` (each with its own embedding model), fuses the lists by rank, and sends the passages here. It is `rw-chat`
+without the `Embeddings`, `Search` and `ChatOutput-citations` nodes; the chat input feeds the prompt's `question`.
+
+| Node | Tweak fields |
+|---|---|
+| `ChatInput` | `input_value` (top-level): the question or latest message |
+| `Prompt` | `context`: the numbered passages, `[n] (<workspace>: <title>, page p)` then the text. `history`: earlier turns, or `(this is the first message)` |
+| `LLM` | as `rw-answer` |
+
+Output `ChatOutput-answer` only: the API already knows the passages it sent, so it stores them as the citations.
+
 ### `rw-delete`: delete a document's vectors
 
 | Node | Tweak fields |

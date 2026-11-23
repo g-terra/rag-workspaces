@@ -644,6 +644,48 @@ async function main() {
     );
   });
 
+  await step('a composite workspace answers from both of its sources through rw-generate', async () => {
+    const other = `${slug}-b`;
+    const study = `${slug}-c`;
+    await call(token, 'POST', '/v1/workspaces', {
+      slug: other,
+      name: 'Smoke source B',
+      settings: { minScore: 0 },
+    });
+    try {
+      const form = new FormData();
+      form.append('files', new Blob(['The vector store keeps one collection per workspace.']), 'store.md');
+      const { data } = (await call(token, 'POST', `/v1/workspaces/${other}/documents`, form)) as {
+        data: { document: Doc }[];
+      };
+      await waitUntilReady(
+        token,
+        other,
+        data.map((d) => d.document.id),
+      );
+      await call(token, 'POST', '/v1/workspaces', {
+        slug: study,
+        name: 'Smoke composite',
+        kind: 'composite',
+        sources: [slug, other],
+      });
+      const answer = await call(token, 'POST', `/v1/workspaces/${study}/answers`, {
+        question: 'What does Chroma store?',
+      });
+      const from = new Set(answer.citations.map((c: { workspace: string }) => c.workspace));
+      expect(
+        answer.status === 'complete' && answer.workspace === study && from.has(slug) && from.has(other),
+        `answer: ${JSON.stringify(answer)}`,
+      );
+      const cited = answer.citations.find((c: { workspace: string }) => c.workspace === other);
+      const preview = await call(token, 'GET', `/v1/workspaces/${study}/passages/${cited.passageId}`);
+      expect(preview.passage.workspace === other, `preview: ${JSON.stringify(preview)}`);
+    } finally {
+      await call(token, 'DELETE', `/v1/workspaces/${study}`).catch(() => undefined);
+      await call(token, 'DELETE', `/v1/workspaces/${other}`);
+    }
+  });
+
   await step('deleted the workspace, its Chroma collection is gone', async () => {
     await call(token, 'DELETE', `/v1/workspaces/${slug}`);
     const res = await chroma(`/collections/${collection}`);
