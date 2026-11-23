@@ -124,7 +124,7 @@ export function ProviderKeyDialog({
                 Cancel
               </Button>
             </DialogClose>
-            <Button type="submit" disabled={save.isPending || apiKey.trim().length < 8}>
+            <Button type="submit" disabled={save.isPending || apiKey.trim().length < 20}>
               {save.isPending ? 'Checking…' : 'Save key'}
             </Button>
           </div>
