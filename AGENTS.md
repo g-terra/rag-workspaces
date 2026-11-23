@@ -85,6 +85,7 @@ pnpm typecheck        # tsc --noEmit
 pnpm test             # Vitest
 pnpm build
 pnpm smoke            # whole compose stack + stand-in model, end to end (Docker, ~5 min)
+pnpm e2e              # admin UI Playwright tests on that same stack (Docker + Chromium)
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same five checks on every pull request. Run them before you
@@ -92,6 +93,8 @@ push. The smoke test (`.github/workflows/smoke.yml`) runs on pull requests that 
 (`apps/api`, `packages`, `flows`, `langflow`, `docker`, the compose files) and nightly on `main`; run
 it locally before pushing such a change. `pnpm smoke --keep` leaves its stack running on ports 13000
 (API), 18080 (admin UI) and 18081 (Keycloak); the login is in `.env.smoke`.
+The admin UI's Playwright tests (`.github/workflows/e2e.yml`, `pnpm e2e`) run on that same stack, on
+pull requests that touch `apps/admin` or the stack, and nightly on `main`.
 
 ## Langflow
 
