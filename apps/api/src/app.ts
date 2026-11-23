@@ -31,6 +31,7 @@ import { DocumentEvents } from './services/document-events.js';
 import { noopQueue, type IngestQueue } from './services/ingest-queue.js';
 import { UploadStorage } from './services/storage.js';
 import { UsageLog, usageLogging } from './usage/log.js';
+import { VERSION } from './version.js';
 
 export type AppDeps = {
   config: Config;
@@ -94,7 +95,7 @@ export async function buildApp({
       openapi: '3.1.0',
       info: {
         title: 'rag-workspaces API',
-        version: '0.1.0',
+        version: VERSION,
         description:
           'Ask questions over your own material, organised in isolated workspaces. ' +
           'Authenticate with `Authorization: Bearer <Keycloak token or rw_ API key>`.',
