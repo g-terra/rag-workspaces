@@ -66,6 +66,7 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
   app.get(
     '/v1/workspaces/:slug/passages',
     {
+      config: { modelCall: true },
       schema: {
         ...common,
         summary: 'Search passages',
