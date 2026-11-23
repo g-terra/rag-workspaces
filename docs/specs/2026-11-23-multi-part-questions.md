@@ -1,7 +1,7 @@
 ---
 title: Search each part of a multi-part question
 date: 2026-11-23
-pr: pending
+pr: "#85"
 status: in review
 areas: [flows, langflow, docs]
 ---
