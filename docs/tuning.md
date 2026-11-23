@@ -41,3 +41,31 @@ the prompt and repeats its grounding rules; the results above were measured with
 - Load the chat and embedding models together (`lms load`), or LM Studio may swap them on every question.
 - Known misses: vague questions ("How does it work?") still get answered; the question about how many targets most versions
   of the Mackworth clock test have still doesn't find the count.
+
+## Response styles
+
+Measured on 2026-11-23 on `ouc-tuning`, with the settings above (`qwen3.6-35b-a3b-splash`, reasoning effort
+`none`, the OUC system prompt): the 15 questions, two more that aren't covered, another vague one, and two that are
+partly covered. One run each; three of the uncovered ones (Kubernetes, GDPR, World Cup) were asked three more times for academic, talkative and tutor. The
+verdicts are one reader's. The set was also used for tuning, so differences of a question are within noise.
+
+| Style     | Correct / partial / wrong of 15 | Median answer | Average words | Refusals                                                                                     |
+| --------- | ------------------------------- | ------------- | ------------- | -------------------------------------------------------------------------------------------- |
+| None      | 13 / 1 / 1                      | 1.6 s         | 62            | All four refused, `grounded: false`                                                          |
+| Academic  | 13 / 1 / 1                      | 2.2 s         | 134           | All refused, but two cite passages about other topics, so `grounded: true`                   |
+| Talkative | 13 / 1 / 1                      | 3.4 s         | 243           | GDPR, World Cup and photosynthesis refused; **Kubernetes answered with RAG material**        |
+| Concise   | 13 / 2 / 0                      | 1.6 s         | 34            | All refused, `grounded: false`                                                               |
+| Tutor     | 12 / 2 / 1                      | 2.2 s         | 106           | GDPR, World Cup and Kubernetes refused, `grounded: false`; photosynthesis refused but cited  |
+
+- **Citations:** every answer to a covered question cites, in `[n]` form, in every style.
+- **Partly covered:** all five runs answered the covered half and said the other half isn't covered.
+- **Vague ("How does it work?"):** talkative asked what was meant; concise said no single subject is named; without a
+  style it said the same, then described two systems; academic and tutor described several systems. On "What are the steps?", none
+  asked.
+- **Known misses:** every style misses the Mackworth target count. Tutor also says Floyd-Warshall "requires" negative weights;
+  concise drops the Fano factor definition.
+- **Talkative and uncovered questions:** asked for a Kubernetes ingress, talkative gave a RAG walk-through (`grounded: true`).
+  On three repeats it was `grounded: true` each time, and two opened as another RAG walk-through. The style's warmth seems to
+  outweigh the refusal rule. Use it with that in mind, or strengthen the rule in its instructions.
+- **Academic refusals:** they sometimes list what the passages do cover, with citations, so `grounded` says `true`.
+  Don't count refusals by `grounded` for that style.
