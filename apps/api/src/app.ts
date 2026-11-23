@@ -133,7 +133,7 @@ export async function buildApp({
   await app.register(healthRoutes, { checks, timeoutMs: config.READY_TIMEOUT_MS });
   await app.register(meRoutes);
   if (db) {
-    await app.register(workspaceRoutes, { db, chroma, storage, config });
+    await app.register(workspaceRoutes, { db, chroma, storage, queue, events, config });
     await app.register(documentRoutes, { db, storage, chroma, queue, events, config });
     await app.register(apiKeyRoutes, { db });
     await app.register(usageRoutes, { db });

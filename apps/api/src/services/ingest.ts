@@ -6,7 +6,7 @@ import {
   parseJsonMessage,
   type LangflowClient,
 } from '@rag/langflow-client';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 import { PgBoss } from 'pg-boss';
 import type { Config } from '../config.js';
@@ -15,6 +15,7 @@ import { ChromaService } from './chroma.js';
 import type { DocumentEvents } from './document-events.js';
 import type { IngestQueue } from './ingest-queue.js';
 import { embeddingEndpoint } from './providers.js';
+import { finishReindexIfDone } from './reindex.js';
 
 type IngestConfig = Pick<
   Config,
@@ -54,11 +55,25 @@ type IngestResult = { document_id: string; chunks: number; pages: number | null 
  *   failed run left behind are deleted, so a failed document is never searchable.
  * - Deleting a document is refused while it is processing, but a delete that lands between
  *   loading the row and marking it `processing` is caught: the run's vectors are removed.
+ * - A run only records its result on the row it claimed (`processing`, this attempt). A
+ *   workspace reindex that sends the document back to `queued` mid-run wins: the stale run
+ *   leaves the row alone and the queued job ingests it again into the new collection.
+ * - The last document of a reindexing workspace to finish puts the workspace back to `active`.
  */
 export class IngestProcessor {
   constructor(private readonly deps: IngestDeps) {}
 
   async process(documentId: string): Promise<IngestOutcome> {
+    const seen: { workspaceId?: string } = {};
+    const outcome = await this.run(documentId, seen);
+    if (outcome !== 'retry' && seen.workspaceId) {
+      const done = await finishReindexIfDone(this.deps.db, seen.workspaceId);
+      if (done) this.deps.log.info({ workspace: done.slug }, 'workspace reindex finished');
+    }
+    return outcome;
+  }
+
+  private async run(documentId: string, seen: { workspaceId?: string }): Promise<IngestOutcome> {
     const { db, langflow, chroma, config, log } = this.deps;
     const [row] = await db
       .select({ document: documents, workspace: workspaces })
@@ -70,6 +85,8 @@ export class IngestProcessor {
     const attempt = document.attempts + 1;
     if (!(await this.update(document.id, { status: 'processing', attempts: attempt, error: null })))
       return 'gone';
+    seen.workspaceId = workspace.id;
+    const claim = { attempts: attempt };
 
     const collection = ChromaService.collectionName(workspace.slug);
     const settings = workspace.settings;
@@ -105,7 +122,13 @@ export class IngestProcessor {
       const result = parseJsonMessage<IngestResult>(
         messageText(outputsByComponent(run)['ChatOutput-result']),
       );
-      if (!(await this.update(document.id, { status: 'ready', passageCount: result.chunks, error: null }))) {
+      if (
+        !(await this.update(
+          document.id,
+          { status: 'ready', passageCount: result.chunks, error: null },
+          claim,
+        ))
+      ) {
         await chroma.deleteDocumentVectors(collection, document.id);
         return 'gone';
       }
@@ -118,7 +141,9 @@ export class IngestProcessor {
         // The next attempt or a reindex starts by deleting them again.
         log.warn({ documentId, err: cleanupErr }, 'could not remove vectors of a failed run');
       });
-      await this.update(document.id, { status: last ? 'failed' : 'queued', error: reason });
+      // Superseded (a workspace reindex requeued it) or deleted: the row is not ours to fail.
+      if (!(await this.update(document.id, { status: last ? 'failed' : 'queued', error: reason }, claim)))
+        return 'gone';
       log.warn({ documentId, attempt, last, reason }, 'ingestion failed');
       return last ? 'failed' : 'retry';
     }
@@ -137,6 +162,12 @@ export class IngestProcessor {
       .returning();
     for (const doc of stuck) this.deps.events.emit({ workspaceId: doc.workspaceId, document: doc });
     if (stuck.length) this.deps.log.warn({ count: stuck.length }, 'requeued documents left mid-run');
+    // A reindex whose last document finished just before a crash would otherwise stay open.
+    const reindexing = await db
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.status, 'reindexing'));
+    for (const w of reindexing) await finishReindexIfDone(db, w.id);
     const queued = await db
       .select({ id: documents.id })
       .from(documents)
@@ -144,9 +175,15 @@ export class IngestProcessor {
     return queued.map((q) => q.id);
   }
 
-  /** Returns the updated row, or undefined when the document was deleted meanwhile. */
-  private async update(id: string, set: Partial<Document>) {
-    const [doc] = await this.deps.db.update(documents).set(set).where(eq(documents.id, id)).returning();
+  /**
+   * Returns the updated row, or undefined when the document was deleted meanwhile. With a
+   * `claim`, only the run's own row is updated: still `processing`, at the attempt it took.
+   */
+  private async update(id: string, set: Partial<Document>, claim?: { attempts: number }) {
+    const where = claim
+      ? and(eq(documents.id, id), eq(documents.status, 'processing'), eq(documents.attempts, claim.attempts))
+      : eq(documents.id, id);
+    const [doc] = await this.deps.db.update(documents).set(set).where(where).returning();
     if (doc) this.deps.events.emit({ workspaceId: doc.workspaceId, document: doc });
     return doc;
   }
