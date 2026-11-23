@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useCurrentWorkspace } from '@/workspaces/current';
-import { answerMeta } from './answer';
+import { answerMeta, foundNothing, UNCITED } from './answer';
 import { AnswerFailure, AnswerText, Sources } from './answer-view';
 import { feedbackNote, type Rating } from './feedback';
 import { PassageDialog } from './passage-dialog';
@@ -55,7 +55,7 @@ export function AskPanel() {
 
       {ask.error && ask.status === 'failed' && <AnswerFailure error={ask.error} onRetry={submit} />}
 
-      {ask.answer?.grounded === false ? (
+      {ask.answer && foundNothing(ask.answer) ? (
         <NotFound slug={w.slug} question={ask.question}>
           <AnswerFeedback answer={ask.answer} onRated={ask.rated} />
         </NotFound>
@@ -77,6 +77,11 @@ export function AskPanel() {
                   onOpen={setOpenPassage}
                 />
               </div>
+              {ask.answer?.grounded === false && (
+                <p className="text-muted-foreground border-t pt-3 text-[13px]" data-testid="uncited">
+                  {UNCITED}
+                </p>
+              )}
               {ask.status === 'stopped' && (
                 <p className="text-muted-foreground border-t pt-3 text-[13px]">
                   Stopped. What had arrived is above; the API stopped generating too and stored the answer as

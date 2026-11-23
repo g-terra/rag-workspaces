@@ -1,5 +1,6 @@
+import type { Citation } from '@rag/shared';
 import { describe, expect, it } from 'vitest';
-import { answerMeta, answerParts, clock, formatDuration, passageWhere } from './answer';
+import { answerMeta, answerParts, clock, formatDuration, foundNothing, passageWhere } from './answer';
 
 describe('answerParts', () => {
   it('reads the fullwidth 【n】 some models (gpt-oss) write, with or without a †locator', () => {
@@ -147,5 +148,15 @@ describe('clock', () => {
     expect(clock(5.9)).toBe('0:05');
     expect(clock(754.2)).toBe('12:34');
     expect(clock(3723)).toBe('1:02:03');
+  });
+});
+
+describe('foundNothing', () => {
+  const passage = { rank: 1 } as Citation;
+  it('is true only when no passage was relevant enough, so no model ran', () => {
+    expect(foundNothing({ grounded: false, citations: [] })).toBe(true);
+    // The model read passages and cited none of them: its own words are worth showing.
+    expect(foundNothing({ grounded: false, citations: [passage] })).toBe(false);
+    expect(foundNothing({ grounded: true, citations: [passage] })).toBe(false);
   });
 });

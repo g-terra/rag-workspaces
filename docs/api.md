@@ -61,7 +61,8 @@ curl -s "$RW/v1/workspaces/ouc/answers" -H "Authorization: Bearer $KEY" \
 
 The answer's `text` cites passages as `[1]`, `[2]`, matching `citations[].rank`, and each citation names its
 document and page. When nothing in the workspace is relevant enough, the answer is `grounded: false` with a
-fixed "not found" text, and no model is called. Rate an answer with
+fixed "not found" text, and no model is called. A reply that cites none of its passages (the model read them and
+found nothing to use) is `grounded: false` too, with the model's own words. Rate an answer with
 `POST …/answers/{id}/feedback { "rating": "up" }`.
 
 **Stream** the answer as it is written by sending `Accept: text/event-stream`. The stream sends `token`

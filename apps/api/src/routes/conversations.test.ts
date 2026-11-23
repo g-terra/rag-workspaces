@@ -221,6 +221,16 @@ describe.skipIf(!url)('conversations (against TEST_DATABASE_URL)', () => {
     expect(stored.citations[0]).toMatchObject({ page: 3, startSeconds: null });
   });
 
+  it('a reply that cites none of its passages is stored as ungrounded, with its text', async () => {
+    const id = await start();
+    replyText = 'The material does not say.';
+    const res = await call('POST', `/conversations/${id}/messages`, { content: 'Who won in 1998?' });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ content: 'The material does not say.', grounded: false });
+    const rows = await t.db.select().from(messages).where(eq(messages.conversationId, id));
+    expect(rows.find((m) => m.role === 'assistant')).toMatchObject({ grounded: false });
+  });
+
   it('a failed reply is stored, left out of later history, and returned as 502', async () => {
     const id = await start();
     failChat = true;

@@ -35,7 +35,10 @@ export const Answer = z.object({
   /** `null` when generation failed (`status: "failed"`). */
   text: z.string().nullable(),
   status: z.enum(['complete', 'failed']),
-  /** `false` when nothing in the workspace was relevant enough; the model was not asked. */
+  /**
+   * `false` when the answer does not rest on the material: nothing was relevant enough (the model was
+   * not asked, citations are empty), or the reply cites none of the passages it was given.
+   */
   grounded: z.boolean(),
   citations: z.array(Citation),
   provider: z.string().nullable(),

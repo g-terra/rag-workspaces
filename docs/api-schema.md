@@ -119,6 +119,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 - Every answer is stored, failures too (`status: "failed"` with `error`), so usage counts them; the caller still gets the error status.
 - An answer, and a conversation, is visible only to the person or key that created it, and to admins; anyone else gets `404`.
 - When nothing in the workspace scores above `minScore`, the answer is still `201` with `"grounded": false`, a fixed "not found in this workspace" text and empty citations; the chat model is not called.
+- A reply is also `"grounded": false` when it cites none of the passages it was given (`[n]` or `【n】`): passages can score well and still not hold the answer, and the model then says so without citing. Its text and citations (the passages it read) are kept. The same rule applies to conversation replies.
 - `usage` token counts can be `null` when the provider does not report them.
 - Streaming adds `timeToFirstTokenMs`. A stream that fails midway ends with an `error` event and the answer is stored as failed, so it still shows in usage.
 - The message body is `{ "content": "…", "folderId": "fld_…" }`; `folderId` is optional and limits that message's search to one folder. A conversation's history sent to the model is capped (last 10 turns by default).
