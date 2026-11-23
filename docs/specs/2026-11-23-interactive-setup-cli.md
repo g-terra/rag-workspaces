@@ -1,8 +1,8 @@
 ---
 title: Interactive setup CLI with arrow-key selection
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#66"
+status: in review
 areas: [infra]
 ---
 
