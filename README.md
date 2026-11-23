@@ -92,7 +92,10 @@ and admins upload files from "Upload" in the sidebar and watch each one through 
 editors and admins. Admins manage API keys for agents and scripts under "API keys": a new key's secret is
 shown once, with a `curl` example to try it. "Usage" charts requests, latency, top questions, cited
 documents and the raw request log — for one workspace (editors and admins) or across all of them
-(admins). The API docs are linked from the top bar of every page.
+(admins). "Settings" (admins) changes a workspace's name, description, chat model and retrieval
+settings, with the providers and models read from `GET /v1/system`; it is also where you start a
+reindex, which is the only way to change the embedding model. The API docs are linked from the top
+bar of every page.
 
 `docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
 
