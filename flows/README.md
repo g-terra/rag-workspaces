@@ -77,7 +77,7 @@ Same `Embeddings` and `Search` tweaks as `rw-retrieve`, plus:
 | Node | Tweak fields |
 |---|---|
 | `Prompt` | `template` (uses `{context}` and `{question}`) |
-| `LLM` | `provider` (`lmstudio`, `openai`, `anthropic`, `gemini`), `model_name`, `api_key`, `base_url`, `temperature`, `system_message` |
+| `LLM` | `provider` (`lmstudio`, `openai`, `anthropic`, `gemini`), `model_name`, `api_key`, `base_url`, `temperature`, `system_message`, `reasoning_effort` (empty: not sent; LM Studio and OpenAI only) |
 
 Outputs `ChatOutput-answer` (the answer text; tokens stream with `?stream=true`) and
 `ChatOutput-citations` (the passages given to the model, same shape as `rw-retrieve`).

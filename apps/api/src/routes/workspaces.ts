@@ -62,6 +62,7 @@ const UNSET: Omit<WorkspaceSettings, 'embeddingProvider' | 'embeddingModel'> = {
   chunkOverlap: null,
   topK: null,
   minScore: null,
+  reasoningEffort: null,
 };
 
 export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = async (

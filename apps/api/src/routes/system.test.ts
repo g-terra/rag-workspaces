@@ -18,6 +18,7 @@ const config = loadConfig({
   DEFAULT_CHUNK_OVERLAP: '120',
   DEFAULT_TOP_K: '6',
   DEFAULT_MIN_SCORE: '0.4',
+  DEFAULT_REASONING_EFFORT: 'none',
 });
 let kc: Awaited<ReturnType<typeof testKeycloak>>;
 let app: App | undefined;
@@ -81,6 +82,7 @@ describe('GET /v1/system', () => {
           topK: 6,
           minScore: 0.4,
           systemPrompt: DEFAULT_SYSTEM_PROMPT,
+          reasoningEffort: 'none',
         },
       },
     });

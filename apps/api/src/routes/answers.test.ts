@@ -196,7 +196,13 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
 
     expect(runs.map((r) => r.flow)).toEqual(['rw-retrieve', 'rw-answer']);
     const llm = runs[1]!.body.tweaks.LLM!;
-    expect(llm).toMatchObject({ provider: 'lmstudio', model_name: 'qwen-test', stream: false });
+    // No reasoning effort set anywhere: nothing is sent, so the model does what it does by default.
+    expect(llm).toMatchObject({
+      provider: 'lmstudio',
+      model_name: 'qwen-test',
+      stream: false,
+      reasoning_effort: '',
+    });
     expect(String(llm.system_message)).toContain('[n]');
     expect(runs[1]!.body.tweaks.Search).toMatchObject({ collection_name: 'ws_ouc', top_k: 4 });
 
@@ -206,6 +212,25 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
       askedBy: 'reader-1',
       requestId: res.headers['x-request-id'],
     });
+  });
+
+  it("sends the workspace's reasoning effort to the chat model", async () => {
+    const set = (reasoningEffort: string | null) =>
+      app.inject({
+        method: 'PATCH',
+        url: '/v1/workspaces/ouc',
+        headers: { authorization: auth.admin },
+        payload: { settings: { reasoningEffort } },
+      });
+    expect((await set('none')).json().settings.reasoningEffort).toBe('none');
+    try {
+      await ask({ question: 'What is RAG?' });
+      expect(runs.find((r) => r.flow === 'rw-answer')!.body.tweaks.LLM).toMatchObject({
+        reasoning_effort: 'none',
+      });
+    } finally {
+      await set(null);
+    }
   });
 
   it('nothing relevant: an ungrounded answer with the fixed text, and no model call', async () => {

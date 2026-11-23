@@ -52,7 +52,8 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
   "defaults": { "chat": { "provider": "lmstudio", "model": "qwen2.5-7b-instruct", "available": true },
                 "embedding": { "provider": "lmstudio", "model": "text-embedding-nomic-embed-text-v1.5", "available": true },
                 "workspace": { "chunkSize": 800, "chunkOverlap": 100, "topK": 5, "minScore": 0.3,
-                               "systemPrompt": "You answer questions using only the numbered passages…" } } }
+                               "systemPrompt": "You answer questions using only the numbered passages…",
+                               "reasoningEffort": null } } }
 ```
 
 `providers` always lists `lmstudio`, `openai`, `gemini` and `anthropic`; a hosted one is asked only when its key is set, and keys are never returned. `langflowKey` is `auto` (minted at start), `env` (`LANGFLOW_API_KEY`) or `none` (not yet). `/ready` does not ask the model providers, so a stopped LM Studio shows here but doesn't make the API unready.
@@ -74,7 +75,8 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
   "settings": { "chatProvider": null, "chatModel": null,
                 "embeddingProvider": "lmstudio", "embeddingModel": "text-embedding-nomic-embed-text-v1.5",
                 "embeddingPrefixes": { "document": "search_document: ", "query": "search_query: " },
-                "systemPrompt": null, "chunkSize": 800, "chunkOverlap": 100, "topK": 5, "minScore": null },
+                "systemPrompt": null, "chunkSize": 800, "chunkOverlap": 100, "topK": 5, "minScore": null,
+                "reasoningEffort": "none" },
   "access": "admin",
   "stats": { "documents": 42, "passages": 5120, "conversations": 7 },   // (planned)
   "createdAt": "…", "updatedAt": "…" }
@@ -85,6 +87,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 - `null` settings use the global defaults from `.env`. `embeddingProvider` and `embeddingModel` are the exception: they are filled in from the default when the workspace is created and are never `null` afterwards, so a later change to `.env` cannot silently break search in existing workspaces. `PATCH` refuses to change them (`400`); change them with workspace reindex, since vectors from two models can't be compared.
 - `embeddingPrefixes` (read-only) is the text put before each document and each search query when embedding. It is pinned with the model, at creation and at every reindex, from the built-in table (nomic-embed-text and Qwen3-Embedding) or `EMBEDDING_PREFIXES` in `.env`, so a workspace's queries always match how its documents were embedded. It is `null` for a workspace not reindexed since prefixes were added, which embeds without them.
 - `chunkSize` and `chunkOverlap` apply to documents ingested after the change; reindex applies them to everything.
+- `reasoningEffort` (`none`, `minimal`, `low`, `medium`, `high`) is sent to the chat model as `reasoning_effort`, by LM Studio and OpenAI only. `none` stops a thinking model such as Qwen 3 from reasoning before it answers, which can take minutes on a local machine. `null` uses `DEFAULT_REASONING_EFFORT`, and when that is unset too nothing is sent.
 - `status` is `active` or `reindexing`. While reindexing, passage search and reads, answers and chat messages return `503` with `Retry-After: 30`; the document list still works, so progress can be watched (each document goes `queued`, `processing`, `ready`).
 - Deleting a workspace removes its collection, files, documents, conversations and answers, and unbinds it from API keys; a key left with no workspace is revoked. Usage rows are kept with the workspace marked deleted.
 

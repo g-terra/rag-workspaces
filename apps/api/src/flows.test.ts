@@ -79,6 +79,12 @@ describe('flows/*.json', () => {
       }
     });
 
+    it('lets the API set the reasoning effort on every LLM node', () => {
+      for (const node of flow.data.nodes.filter((n) => n.id === 'LLM')) {
+        expect(node.data.node.template as Record<string, unknown>).toHaveProperty('reasoning_effort');
+      }
+    });
+
     it('uses no legacy component', () => {
       const legacy = flow.data.nodes.filter((n) => n.data.node.legacy).map((n) => n.id);
       expect(legacy).toEqual([]);

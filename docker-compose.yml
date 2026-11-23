@@ -176,6 +176,8 @@ services:
       KEYCLOAK_DIRECTORY_SECRET: ${KEYCLOAK_DIRECTORY_SECRET}
       LMSTUDIO_BASE_URL: ${LMSTUDIO_BASE_URL:-http://host.docker.internal:1234/v1}
       DEFAULT_MIN_SCORE: ${DEFAULT_MIN_SCORE:-0.3}
+      # reasoning_effort for workspaces that set none (e.g. none to stop Qwen 3 thinking); empty sends nothing.
+      DEFAULT_REASONING_EFFORT: ${DEFAULT_REASONING_EFFORT:-}
       DEFAULT_CHAT_PROVIDER: ${DEFAULT_CHAT_PROVIDER:-lmstudio}
       DEFAULT_CHAT_MODEL: ${DEFAULT_CHAT_MODEL:-qwen2.5-7b-instruct}
       # Earlier turns of a conversation sent to the model with each new message.

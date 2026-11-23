@@ -23,6 +23,7 @@ export type SystemRoutesOptions = {
     | 'DEFAULT_CHUNK_OVERLAP'
     | 'DEFAULT_TOP_K'
     | 'DEFAULT_MIN_SCORE'
+    | 'DEFAULT_REASONING_EFFORT'
   >;
 };
 
@@ -62,6 +63,7 @@ export const systemRoutes: FastifyPluginAsyncZod<SystemRoutesOptions> = async (
           topK: config.DEFAULT_TOP_K,
           minScore: config.DEFAULT_MIN_SCORE,
           systemPrompt: DEFAULT_SYSTEM_PROMPT,
+          reasoningEffort: config.DEFAULT_REASONING_EFFORT ?? null,
         },
       };
       const healthy = services.every((s) => s.ok) && defaults.chat.available && defaults.embedding.available;

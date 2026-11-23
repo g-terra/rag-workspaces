@@ -517,6 +517,25 @@ async function main() {
     },
   );
 
+  await step("reasoning effort: the workspace's setting reaches the chat model", async () => {
+    // minScore 0, so the stand-in's rough embeddings always find something and the model is asked.
+    await call(token, 'PATCH', `/v1/workspaces/${slug}`, {
+      settings: { reasoningEffort: 'none', minScore: 0 },
+    });
+    await fetch(`${STANDIN}/_log`, { method: 'DELETE' });
+    const answer = await call(token, 'POST', `/v1/workspaces/${slug}/answers`, {
+      question: 'What does Chroma store?',
+    });
+    expect(answer.status === 'complete', `answer: ${JSON.stringify(answer)}`);
+    const chats = (
+      (await (await fetch(`${STANDIN}/_log`)).json()) as { path: string; reasoning_effort?: string }[]
+    ).filter((e) => e.path === '/v1/chat/completions');
+    expect(
+      chats.length > 0 && chats.every((e) => e.reasoning_effort === 'none'),
+      `chat requests: ${JSON.stringify(chats)}`,
+    );
+  });
+
   await step('deleted the workspace, its Chroma collection is gone', async () => {
     await call(token, 'DELETE', `/v1/workspaces/${slug}`);
     const res = await chroma(`/collections/${collection}`);
