@@ -61,11 +61,16 @@ function citesAny(text: string, ranks: number[]): boolean {
 }
 
 /**
- * A stored citation as the API returns it, filling what older rows lack: start times, and the
- * workspace (before composites, always the one answering, `slug`).
+ * A stored citation as the API returns it, filling what older rows lack: start times, source URLs,
+ * and the workspace (before composites, always the one answering, `slug`).
  */
 export function toApiCitation(c: StoredCitation, slug: string) {
-  return { ...c, startSeconds: c.startSeconds ?? null, workspace: c.workspace ?? slug };
+  return {
+    ...c,
+    startSeconds: c.startSeconds ?? null,
+    sourceUrl: c.sourceUrl ?? null,
+    workspace: c.workspace ?? slug,
+  };
 }
 
 export type GenerateConfig = Pick<
@@ -245,6 +250,7 @@ export class Generator {
           passageId: p.id,
           documentId: p.documentId,
           documentTitle: p.documentTitle,
+          sourceUrl: p.sourceUrl,
           page: p.page,
           startSeconds: p.startSeconds,
           snippet: p.text.length > SNIPPET_CHARS ? `${p.text.slice(0, SNIPPET_CHARS)}…` : p.text,

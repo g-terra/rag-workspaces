@@ -80,4 +80,4 @@ None: ships with the admin UI image.
 
 ## Docs updated
 
-- `README.md`: "New composite" in the tour of the admin UI.
+- `docs/guide/workspaces.md`: a "Composite workspaces" section (creating one, what it hides, the API call).

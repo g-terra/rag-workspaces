@@ -54,7 +54,7 @@ export const answerRoutes: FastifyPluginAsyncZod<AnswerRoutesOptions> = async (a
         question: req.body.question,
         maxPassages: req.body.maxPassages,
         folderId: req.body.folderId && (await requireFolder(db, workspace.id, req.body.folderId)),
-        style: styleFor(req.body.style, workspace),
+        style: await styleFor(db, req.body.style, workspace),
         requestId: req.id,
       };
 

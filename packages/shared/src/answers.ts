@@ -10,6 +10,8 @@ export const Citation = z.object({
   passageId: z.string(),
   documentId: z.string(),
   documentTitle: z.string(),
+  /** For a page of an imported website, its URL, so the citation can link to it; otherwise `null`. */
+  sourceUrl: z.string().nullable(),
   page: z.number().int().nullable(),
   /** For a video or audio transcript, the second the passage starts at; otherwise `null`. */
   startSeconds: z.number().nullable(),

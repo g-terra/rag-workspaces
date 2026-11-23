@@ -14,29 +14,29 @@ export function WorkspaceNav() {
       <p className="text-muted-foreground mb-1 px-2.5 text-xs font-medium">Workspace</p>
       {/* A composite has no documents of its own: its sources hold them. */}
       {workspace.kind === 'standard' && workspace.access !== 'reader' && (
-        <NavLink to={`${base}/upload`} className={navItemClass}>
+        <NavLink to={`${base}/upload`} className={navItemClass} data-tour="upload">
           <Upload className="size-4" /> Upload
         </NavLink>
       )}
       {workspace.kind === 'standard' && (
-        <NavLink to={`${base}/documents`} className={navItemClass}>
+        <NavLink to={`${base}/documents`} className={navItemClass} data-tour="documents">
           <FileText className="size-4" /> Documents
         </NavLink>
       )}
-      <NavLink to={`${base}/playground`} className={navItemClass}>
+      <NavLink to={`${base}/playground`} className={navItemClass} data-tour="playground">
         <Sparkles className="size-4" /> Playground
       </NavLink>
-      <NavLink to={`${base}/conversations`} className={navItemClass}>
+      <NavLink to={`${base}/conversations`} className={navItemClass} data-tour="conversations">
         <MessagesSquare className="size-4" /> Conversations
       </NavLink>
       {workspace.access !== 'reader' && (
-        <NavLink to={`${base}/usage`} className={navItemClass}>
+        <NavLink to={`${base}/usage`} className={navItemClass} data-tour="usage">
           <BarChart3 className="size-4" /> Usage
         </NavLink>
       )}
       {/* Settings, members and delete all need admin access in the API, not merely editor. */}
       {workspace.access === 'admin' && (
-        <NavLink to={`${base}/settings`} className={navItemClass}>
+        <NavLink to={`${base}/settings`} className={navItemClass} data-tour="settings">
           <Settings className="size-4" /> Settings
         </NavLink>
       )}

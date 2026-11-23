@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runMigrations } from './client.js';
 import { newId } from './ids.js';
-import { workspaces } from './schema.js';
+import { documents, sites, workspaces } from './schema.js';
 import { createTestDatabase } from './testing.js';
 
 // Needs a throwaway Postgres: CI provides one; locally run
@@ -36,5 +36,42 @@ describe.skipIf(!url)('database (against TEST_DATABASE_URL)', () => {
     await expect(
       t.db.insert(workspaces).values({ id: newId('workspace'), slug: 'ouc', name: 'again' }),
     ).rejects.toThrow();
+  });
+
+  it('deduplicates uploads per workspace but website pages per site', async () => {
+    const workspaceId = newId('workspace');
+    await t.db.insert(workspaces).values({ id: workspaceId, slug: 'dedup', name: 'dedup' });
+    const siteId = newId('site');
+    await t.db.insert(sites).values({
+      id: siteId,
+      workspaceId,
+      startUrl: 'https://docs.example.org/guide/',
+      scope: 'https://docs.example.org/guide/',
+      maxPages: 10,
+      maxDepth: 3,
+    });
+    const doc = (over: Partial<typeof documents.$inferInsert> = {}) => {
+      const id = newId('document');
+      return {
+        id,
+        workspaceId,
+        title: 't',
+        fileName: 'f.md',
+        type: 'md' as const,
+        sizeBytes: 1,
+        sha256: 'same',
+        storagePath: `dedup/${id}.md`,
+        ...over,
+      };
+    };
+    await t.db.insert(documents).values(doc());
+    await expect(t.db.insert(documents).values(doc())).rejects.toThrow();
+    // A page with the same content as an upload is kept, so it can be cited by its URL.
+    const page = { type: 'web' as const, siteId, sourceUrl: 'https://docs.example.org/guide/a' };
+    await t.db.insert(documents).values(doc(page));
+    await expect(
+      t.db.insert(documents).values(doc({ ...page, sourceUrl: 'https://docs.example.org/guide/b' })),
+    ).rejects.toThrow();
+    await expect(t.db.insert(documents).values(doc({ ...page, sha256: 'other' }))).rejects.toThrow();
   });
 });

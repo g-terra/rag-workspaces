@@ -46,7 +46,7 @@ const common = { tags: ['passages'], security: [{ bearerAuth: [] }] };
 /** A stored chunk as a passage. `page` is only kept when it is a real page number, `startSeconds` when it is a number. */
 function fromChunk(
   chunk: StoredChunk,
-  document: Pick<DocumentRow, 'id' | 'title'>,
+  document: Pick<DocumentRow, 'id' | 'title' | 'sourceUrl'>,
   workspace: string,
 ): Passage {
   const index = Number(chunk.metadata.chunk_index ?? chunk.id.split(':').pop());
@@ -57,6 +57,7 @@ function fromChunk(
     workspace,
     documentId: document.id,
     documentTitle: document.title,
+    sourceUrl: document.sourceUrl,
     page: typeof page === 'number' && Number.isInteger(page) ? page : null,
     startSeconds: typeof start === 'number' ? start : null,
     chunkIndex: index,

@@ -74,6 +74,12 @@ describe('answerMeta', () => {
     expect(answerMeta(meta)).toBe('2.3 s · a-model · 1,840 + 212 tokens');
   });
 
+  it('names the response style an answer was written in', () => {
+    expect(answerMeta({ ...meta, style: 'academic' })).toBe(
+      '2.3 s · a-model · academic style · 1,840 + 212 tokens',
+    );
+  });
+
   it('names the provider when the model is unknown', () => {
     expect(answerMeta({ ...meta, model: null })).toBe('2.3 s · lmstudio · 1,840 + 212 tokens');
   });

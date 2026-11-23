@@ -1,5 +1,5 @@
 {
-  "id": "b0fdcb25-46df-4050-b70b-e7ab2373a36e",
+  "id": "a0828a30-6c0b-40e5-8931-43fc570ac664",
   "prevId": "5ba08f21-f2d6-4038-bf49-762ab86e087d",
   "version": "7",
   "dialect": "postgresql",
@@ -554,77 +554,6 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.composite_sources": {
-      "name": "composite_sources",
-      "schema": "",
-      "columns": {
-        "composite_id": {
-          "name": "composite_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_id": {
-          "name": "source_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "position": {
-          "name": "position",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "composite_sources_source_idx": {
-          "name": "composite_sources_source_idx",
-          "columns": [
-            {
-              "expression": "source_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "composite_sources_composite_id_workspaces_id_fk": {
-          "name": "composite_sources_composite_id_workspaces_id_fk",
-          "tableFrom": "composite_sources",
-          "tableTo": "workspaces",
-          "columnsFrom": ["composite_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "composite_sources_source_id_workspaces_id_fk": {
-          "name": "composite_sources_source_id_workspaces_id_fk",
-          "tableFrom": "composite_sources",
-          "tableTo": "workspaces",
-          "columnsFrom": ["source_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "composite_sources_composite_id_source_id_pk": {
-          "name": "composite_sources_composite_id_source_id_pk",
-          "columns": ["composite_id", "source_id"]
-        }
-      },
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1226,6 +1155,64 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.response_styles": {
+      "name": "response_styles",
+      "schema": "",
+      "columns": {
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "instructions": {
+          "name": "instructions",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.workspace_members": {
       "name": "workspace_members",
       "schema": "",
@@ -1337,14 +1324,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "kind": {
-          "name": "kind",
-          "type": "workspace_kind",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'standard'"
-        },
         "status": {
           "name": "status",
           "type": "workspace_status",
@@ -1430,11 +1409,6 @@
       "name": "message_role",
       "schema": "public",
       "values": ["user", "assistant"]
-    },
-    "public.workspace_kind": {
-      "name": "workspace_kind",
-      "schema": "public",
-      "values": ["standard", "composite"]
     },
     "public.workspace_role": {
       "name": "workspace_role",

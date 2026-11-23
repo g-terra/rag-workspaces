@@ -11,6 +11,8 @@ export const FLOWS = {
   /** Like answer, with the conversation so far; the API keeps the history (stateless flow). */
   chat: 'rw-chat',
   delete: 'rw-delete',
+  /** One web page as clean Markdown, or a site's sitemap; the API's crawler calls it per URL. */
+  fetch: 'rw-fetch',
 } as const;
 
 export const REQUIRED_FLOWS: readonly string[] = Object.values(FLOWS);

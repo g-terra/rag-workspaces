@@ -185,7 +185,7 @@ export const conversationRoutes: FastifyPluginAsyncZod<ConversationRoutesOptions
         conversation,
         content: req.body.content,
         folderId: req.body.folderId && (await requireFolder(db, workspace.id, req.body.folderId)),
-        style: styleFor(req.body.style, workspace),
+        style: await styleFor(db, req.body.style, workspace),
         requestId: req.id,
       };
 

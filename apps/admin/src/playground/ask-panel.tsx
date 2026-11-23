@@ -5,11 +5,13 @@ import { Link } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { WORKSPACE_DEFAULT } from '@/styles/styles';
 import { useCurrentWorkspace } from '@/workspaces/current';
 import { answerMeta, foundNothing, UNCITED } from './answer';
 import { AnswerFailure, AnswerText, Sources } from './answer-view';
 import { feedbackNote, type Rating } from './feedback';
 import { PassageDialog } from './passage-dialog';
+import { StylePicker } from './style-picker';
 import { Passages, QuestionBox } from './question-box';
 import { useAnswerFeedback } from './queries';
 import { useAsk } from './use-ask';
@@ -24,11 +26,12 @@ export function AskPanel() {
   const ask = useAsk(w.slug);
   const [question, setQuestion] = useState('');
   const [maxPassages, setMaxPassages] = useState(DEFAULT_PASSAGES);
+  const [style, setStyle] = useState(WORKSPACE_DEFAULT);
   const [openPassage, setOpenPassage] = useState<string | null>(null);
   const streaming = ask.status === 'streaming';
   const citations = ask.answer?.citations ?? [];
   const submit = () => {
-    if (question.trim()) ask.ask(question.trim(), maxPassages);
+    if (question.trim()) ask.ask(question.trim(), maxPassages, style);
   };
 
   return (
@@ -41,7 +44,10 @@ export function AskPanel() {
         onChange={setQuestion}
         onSubmit={submit}
       >
-        <Passages value={maxPassages} onChange={setMaxPassages} counts={PASSAGE_COUNTS} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Passages value={maxPassages} onChange={setMaxPassages} counts={PASSAGE_COUNTS} />
+          <StylePicker value={style} onChange={setStyle} />
+        </div>
         {streaming ? (
           <Button size="sm" variant="outline" onClick={ask.stop}>
             <SquareIcon /> Stop
