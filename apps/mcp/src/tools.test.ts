@@ -93,8 +93,20 @@ describe('MCP tools', () => {
     respond = () =>
       Response.json({
         data: [
-          { slug: 'academic', name: 'Academic', description: 'Formal.', instructions: 'Long text…', builtIn: true },
-          { slug: 'socratic', name: 'Socratic', description: 'Asks back.', instructions: '…', builtIn: false },
+          {
+            slug: 'academic',
+            name: 'Academic',
+            description: 'Formal.',
+            instructions: 'Long text…',
+            builtIn: true,
+          },
+          {
+            slug: 'socratic',
+            name: 'Socratic',
+            description: 'Asks back.',
+            instructions: '…',
+            builtIn: false,
+          },
         ],
       });
     const res = await client.callTool({ name: 'list_styles', arguments: {} });
@@ -107,7 +119,14 @@ describe('MCP tools', () => {
 
   it('asks in a response style, and says which style the answer used', async () => {
     respond = () =>
-      Response.json({ id: 'ans_2', grounded: true, text: 'Short [1].', citations: [], model: 'm', style: 'concise' });
+      Response.json({
+        id: 'ans_2',
+        grounded: true,
+        text: 'Short [1].',
+        citations: [],
+        model: 'm',
+        style: 'concise',
+      });
     const res = await client.callTool({
       name: 'ask',
       arguments: { workspace: 'ouc', question: 'What is Langflow?', style: 'concise' },

@@ -129,8 +129,9 @@ never changes existing values, and keeps working as before. To move it to the na
 `apps/mcp` is an [MCP](https://modelcontextprotocol.io) server, so Claude Desktop, Claude Code or any MCP
 client can search and ask a workspace. It runs on your machine over stdio and calls the REST API with an
 API key, so the key's role and workspaces decide what the agent sees. Its tools: `list_workspaces`,
-`list_folders`, `list_documents`, `search_passages`, `read_passage` and `ask`. None of them changes any
-material; `ask` stores an answer, like any other caller's.
+`list_folders`, `list_documents`, `search_passages`, `read_passage`, `list_styles` and `ask`. None of them
+changes any material; `ask` stores an answer, like any other caller's, and takes an optional response
+`style` from `list_styles`.
 
 1. In the admin UI, "API keys", create a `reader` key for the workspaces the agent may use, and copy it.
 2. Build the server once: `pnpm install && pnpm --filter '@rag/mcp...' build`.
