@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   CUSTOM_MODEL,
+  modelIdError,
   modelOptions,
   providerOptions,
   transcriptionEnv,
@@ -100,5 +101,21 @@ describe('transcriptionEnv', () => {
       COMPOSE_PROFILES: 'gpu',
       WHISPER_URL: '',
     });
+  });
+});
+
+describe('modelIdError', () => {
+  it('lets an empty answer through when there is a default to take', () => {
+    assert.equal(modelIdError('', 'qwen3-8b'), undefined);
+    assert.equal(modelIdError('  ', 'qwen3-8b'), undefined);
+  });
+
+  it('asks for an id when the answer is empty and there is no default', () => {
+    assert.equal(modelIdError('', ''), 'A model id is required.');
+    assert.equal(modelIdError(undefined, ''), 'A model id is required.');
+  });
+
+  it('accepts any typed id', () => {
+    assert.equal(modelIdError('gpt-4o-mini', ''), undefined);
   });
 });

@@ -89,3 +89,11 @@ export function transcriptionEnv(on: boolean, model: string, profiles: string): 
   const withVideo = list.includes('video') ? list : [...list, 'video'];
   return { COMPOSE_PROFILES: withVideo.join(','), WHISPER_URL, WHISPER_MODEL: model };
 }
+
+/**
+ * Validation for a typed model id. The prompt validates the raw answer before it falls back to its
+ * default, so an empty answer is fine whenever there is a default to take.
+ */
+export function modelIdError(value: string | undefined, fallback: string): string | undefined {
+  return !value?.trim() && !fallback ? 'A model id is required.' : undefined;
+}

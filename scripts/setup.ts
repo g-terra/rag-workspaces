@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import * as p from '@clack/prompts';
 import {
   CUSTOM_MODEL,
+  modelIdError,
   modelOptions,
   providerOptions,
   transcriptionEnv,
@@ -265,7 +266,7 @@ async function pickModel(
           message: `Enter ${label.toLowerCase()} id`,
           placeholder: fallback || 'model-id',
           defaultValue: fallback,
-          validate: (v) => (!v?.trim() ? 'A model id is required.' : undefined),
+          validate: (v) => modelIdError(v, fallback),
         }),
       ).trim();
     } else {
@@ -277,7 +278,7 @@ async function pickModel(
         message: `${label} id (${provider})`,
         placeholder: fallback || 'model-id',
         defaultValue: fallback,
-        validate: (v) => (!v?.trim() ? 'A model id is required.' : undefined),
+        validate: (v) => modelIdError(v, fallback),
       }),
     ).trim();
   }
