@@ -145,6 +145,22 @@ async function main() {
     expect(admin?.isAdmin === true, `expected the admin with isAdmin true, got ${JSON.stringify(data)}`);
   });
 
+  await step('GET /v1/system: every service up, the stand-in lists the embedding model', async () => {
+    const system = await call(token, 'GET', '/v1/system');
+    const down = system.services.filter((s: { ok: boolean }) => !s.ok);
+    expect(!down.length, `services down: ${JSON.stringify(down)}`);
+    expect(system.langflowKey === 'auto', `expected a minted Langflow key, got ${system.langflowKey}`);
+    const lm = system.providers.find((p: { id: string }) => p.id === 'lmstudio');
+    expect(
+      lm?.reachable && lm.models.includes('standin-embed-a'),
+      `LM Studio stand-in: ${JSON.stringify(lm)}`,
+    );
+    expect(
+      system.defaults.embedding.available,
+      `embedding default: ${JSON.stringify(system.defaults.embedding)}`,
+    );
+  });
+
   const slug = `smoke-${Date.now()}`;
   const collection = `ws_${slug}`;
   await step(`created workspace ${slug}`, () =>
