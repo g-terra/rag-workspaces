@@ -232,6 +232,29 @@ export function modelChoices(system: SystemStatus | undefined, provider: string,
   return pinned && !listed.includes(pinned) ? [pinned, ...listed] : listed;
 }
 
+/**
+ * The models a reindex can switch to, split by whether their id says they embed (`embed` anywhere in
+ * it, which covers LM Studio's `text-embedding-…`, OpenAI's `text-embedding-3-…`, Gemini's
+ * `gemini-embedding-…` and most open models). The provider's API does not say, so the rest stay
+ * offered under their own heading. The model in use comes first even when the provider stopped
+ * listing it. Both empty when there is nothing to list, and the dialog asks for the id as text.
+ */
+export function embeddingModelChoices(
+  system: SystemStatus | undefined,
+  provider: string,
+  current: string,
+): { embedding: string[]; other: string[] } {
+  const listed = providerModels(system, provider);
+  if (listed.length === 0) return { embedding: [], other: [] };
+  const embeds = (m: string) => /embed/i.test(m);
+  const pinned = current.trim();
+  const embedding = listed.filter(embeds);
+  return {
+    embedding: pinned && !listed.includes(pinned) ? [pinned, ...embedding] : embedding,
+    other: listed.filter((m) => !embeds(m)),
+  };
+}
+
 /** Hosted providers answer from someone else's machine; the page says so beside the picker. */
 export function hostedWarning(provider: string): string | null {
   if (provider === '' || provider === 'lmstudio') return null;

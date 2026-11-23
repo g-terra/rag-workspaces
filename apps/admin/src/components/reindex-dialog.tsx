@@ -6,11 +6,14 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } fr
 import { Input } from '@/components/ui/input';
 import { useReindexWorkspace } from '@/workspaces/queries';
 import {
+  embeddingModelChoices,
   embeddingProviderChoices,
   hostedEmbeddingWarning,
-  providerModels,
   reindexErrorMessage,
 } from '@/workspaces/settings';
+
+/** The select's value for "the model I want isn't listed": the field becomes a text box. */
+const TYPED = '\u0000typed';
 
 const selectClass =
   'border-input dark:bg-input/30 h-9 w-full rounded-md border bg-transparent px-2.5 text-sm shadow-xs';
@@ -38,9 +41,16 @@ export function ReindexDialog({
   const warning = changed ? hostedEmbeddingWarning(provider) : null;
   // The API wants a provider and a model together, so a change sends both even when only one moved.
   const body: ReindexWorkspace = changed ? { embeddingProvider: provider, embeddingModel: model.trim() } : {};
-  // The provider's own catalogue, as suggestions only: `GET /v1/models` does not say which of them
-  // embed, so the field stays typeable and the hint says what the list is.
-  const suggestions = providerModels(system, provider);
+  // The provider's own catalogue. Its API doesn't say which models embed, so the ones whose id says
+  // so come first and the rest follow under their own heading; one that isn't listed can be typed.
+  const choices = embeddingModelChoices(
+    system,
+    provider,
+    provider === pinned.embeddingProvider ? pinned.embeddingModel : '',
+  );
+  const listed = [...choices.embedding, ...choices.other];
+  const [typing, setTyping] = useState(false);
+  const asText = typing || listed.length === 0;
 
   return (
     <Dialog open onOpenChange={(next) => !reindex.isPending && onOpenChange(next)}>
@@ -62,7 +72,13 @@ export function ReindexDialog({
               aria-describedby="reindex-provider-note"
               className={selectClass}
               value={provider}
-              onChange={(e) => setProvider(e.target.value as EmbeddingProvider)}
+              onChange={(e) => {
+                const next = e.target.value as EmbeddingProvider;
+                setProvider(next);
+                // A model belongs to its provider: going back restores the pinned one, else pick anew.
+                setModel(next === pinned.embeddingProvider ? pinned.embeddingModel : '');
+                setTyping(false);
+              }}
             >
               {embeddingProviderChoices(system, pinned.embeddingProvider).map((id) => (
                 <option key={id} value={id}>
@@ -77,25 +93,55 @@ export function ReindexDialog({
             label="Embedding model"
             error={changed && model.trim() === '' ? 'Name the model to embed with.' : undefined}
             hint={
-              suggestions.length > 0
-                ? 'Suggestions are everything this provider serves, embedding or not — a chat model here fails every document.'
-                : 'The model id, as the provider names it.'
+              asText
+                ? 'The model id, as the provider names it.'
+                : 'A chat model here fails every document, so pick one that embeds.'
             }
           >
-            <Input
-              id="reindex-model"
-              list={suggestions.length > 0 ? 'reindex-model-options' : undefined}
-              aria-describedby="reindex-model-note"
-              aria-invalid={changed && model.trim() === ''}
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-            />
-            {suggestions.length > 0 && (
-              <datalist id="reindex-model-options">
-                {suggestions.map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
+            {asText ? (
+              <Input
+                id="reindex-model"
+                aria-describedby="reindex-model-note"
+                aria-invalid={changed && model.trim() === ''}
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+              />
+            ) : (
+              <select
+                id="reindex-model"
+                aria-describedby="reindex-model-note"
+                className={selectClass}
+                value={listed.includes(model) ? model : ''}
+                onChange={(e) => {
+                  if (e.target.value === TYPED) {
+                    setTyping(true);
+                    setModel('');
+                  } else setModel(e.target.value);
+                }}
+              >
+                <option value="" disabled>
+                  Pick a model
+                </option>
+                {choices.embedding.length > 0 && (
+                  <optgroup label="Embedding models">
+                    {choices.embedding.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {choices.other.length > 0 && (
+                  <optgroup label="Other models">
+                    {choices.other.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <option value={TYPED}>Another model, type its id…</option>
+              </select>
             )}
           </Field>
         </div>
