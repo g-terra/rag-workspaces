@@ -1,6 +1,6 @@
 import { answers, newId, type Answer as AnswerRow, type Database, type Workspace } from '@rag/db';
 import type { LangflowClient } from '@rag/langflow-client';
-import type { Answer } from '@rag/shared';
+import type { Answer, ResponseStyle } from '@rag/shared';
 import type { Principal } from '../auth/principal.js';
 import { Generator, withStartSeconds, type GenerateConfig } from './generate.js';
 
@@ -12,6 +12,7 @@ export type AskInput = {
   question: string;
   maxPassages?: number;
   folderId?: string;
+  style: ResponseStyle | null;
   requestId?: string;
   /** Stream the reply: called with each piece of text as the model writes it. */
   onToken?: (text: string) => void;
@@ -37,6 +38,7 @@ export class AnswerService {
       question: input.question,
       maxPassages: input.maxPassages,
       folderId: input.folderId,
+      style: input.style,
       sessionId: id,
       onToken: input.onToken,
       signal: input.signal,
@@ -74,6 +76,7 @@ export function toApiAnswer(a: AnswerRow, slug: string): Answer {
     citations: a.citations.map(withStartSeconds),
     provider: a.provider,
     model: a.model,
+    style: a.style,
     usage: { promptTokens: a.promptTokens, completionTokens: a.completionTokens },
     latencyMs: a.latencyMs,
     timeToFirstTokenMs: a.timeToFirstTokenMs,

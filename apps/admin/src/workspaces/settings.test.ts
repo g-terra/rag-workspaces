@@ -41,6 +41,7 @@ const workspace = (over: Partial<Workspace> = {}): Workspace => ({
     topK: 5,
     minScore: 0.35,
     reasoningEffort: null,
+    style: null,
     ...over.settings,
   },
   ...over,

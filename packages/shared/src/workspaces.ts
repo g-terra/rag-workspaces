@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { WorkspaceRole } from './api-keys.js';
 import { WorkspaceSlug } from './common.js';
+import { StyleSlug } from './styles.js';
 
 export const ChatProvider = z.enum(['lmstudio', 'openai', 'anthropic', 'gemini']);
 export type ChatProvider = z.infer<typeof ChatProvider>;
@@ -35,6 +36,8 @@ export const WorkspaceSettings = z.object({
   minScore: z.number().min(0).max(1).nullable(),
   /** `null`: the `.env` default (`DEFAULT_REASONING_EFFORT`), and when that is unset too, nothing is sent. */
   reasoningEffort: ReasoningEffort.nullable(),
+  /** The response style used when a request names none (`GET /v1/styles`). `null`: no style. */
+  style: StyleSlug.nullable(),
 });
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettings>;
 
