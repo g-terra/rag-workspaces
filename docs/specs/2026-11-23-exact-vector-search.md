@@ -1,7 +1,7 @@
 ---
 title: rank search by exact cosine similarity
 date: 2026-11-23
-pr: pending
+pr: "#89"
 status: in review
 areas: [flows, langflow, docs]
 ---
