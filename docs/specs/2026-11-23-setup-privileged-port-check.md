@@ -1,8 +1,8 @@
 ---
 title: Handle EACCES on privileged ports in pnpm run setup
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#65"
+status: in review
 areas: [infra]
 ---
 
