@@ -189,6 +189,7 @@ export class Generator {
           system_message: composeSystemPrompt(
             workspace.settings.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
             style,
+            workspace.settings.systemPrompt == null,
           ),
           // Empty: not sent, and the model thinks as much as it does by default.
           reasoning_effort: workspace.settings.reasoningEffort ?? config.DEFAULT_REASONING_EFFORT ?? '',

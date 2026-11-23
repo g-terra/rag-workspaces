@@ -43,8 +43,8 @@ export const SendMessage = z.object({
   content: z.string().trim().min(1).max(4000),
   /** Only use passages from documents in this folder, for this message. */
   folderId: z.string().min(1).optional(),
-  /** A response style slug for this reply (`GET /v1/styles`). Defaults to the workspace's `settings.style`. */
-  style: StyleSlug.optional(),
+  /** A response style slug for this reply (`GET /v1/styles`). Left out: the workspace's `settings.style`; `null`: no style. */
+  style: StyleSlug.nullable().optional(),
 });
 export type SendMessage = z.infer<typeof SendMessage>;
 

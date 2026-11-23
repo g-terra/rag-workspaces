@@ -78,7 +78,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
                 "embeddingProvider": "lmstudio", "embeddingModel": "text-embedding-nomic-embed-text-v1.5",
                 "embeddingPrefixes": { "document": "search_document: ", "query": "search_query: " },
                 "systemPrompt": null, "chunkSize": 1200, "chunkOverlap": 200, "topK": 8, "minScore": null,
-                "reasoningEffort": "none" },
+                "reasoningEffort": "none", "style": null },
   "access": "admin",
   "stats": { "documents": 42, "passages": 5120, "conversations": 7 },   // (planned)
   "createdAt": "…", "updatedAt": "…" }
@@ -129,13 +129,13 @@ A hosted provider's key can be saved for one workspace from the admin UI, and th
 
 ```json
 // POST /v1/workspaces/ouc/answers
-{ "question": "What is retrieval-augmented generation?", "maxPassages": 5, "folderId": "fld_01J…" }
+{ "question": "What is retrieval-augmented generation?", "maxPassages": 5, "folderId": "fld_01J…", "style": "academic" }
 // 201
 { "id": "ans_01J…", "workspace": "ouc", "question": "…", "text": "Retrieval-augmented generation combines …",
   "status": "complete", "grounded": true,
   "citations": [ { "rank": 1, "passageId": "psg_01J…", "documentId": "doc_01J…", "documentTitle": "Week 3 slides",
                    "page": 12, "startSeconds": null, "snippet": "RAG retrieves relevant passages …", "score": 0.83 } ],
-  "provider": "lmstudio", "model": "openai/gpt-oss-20b",
+  "provider": "lmstudio", "model": "openai/gpt-oss-20b", "style": "academic",
   "usage": { "promptTokens": 1840, "completionTokens": 212 },
   "latencyMs": 2310, "timeToFirstTokenMs": null, "error": null, "feedback": null, "createdAt": "…" }
 ```
@@ -149,14 +149,14 @@ A hosted provider's key can be saved for one workspace from the admin UI, and th
 - A reply is also `"grounded": false` when it cites none of the passages it was given (`[n]` or `【n】`): passages can score well and still not hold the answer, and the model then says so without citing. Its text and citations (the passages it read) are kept. The same rule applies to conversation replies.
 - `usage` token counts can be `null` when the provider does not report them.
 - Streaming adds `timeToFirstTokenMs`. A stream that fails midway ends with an `error` event and the answer is stored as failed, so it still shows in usage.
-- `style` (optional, on answers and messages) names a response style; without it the workspace's `settings.style` applies. The answer or reply records the style used (`null` for none); an unknown slug is `400`.
+- `style` (optional, on answers and messages) names a response style. Left out, the workspace's `settings.style` applies; `null` asks for no style. The answer or reply records the style used (`null` for none). An unknown slug is `400`, before anything runs or streams. A workspace default that no longer exists is ignored.
 - The message body is `{ "content": "…", "folderId": "fld_…", "style": "…" }`; `folderId` is optional and limits that message's search to one folder. A conversation's history sent to the model is capped (last 10 turns by default).
 
 Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv_…", "role": "assistant", "content": "…", "citations": [...], "style": null, "usage": {...} }`.
 
 ### Response styles
 
-`GET /v1/styles` lists the styles an answer can be written in: `{ "data": [{ "slug": "academic", "name": "Academic", "description": "…", "instructions": "…", "builtIn": true }] }`. Four are built in: `academic`, `talkative`, `concise` and `tutor`. A style changes tone, length and format only. Its instructions are added after the workspace's system prompt, behind a header that repeats the grounding rules (cite with `[n]`, use only the passages, complete lists, say only that the material does not cover it), so no style can switch citations or refusals off. The fixed "not found" reply is the same in every style.
+`GET /v1/styles` lists the styles an answer can be written in, to any signed-in person or API key (instructions included): `{ "data": [{ "slug": "academic", "name": "Academic", "description": "…", "instructions": "…", "builtIn": true }] }`. Four are built in: `academic`, `talkative`, `concise` and `tutor`. A style changes tone, length and format only. Its instructions are added after the workspace's system prompt, behind a header that repeats the built-in prompt's grounding rules (cite with `[n]`, use only the passages, complete lists, say only that the material does not cover it), so no style can switch citations or refusals off. A workspace with its own system prompt gets only "every rule above still applies", so its rules are not mixed with the built-in ones. The fixed "not found" reply is the same in every style.
 
 | Method | Path | Does |
 |---|---|---|
