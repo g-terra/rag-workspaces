@@ -19,11 +19,14 @@ export async function fillKeycloakLogin(page: Page) {
 }
 
 /** Signs in from our sign-in page, then waits until the app knows who we are. */
-export async function signIn(page: Page, returnTo = '/') {
+export async function signIn(page: Page, returnTo = '/', { skipTour = true } = {}) {
   await page.goto(`/sign-in?returnTo=${encodeURIComponent(returnTo)}`);
   await page.getByRole('button', { name: 'Continue with Keycloak' }).click();
   await fillKeycloakLogin(page);
   await page.getByTestId('user-role').getByText('admin').waitFor();
+  // Every test starts in a fresh browser, where the first-time walkthrough opens. walkthrough.spec.ts
+  // covers it; the other tests close it.
+  if (skipTour) await page.getByRole('button', { name: 'Skip tour' }).click();
 }
 
 /** The signed-in page's access token, as `oidc-client-ts` keeps it in sessionStorage. */
