@@ -13,9 +13,12 @@ describe('defaults for new workspaces', () => {
     }).toEqual({ chunkSize: 1200, chunkOverlap: 200, topK: 8, minScore: 0.3 });
   });
 
-  it("use gpt-oss-20b in LM Studio as the chat model (docs/tuning.md)", () => {
+  it('use gpt-oss-20b in LM Studio as the chat model (docs/tuning.md)', () => {
     const config = loadConfig({ NODE_ENV: 'test' });
-    expect([config.DEFAULT_CHAT_PROVIDER, config.DEFAULT_CHAT_MODEL]).toEqual(['lmstudio', 'openai/gpt-oss-20b']);
+    expect([config.DEFAULT_CHAT_PROVIDER, config.DEFAULT_CHAT_MODEL]).toEqual([
+      'lmstudio',
+      'openai/gpt-oss-20b',
+    ]);
   });
 });
 
