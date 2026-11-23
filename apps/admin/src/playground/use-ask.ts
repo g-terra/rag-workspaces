@@ -9,6 +9,8 @@ export type Ask = AskState & {
   ask(question: string, maxPassages: number): void;
   /** Aborts the request; whatever had streamed stays on screen. */
   stop(): void;
+  /** Takes the answer the API returned after a rating, so the feedback shows. */
+  rated(answer: Answer): void;
 };
 
 /** Asks `POST /v1/workspaces/{slug}/answers` and streams the answer into `AskState`. */
@@ -54,5 +56,7 @@ export function useAsk(slug: string): Ask {
     dispatch({ type: 'stopped' });
   }, []);
 
-  return { ...state, ask, stop };
+  const rated = useCallback((answer: Answer) => dispatch({ type: 'rated', answer }), []);
+
+  return { ...state, ask, stop, rated };
 }

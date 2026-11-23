@@ -1,6 +1,7 @@
-import type { PassageWithNeighbours } from '@rag/shared';
-import { useQuery } from '@tanstack/react-query';
+import type { Answer, PassageWithNeighbours } from '@rag/shared';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/auth/auth-context';
+import { feedbackBody, type Rating } from './feedback';
 
 /** One passage with the passages around it, for a citation preview. Idle until a citation is opened. */
 export function usePassage(slug: string, passageId: string | null) {
@@ -12,5 +13,24 @@ export function usePassage(slug: string, passageId: string | null) {
         `/v1/workspaces/${encodeURIComponent(slug)}/passages/${encodeURIComponent(passageId!)}`,
       ),
     enabled: passageId !== null,
+  });
+}
+
+/**
+ * Rates an answer: `POST …/answers/{id}/feedback`. Rating again replaces the earlier rating, which is
+ * what pressing the other thumb, or sending a comment after a rating, does.
+ */
+export function useAnswerFeedback(slug: string) {
+  const { api } = useAuth();
+  return useMutation({
+    mutationFn: ({ answerId, rating, comment }: { answerId: string; rating: Rating; comment: string }) =>
+      api<Answer>(
+        `/v1/workspaces/${encodeURIComponent(slug)}/answers/${encodeURIComponent(answerId)}/feedback`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(feedbackBody(rating, comment)),
+        },
+      ),
   });
 }

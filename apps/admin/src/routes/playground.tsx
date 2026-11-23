@@ -1,13 +1,17 @@
-import type { Citation } from '@rag/shared';
-import { Search, Sparkles, SquareIcon, Upload } from 'lucide-react';
-import { useState } from 'react';
+import type { Answer, Citation } from '@rag/shared';
+import { Search, Sparkles, SquareIcon, ThumbsDown, ThumbsUp, Upload } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Notice } from '@/components/states';
+import { cn } from '@/lib/utils';
 import { TopBar } from '@/components/top-bar';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { answerMeta, answerParts } from '@/playground/answer';
 import { answerFailure, type AnswerError } from '@/playground/failure';
+import { feedbackNote, type Rating } from '@/playground/feedback';
 import { PassageDialog } from '@/playground/passage-dialog';
+import { useAnswerFeedback } from '@/playground/queries';
 import { useAsk } from '@/playground/use-ask';
 import { useCurrentWorkspace } from '@/workspaces/current';
 
@@ -91,7 +95,9 @@ function Ask() {
         {ask.error && ask.status === 'failed' && <Failure error={ask.error} onRetry={submit} />}
 
         {ask.answer?.grounded === false ? (
-          <NotFound slug={w.slug} question={ask.question} />
+          <NotFound slug={w.slug} question={ask.question}>
+            <AnswerFeedback answer={ask.answer} onRated={ask.rated} />
+          </NotFound>
         ) : (
           (streaming || ask.text !== '' || ask.status === 'stopped') && (
             <div className="flex flex-wrap items-start gap-4">
@@ -126,6 +132,9 @@ function Ask() {
                     Stopped. What had arrived is above; the API still stored the whole answer.
                   </p>
                 )}
+                {ask.status === 'done' && ask.answer && (
+                  <AnswerFeedback answer={ask.answer} onRated={ask.rated} />
+                )}
               </div>
               {citations.length > 0 && <Sources citations={citations} onOpen={setOpenPassage} />}
             </div>
@@ -135,6 +144,100 @@ function Ask() {
         <PassageDialog slug={w.slug} passageId={openPassage} onClose={() => setOpenPassage(null)} />
       </div>
     </>
+  );
+}
+
+/** Thumbs up or down on an answer, with an optional comment after a thumbs down. */
+function AnswerFeedback({ answer, onRated }: { answer: Answer; onRated(answer: Answer): void }) {
+  const w = useCurrentWorkspace();
+  const feedback = useAnswerFeedback(w.slug);
+  const [comment, setComment] = useState('');
+  const rating = answer.feedback?.rating ?? null;
+  const rate = (next: Rating) =>
+    feedback.mutate({ answerId: answer.id, rating: next, comment }, { onSuccess: onRated });
+
+  return (
+    <div className="flex flex-col gap-2.5 border-t pt-3.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-muted-foreground mr-1 text-[13px]">Was this helpful?</span>
+        <Thumb
+          label="Helpful"
+          pressed={rating === 'up'}
+          busy={feedback.isPending}
+          tone="bg-green-100 border-green-300 text-green-800"
+          onClick={() => rate('up')}
+        >
+          <ThumbsUp className="size-4" />
+        </Thumb>
+        <Thumb
+          label="Not helpful"
+          pressed={rating === 'down'}
+          busy={feedback.isPending}
+          tone="bg-red-100 border-red-300 text-red-800"
+          onClick={() => rate('down')}
+        >
+          <ThumbsDown className="size-4" />
+        </Thumb>
+        <span className="text-[13px] text-green-800">{feedbackNote(answer.feedback)}</span>
+      </div>
+      {rating === 'down' && (
+        <div className="flex flex-wrap gap-2">
+          <Input
+            className="flex-[1_1_240px]"
+            aria-label="Feedback comment"
+            placeholder="What was wrong? (optional, saved with the rating)"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={feedback.isPending || !comment.trim()}
+            onClick={() => rate('down')}
+          >
+            Send
+          </Button>
+        </div>
+      )}
+      {feedback.isError && (
+        <p className="text-[13px] text-red-800" role="alert">
+          {feedback.error.message}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Thumb({
+  label,
+  pressed,
+  busy,
+  tone,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed: boolean;
+  busy: boolean;
+  tone: string;
+  onClick(): void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={pressed}
+      disabled={busy}
+      onClick={onClick}
+      className={cn(
+        'inline-flex size-9 items-center justify-center rounded-lg border disabled:opacity-50',
+        // Hovering the chosen thumb must not make it look unchosen.
+        pressed ? tone : 'hover:bg-accent',
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -201,25 +304,32 @@ function Failure({ error, onRetry }: { error: AnswerError; onRetry(): void }) {
   );
 }
 
-/** Nothing in the workspace was relevant enough, so no model was called (`grounded: false`). */
-function NotFound({ slug, question }: { slug: string; question: string }) {
+/**
+ * Nothing in the workspace was relevant enough, so no model was called (`grounded: false`). The API
+ * still stored the answer, so it can be rated: a question the workspace should have covered is exactly
+ * the one worth flagging.
+ */
+function NotFound({ slug, question, children }: { slug: string; question: string; children: ReactNode }) {
   return (
-    <div className="bg-card flex flex-wrap items-start gap-4 rounded-xl border p-7">
-      <span className="bg-accent inline-flex size-10 flex-none items-center justify-center rounded-lg">
-        <Search className="size-5" />
-      </span>
-      <div className="flex-[1_1_300px]">
-        <h2 className="mb-1.5 text-[15px] font-semibold">Not found in this workspace</h2>
-        <p className="text-muted-foreground mb-3.5 text-sm leading-relaxed">
-          No passage was close enough to “{question}”, so no answer was generated. Upload material that covers
-          it, or ask in the words the material uses.
-        </p>
-        <Button variant="outline" size="sm" asChild>
-          <Link to={`/w/${slug}/upload`}>
-            <Upload /> Upload material
-          </Link>
-        </Button>
+    <div className="bg-card flex flex-col gap-4 rounded-xl border p-7">
+      <div className="flex flex-wrap items-start gap-4">
+        <span className="bg-accent inline-flex size-10 flex-none items-center justify-center rounded-lg">
+          <Search className="size-5" />
+        </span>
+        <div className="flex-[1_1_300px]">
+          <h2 className="mb-1.5 text-[15px] font-semibold">Not found in this workspace</h2>
+          <p className="text-muted-foreground mb-3.5 text-sm leading-relaxed">
+            No passage was close enough to “{question}”, so no answer was generated. Upload material that
+            covers it, or ask in the words the material uses.
+          </p>
+          <Button variant="outline" size="sm" asChild>
+            <Link to={`/w/${slug}/upload`}>
+              <Upload /> Upload material
+            </Link>
+          </Button>
+        </div>
       </div>
+      {children}
     </div>
   );
 }
