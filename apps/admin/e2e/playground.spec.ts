@@ -197,11 +197,19 @@ test('holds a conversation, answers a follow-up from it and starts a new one', a
   await expect(link).toHaveAttribute('data-conversation-id', conversationId);
 
   // The API has the whole thread, both sides of both turns, under that one conversation.
-  const stored = await page.request.get(`/api/v1/workspaces/${loose.slug}/conversations/${conversationId}`, {
-    headers,
-  });
-  const thread = (await stored.json()) as { messages: { role: string; content: string | null }[] };
-  expect(thread.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
+  // The reply's text arrives before the API has finished storing it, so wait for the stored thread.
+  type Thread = { messages: { role: string; content: string | null }[] };
+  let thread: Thread = { messages: [] };
+  await expect
+    .poll(async () => {
+      const stored = await page.request.get(
+        `/api/v1/workspaces/${loose.slug}/conversations/${conversationId}`,
+        { headers },
+      );
+      thread = (await stored.json()) as Thread;
+      return thread.messages.map((m) => m.role);
+    })
+    .toEqual(['user', 'assistant', 'user', 'assistant']);
   expect(thread.messages[2]!.content).toBe('Why does that matter?');
 
   // Looking at another mode must not lose the thread: both panels stay mounted.
