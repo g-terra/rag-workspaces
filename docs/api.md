@@ -104,8 +104,8 @@ console.log(answer.text);
 for (const c of answer.citations) console.log(`[${c.rank}] ${c.documentTitle}, page ${c.page ?? '-'}`);
 ```
 
-Agents in Claude Desktop, Claude Code or another MCP client can use the MCP server instead (README,
-"Connect an agent (MCP)").
+Agents in Claude Desktop, Claude Code or another MCP client can use the MCP server instead
+([API keys and agents](guide/api-keys.md#connect-an-ai-agent-mcp)).
 
 ## Errors and limits
 

@@ -40,7 +40,7 @@ See [Models and providers](providers.md).
 | `LANGFLOW_PUBLIC_URL` | `http://langflow.rag.localhost` | The Langflow editor, linked from the System page. Built into the admin UI: run `docker compose up -d --build` after changing it |
 
 To skip the local names, use `http://localhost:8081`, `:8080` and `:3000`. On an existing install the
-Keycloak realm needs a matching change by hand ([README](../../README.md#updating-an-existing-install)).
+Keycloak realm needs a matching change by hand ([Setup](../setup.md#updating-an-existing-install)).
 
 ## Ports
 
