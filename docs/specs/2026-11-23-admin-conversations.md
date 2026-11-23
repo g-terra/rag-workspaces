@@ -30,8 +30,7 @@ since `2026-11-20-conversations.md`; this is their screen. Layout and copy follo
    a `useInfiniteQuery` over `GET …/conversations?limit=20&cursor=`, which is how the API pages it, and
    `select` flattens the pages so the screen reads one array. "Load more" asks for the next cursor. Each
    row shows `conversationName()` (the API titles a conversation from its first message; one with no
-   title still needs a name), its id and when it was last active, through the library's
-   `formatUpdated()`.
+   title still needs a name), its id and when it was last active, through `formatRelative()`.
 2. **The thread** (`src/routes/conversations.tsx`). `useConversation()` reads `GET
    …/conversations/{id}` once: your messages as bubbles, replies as cards with their meta line and their
    sources beside them, through the same `Sources` the playground uses, so a citation opens the same

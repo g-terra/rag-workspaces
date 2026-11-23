@@ -8,7 +8,7 @@ import { ErrorState, Loading, Notice } from '@/components/states';
 import { TopBar } from '@/components/top-bar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { formatUpdated } from '@/documents/library';
+import { formatRelative } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { answerMeta } from '@/playground/answer';
 import { Sources } from '@/playground/answer-view';
@@ -73,7 +73,7 @@ export function Conversations() {
                 <span className="truncate text-[13px] font-semibold">{conversationName(c)}</span>
                 <span className="text-muted-foreground flex gap-2 text-xs">
                   <span className="truncate font-mono">{c.id}</span>
-                  <span className="flex-none">{formatUpdated(c.updatedAt)}</span>
+                  <span className="flex-none">{formatRelative(c.updatedAt)}</span>
                 </span>
               </button>
             ))}
@@ -138,7 +138,7 @@ function Thread({ slug, id, onDeleted }: { slug: string; id: string; onDeleted()
           <h2 className="truncate text-lg font-semibold">{conversationName(stored.data)}</h2>
           <p className="text-muted-foreground text-xs">
             <span className="font-mono">{stored.data.id}</span> · started{' '}
-            {formatUpdated(stored.data.createdAt)}
+            {formatRelative(stored.data.createdAt)}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
