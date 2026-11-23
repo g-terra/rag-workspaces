@@ -20,6 +20,7 @@ import { HttpProblem } from '../errors.js';
 import { ChromaService, type StoredChunk } from '../services/chroma.js';
 import { flowProblem } from '../services/flow-errors.js';
 import { parsePassageId, passageId, resolveHits, retrieve, vectorId } from '../services/passages.js';
+import { withWorkspaceKeys } from '../services/provider-keys.js';
 
 export type PassageRoutesOptions = {
   db: Database;
@@ -33,6 +34,7 @@ export type PassageRoutesOptions = {
     | 'LMSTUDIO_BASE_URL'
     | 'OPENAI_API_KEY'
     | 'GEMINI_API_KEY'
+    | 'SECRETS_KEY'
   >;
 };
 
@@ -89,7 +91,11 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
       req.usage = { question: query };
       let hits;
       try {
-        hits = await retrieve(langflow, workspace, query, config, { limit, minScore, folderId });
+        hits = await retrieve(langflow, workspace, query, await withWorkspaceKeys(db, config, workspace.id), {
+          limit,
+          minScore,
+          folderId,
+        });
       } catch (err) {
         throw flowProblem(err, 'Search');
       }

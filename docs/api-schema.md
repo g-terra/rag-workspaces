@@ -34,6 +34,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Usage | `/v1/usage`, `/v1/workspaces/{slug}/usage` | admin (global), editor (own workspace) |
 | User | `/v1/users` | admin |
 | System | `/v1/system` | admin |
+| Provider key | `/v1/workspaces/{slug}/providers` | admin |
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
 
@@ -83,13 +84,30 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 ```
 
 - `slug` is 3 to 40 characters, lowercase letters, digits and hyphens, and cannot be changed after creation (the collection and the upload folder are named after it). A taken slug returns `409`.
-- `chatProvider` and `embeddingProvider` are one of the providers configured in `.env`: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the providers and the models each offers; choosing one whose key is not set returns `422`. Provider keys are never accepted or returned by the API.
+- `chatProvider` and `embeddingProvider` are one of the providers configured in `.env` or with a key saved for the workspace: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the providers and the models each offers; choosing one whose key is not set returns `422`. Provider keys can be saved per workspace (below) and are never returned by the API.
 - `null` settings use the global defaults from `.env`. `embeddingProvider` and `embeddingModel` are the exception: they are filled in from the default when the workspace is created and are never `null` afterwards, so a later change to `.env` cannot silently break search in existing workspaces. `PATCH` refuses to change them (`400`); change them with workspace reindex, since vectors from two models can't be compared.
 - `embeddingPrefixes` (read-only) is the text put before each document and each search query when embedding. It is pinned with the model, at creation and at every reindex, from the built-in table (nomic-embed-text and Qwen3-Embedding) or `EMBEDDING_PREFIXES` in `.env`, so a workspace's queries always match how its documents were embedded. It is `null` for a workspace not reindexed since prefixes were added, which embeds without them.
 - `chunkSize` and `chunkOverlap` apply to documents ingested after the change; reindex applies them to everything.
 - `reasoningEffort` (`none`, `minimal`, `low`, `medium`, `high`) is sent to the chat model as `reasoning_effort`, by LM Studio and OpenAI only. `none` stops a thinking model such as Qwen 3 from reasoning before it answers, which can take minutes on a local machine. `null` uses `DEFAULT_REASONING_EFFORT`, and when that is unset too nothing is sent.
 - `status` is `active` or `reindexing`. While reindexing, passage search and reads, answers and chat messages return `503` with `Retry-After: 30`; the document list still works, so progress can be watched (each document goes `queued`, `processing`, `ready`).
 - Deleting a workspace removes its collection, files, documents, conversations and answers, and unbinds it from API keys; a key left with no workspace is revoked. Usage rows are kept with the workspace marked deleted.
+
+### Provider keys per workspace
+
+A hosted provider's key can be saved for one workspace from the admin UI, and then wins over the key in `.env` for that workspace's ingestion, search, answers and chat. Admins only.
+
+```jsonc
+// GET /v1/workspaces/{slug}/providers → 200: every provider, asked with the key this workspace would use
+[{ "id": "gemini", "configured": true, "reachable": true, "error": null, "embeddings": true,
+   "models": ["gemini-2.5-flash", "gemini-embedding-001"],
+   "key": { "source": "workspace", "last4": "x9Qa" } }]   // source: "workspace" | "env" | null
+
+// PUT /v1/workspaces/{slug}/providers/{provider}/key  { "apiKey": "..." } → 200 with that provider, as above
+// DELETE /v1/workspaces/{slug}/providers/{provider}/key → 204; the workspace goes back to .env's key
+```
+
+- `PUT` asks the provider for its models with the key first and saves nothing when it refuses (`422` with the provider's reason) or can't be asked (`502`, or `504` when too slow). `lmstudio` takes no key (`400`). Without `SECRETS_KEY` in `.env` keys can't be saved (`503`).
+- Keys are stored encrypted (AES-256-GCM under `SECRETS_KEY`, bound to the workspace and provider) and never returned: only the last four characters. Deleting the workspace deletes its keys. A saved key that no longer opens (`SECRETS_KEY` changed) is reported in the list and refused by every run, never replaced by `.env`'s key.
 
 ## Asking
 

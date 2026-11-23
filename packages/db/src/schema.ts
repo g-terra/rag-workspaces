@@ -140,6 +140,28 @@ export const documentStatus = pgEnum('document_status', [
 ]);
 
 /**
+ * Hosted model provider keys saved for one workspace from the admin UI. They win over the key in
+ * `.env`. Only the encrypted form is stored (AES-256-GCM under `SECRETS_KEY`, apps/api
+ * services/secrets.ts), plus the last four characters so admins can tell keys apart.
+ */
+export const providerKeys = pgTable(
+  'provider_keys',
+  {
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** `openai`, `gemini` or `anthropic`. */
+    provider: text().notNull(),
+    sealed: text().notNull(),
+    last4: text().notNull(),
+    /** Keycloak user id of the admin who saved it. */
+    savedBy: text().notNull(),
+    ...timestamps,
+  },
+  (t) => [primaryKey({ columns: [t.workspaceId, t.provider] })],
+);
+
+/**
  * Optional groupings inside a workspace (a course code, a project), usable as a filter when
  * searching and asking. Flat, and they isolate nothing. Passages carry the folder id in their
  * Chroma metadata (`folder`), so a rename changes nothing there and a move updates it.

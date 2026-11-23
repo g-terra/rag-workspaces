@@ -15,6 +15,7 @@ import { HttpProblem } from '../errors.js';
 import { FLOWS } from '../flows.js';
 import { normalise, resolveHits, retrieve, searchTweaks } from './passages.js';
 import { chatEndpoint, ProviderNotConfigured, type ChatEndpoint } from './providers.js';
+import { withWorkspaceKeys } from './provider-keys.js';
 
 /** The reply when nothing in the workspace is relevant enough. The model is not asked. */
 export const NOT_FOUND_TEXT = "I couldn't find anything about this in this workspace's material.";
@@ -74,6 +75,7 @@ export type GenerateConfig = Pick<
   | 'OPENAI_API_KEY'
   | 'GEMINI_API_KEY'
   | 'ANTHROPIC_API_KEY'
+  | 'SECRETS_KEY'
 >;
 
 type GenerateInput = {
@@ -128,7 +130,7 @@ export class Generator {
   constructor(private readonly deps: { db: Database; langflow: LangflowClient; config: GenerateConfig }) {}
 
   async generate(input: GenerateInput): Promise<Generation> {
-    const { db, langflow, config } = this.deps;
+    const { db, langflow } = this.deps;
     const { workspace, question, history, maxPassages, folderId, sessionId, onToken, signal } = input;
     const searchQuery = input.searchQuery ?? question;
     const started = performance.now();
@@ -145,6 +147,9 @@ export class Generator {
     };
 
     try {
+      // The workspace's own provider keys, where it has saved any, over the ones in .env. Shadows the
+      // API's config so nothing below can reach a key the workspace has replaced.
+      const config = await withWorkspaceKeys(db, this.deps.config, workspace.id);
       chat = chatEndpoint(workspace.settings, config);
       const opts = { limit: maxPassages, folderId };
       // Resolve before deciding: a hit whose document was deleted or is not ready doesn't count.

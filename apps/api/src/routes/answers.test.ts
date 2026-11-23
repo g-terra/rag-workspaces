@@ -1,4 +1,4 @@
-import { answers, documents, folders, newId, workspaces } from '@rag/db';
+import { answers, documents, folders, newId, providerKeys, workspaces } from '@rag/db';
 import { createTestDatabase } from '@rag/db/testing';
 import { LangflowClient } from '@rag/langflow-client';
 import { eq } from 'drizzle-orm';
@@ -9,6 +9,7 @@ import { keycloakAuthenticator } from '../auth/keycloak.js';
 import { loadConfig } from '../config.js';
 import { AnswerService, DEFAULT_SYSTEM_PROMPT, NOT_FOUND_TEXT } from '../services/answers.js';
 import { ChromaService } from '../services/chroma.js';
+import { sealSecret } from '../services/secrets.js';
 import { testKeycloak } from '../test/tokens.js';
 
 const url = process.env.TEST_DATABASE_URL;
@@ -80,6 +81,7 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
         NODE_ENV: 'test',
         DEFAULT_CHAT_PROVIDER: 'lmstudio',
         DEFAULT_CHAT_MODEL: 'qwen-test',
+        SECRETS_KEY: 'answers-test-secrets-key',
         DEFAULT_TOP_K: '4',
       }),
       db: t.db,
@@ -212,6 +214,44 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
       askedBy: 'reader-1',
       requestId: res.headers['x-request-id'],
     });
+  });
+
+  it("embeds the question and answers with the workspace's own saved keys", async () => {
+    const [ws] = await t.db.select().from(workspaces).where(eq(workspaces.slug, 'ouc'));
+    const before = ws!.settings;
+    const seal = (provider: string, key: string) => ({
+      workspaceId: ws!.id,
+      provider,
+      sealed: sealSecret('answers-test-secrets-key', key, `${ws!.id}:${provider}`),
+      last4: key.slice(-4),
+      savedBy: 'admin-1',
+    });
+    await t.db
+      .insert(providerKeys)
+      .values([seal('gemini', 'gemini-ws-key'), seal('openai', 'openai-ws-key')]);
+    await t.db
+      .update(workspaces)
+      .set({
+        settings: {
+          ...before,
+          embeddingProvider: 'gemini',
+          embeddingModel: 'gemini-embedding-001',
+          chatProvider: 'openai',
+          chatModel: 'gpt-test',
+        },
+      })
+      .where(eq(workspaces.id, ws!.id));
+    try {
+      expect((await ask({ question: 'What is RAG?' })).statusCode).toBe(201);
+      for (const run of runs) expect(run.body.tweaks.Embeddings).toMatchObject({ api_key: 'gemini-ws-key' });
+      expect(runs.find((r) => r.flow === 'rw-answer')!.body.tweaks.LLM).toMatchObject({
+        provider: 'openai',
+        api_key: 'openai-ws-key',
+      });
+    } finally {
+      await t.db.delete(providerKeys).where(eq(providerKeys.workspaceId, ws!.id));
+      await t.db.update(workspaces).set({ settings: before }).where(eq(workspaces.id, ws!.id));
+    }
   });
 
   it("sends the workspace's reasoning effort to the chat model", async () => {

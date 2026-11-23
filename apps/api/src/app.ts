@@ -22,6 +22,7 @@ import { conversationRoutes } from './routes/conversations.js';
 import { documentRoutes } from './routes/documents.js';
 import { folderRoutes } from './routes/folders.js';
 import { healthRoutes } from './routes/health.js';
+import { providerRoutes } from './routes/providers.js';
 import { systemRoutes } from './routes/system.js';
 import { meRoutes } from './routes/me.js';
 import { passageRoutes } from './routes/passages.js';
@@ -58,6 +59,8 @@ export type AppDeps = {
   directory?: Pick<KeycloakDirectory, 'list'>;
   /** Asks the model providers which models they offer, for `GET /v1/system`. */
   models?: Pick<ModelCatalog, 'status'>;
+  /** How model providers are asked for their models; tests pass a stand-in. */
+  providerFetch?: typeof fetch;
   /** Where the API's Langflow key came from, for `GET /v1/system`. */
   langflowKey?: () => KeySource;
   /** Where `/v1` requests are logged for analytics. Defaults to the app database. */
@@ -87,7 +90,8 @@ export async function buildApp({
     clientId: config.KEYCLOAK_DIRECTORY_CLIENT_ID,
     secret: config.KEYCLOAK_DIRECTORY_SECRET,
   }),
-  models = new ModelCatalog(config),
+  providerFetch = fetch,
+  models = new ModelCatalog(config, providerFetch),
   langflowKey = () => 'none',
   usage,
   checks = [],
@@ -162,6 +166,7 @@ export async function buildApp({
     await app.register(documentRoutes, { db, storage, chroma, queue, events, config });
     await app.register(folderRoutes, { db, chroma, events });
     await app.register(apiKeyRoutes, { db });
+    await app.register(providerRoutes, { db, config, fetchFn: providerFetch });
     await app.register(usageRoutes, { db });
     if (langflow) {
       await app.register(passageRoutes, { db, chroma, langflow, config });

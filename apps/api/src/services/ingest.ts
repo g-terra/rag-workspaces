@@ -18,6 +18,7 @@ import { embeddingEndpoint } from './providers.js';
 import { finishReindexIfDone } from './reindex.js';
 import { isMedia, transcriptPath, type UploadStorage } from './storage.js';
 import type { WhisperClient } from './whisper.js';
+import { withWorkspaceKeys } from './provider-keys.js';
 
 type IngestConfig = Pick<
   Config,
@@ -26,6 +27,7 @@ type IngestConfig = Pick<
   | 'LMSTUDIO_BASE_URL'
   | 'OPENAI_API_KEY'
   | 'GEMINI_API_KEY'
+  | 'SECRETS_KEY'
   | 'INGEST_TIMEOUT_MS'
   | 'INGEST_TIMEOUT_MS_PER_MB'
   | 'INGEST_MAX_ATTEMPTS'
@@ -107,7 +109,10 @@ export class IngestProcessor {
     const timeoutMs =
       config.INGEST_TIMEOUT_MS + Math.ceil(document.sizeBytes / 1_048_576) * config.INGEST_TIMEOUT_MS_PER_MB;
     try {
-      const embeddings = embeddingEndpoint(settings.embeddingProvider ?? 'lmstudio', config);
+      const embeddings = embeddingEndpoint(
+        settings.embeddingProvider ?? 'lmstudio',
+        await withWorkspaceKeys(db, config, workspace.id),
+      );
       let filePath = document.storagePath;
       if (media) {
         filePath = await this.transcribe(document, AbortSignal.timeout(timeoutMs));

@@ -17,7 +17,8 @@ type Source = {
 export const PROVIDERS: readonly ModelProviderId[] = ['lmstudio', 'openai', 'gemini', 'anthropic'];
 
 /**
- * Asks each model provider which models it offers, with the key from the API's environment.
+ * Asks each model provider which models it offers, with the keys in the config it is given (the
+ * API's environment, or a workspace's own keys over it).
  * Every one of them answers `GET .../models` with `{ data: [{ id }] }`. The keys only go to
  * their own provider, and never into the response.
  */
@@ -31,7 +32,24 @@ export class ModelCatalog {
     return Promise.all(PROVIDERS.map((id) => this.provider(id, signal)));
   }
 
-  private async provider(id: ModelProviderId, signal: AbortSignal): Promise<ProviderStatus> {
+  /** One provider, asked with the key in this catalogue's config. */
+  async provider(id: ModelProviderId, signal: AbortSignal): Promise<ProviderStatus> {
+    return (await this.check(id, signal)).status;
+  }
+
+  /**
+   * The same, plus whether the provider answered and turned the key down (HTTP 400, 401 or 403:
+   * Gemini says 400 for a bad key) rather than being down, slow or busy.
+   */
+  async check(
+    id: ModelProviderId,
+    signal: AbortSignal,
+  ): Promise<{ status: ProviderStatus; refused: boolean }> {
+    const status = await this.ask(id, signal);
+    return { status, refused: status.error?.includes('refused the key') ?? false };
+  }
+
+  private async ask(id: ModelProviderId, signal: AbortSignal): Promise<ProviderStatus> {
     const source = this.source(id);
     const base = { id, embeddings: id !== 'anthropic' };
     if (!source.request) {
@@ -40,7 +58,8 @@ export class ModelCatalog {
     try {
       const res = await this.fetchFn(source.request.url, { headers: source.request.headers, signal });
       if (!res.ok) {
-        const why = res.status === 401 || res.status === 403 ? 'refused the key' : 'answered';
+        const why =
+          [400, 401, 403].includes(res.status) && id !== 'lmstudio' ? 'refused the key' : 'answered';
         throw new Error(`${source.label} ${why} (HTTP ${res.status})`);
       }
       const body = (await res.json()) as { data?: { id?: unknown }[] };

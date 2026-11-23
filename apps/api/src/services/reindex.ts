@@ -6,13 +6,17 @@ import { ChromaService } from './chroma.js';
 import type { DocumentEvents } from './document-events.js';
 import type { IngestQueue } from './ingest-queue.js';
 import { embeddingEndpoint, embeddingPrefixes, ProviderNotConfigured } from './providers.js';
+import { withWorkspaceKeys } from './provider-keys.js';
 
 export type ReindexDeps = {
   db: Database;
   chroma: ChromaService;
   queue: IngestQueue;
   events: DocumentEvents;
-  config: Pick<Config, 'LMSTUDIO_BASE_URL' | 'OPENAI_API_KEY' | 'GEMINI_API_KEY' | 'EMBEDDING_PREFIXES'>;
+  config: Pick<
+    Config,
+    'LMSTUDIO_BASE_URL' | 'OPENAI_API_KEY' | 'GEMINI_API_KEY' | 'EMBEDDING_PREFIXES' | 'SECRETS_KEY'
+  >;
 };
 
 /** A new embedding provider or model for the workspace; the rest of its settings stay. */
@@ -50,7 +54,10 @@ export async function startReindex(
   if (settings.embeddingModel)
     settings.embeddingPrefixes = embeddingPrefixes(settings.embeddingModel, config);
   try {
-    embeddingEndpoint(settings.embeddingProvider ?? 'lmstudio', config);
+    embeddingEndpoint(
+      settings.embeddingProvider ?? 'lmstudio',
+      await withWorkspaceKeys(db, config, workspace.id),
+    );
   } catch (err) {
     if (err instanceof ProviderNotConfigured) {
       throw new HttpProblem(422, `The embedding provider can't be used: ${err.message}.`);
