@@ -2,6 +2,7 @@ import type { Citation } from '@rag/shared';
 import { Notice } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { useCurrentWorkspace } from '@/workspaces/current';
+import { clock } from './answer';
 import { AnswerMarkdown } from './answer-markdown';
 import { answerFailure, type AnswerError } from './failure';
 import { formatScore } from './search';
@@ -79,6 +80,9 @@ export function Sources({ citations, onOpen }: { citations: Citation[]; onOpen(p
             <span className="text-muted-foreground font-mono text-xs">{formatScore(c.score)}</span>
           </span>
           {c.page !== null && <span className="text-muted-foreground text-xs">page {c.page}</span>}
+          {c.page === null && c.startSeconds !== null && (
+            <span className="text-muted-foreground text-xs">at {clock(c.startSeconds)}</span>
+          )}
           <span className="text-[13px] leading-snug">“{c.snippet}”</span>
         </button>
       ))}

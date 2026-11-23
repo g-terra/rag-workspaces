@@ -8,7 +8,7 @@ import { TopBar } from '@/components/top-bar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { formatBytes, statusLabel } from '@/documents/files';
+import { formatBytes, isMedia, statusLabel } from '@/documents/files';
 import {
   filterDocuments,
   isIngesting,
@@ -22,7 +22,9 @@ import {
   useDownloadDocument,
   useLiveDocuments,
   useReindexDocument,
+  useTranscript,
 } from '@/documents/queries';
+import { TranscriptView } from '@/documents/transcript-view';
 import { formatRelative } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { useCurrentWorkspace } from '@/workspaces/current';
@@ -116,7 +118,10 @@ function Library() {
         )}
         {documents.data?.length === 0 &&
           (canEdit ? (
-            <Notice title="No documents yet" body="Upload PDF, DOCX, TXT or MD files to fill this workspace.">
+            <Notice
+              title="No documents yet"
+              body="Upload PDF, DOCX, TXT or MD files, or video and audio, to fill this workspace."
+            >
               <Button asChild>
                 <Link to={`/w/${w.slug}/upload`}>
                   <Upload /> Upload files
@@ -304,6 +309,7 @@ function DocumentDetail({
             : "Reindex deletes this document's vectors and runs the ingest flow again. Delete removes the file and its vectors."}
         </p>
       )}
+      {isMedia(doc.type) && doc.status === 'ready' && <DocumentTranscript slug={slug} doc={doc} />}
       {canEdit && (
         <DeleteDialog
           slug={slug}
@@ -314,6 +320,32 @@ function DocumentDetail({
         />
       )}
     </>
+  );
+}
+
+/** The transcript of a video or audio document, which is what its passages were made from. */
+function DocumentTranscript({ slug, doc }: { slug: string; doc: Document }) {
+  const transcript = useTranscript(slug, doc.id, true);
+  return (
+    <section aria-label="Transcript" className="flex flex-col gap-2 border-t pt-3">
+      <h3 className="text-[13px] font-semibold">
+        Transcript
+        {transcript.data?.language && (
+          <span className="text-muted-foreground font-normal"> · {transcript.data.language}</span>
+        )}
+      </h3>
+      {transcript.isPending && (
+        <p role="status" className="text-muted-foreground text-[13px]">
+          Loading the transcript…
+        </p>
+      )}
+      {transcript.error && (
+        <p role="alert" className="text-destructive text-[13px]">
+          {transcript.error.message}
+        </p>
+      )}
+      {transcript.data && <TranscriptView transcript={transcript.data} />}
+    </section>
   );
 }
 

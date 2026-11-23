@@ -80,10 +80,14 @@ test('uploads files and follows them live to Ready; a second copy is skipped', a
     { name: 'slides.pptx', mimeType: 'application/octet-stream', buffer: Buffer.from('x') },
     { name: 'binary.txt', mimeType: 'text/plain', buffer: Buffer.from([0x61, 0x00, 0x62]) },
   ]);
-  for (const name of ['slides.pptx', 'binary.txt']) {
+  for (const [name, reason] of [
+    ['slides.pptx', 'Not a supported file. Use PDF, DOCX, TXT, MD, MP4, MP3 or WAV.'],
+    // The API's own reason, which also says when video or audio needs the video profile.
+    ['binary.txt', '"binary.txt" is not a supported file.'],
+  ]) {
     const row = page.getByTestId('upload-row').filter({ hasText: name });
     await expect(row.getByTestId('status')).toHaveText('Not uploaded');
-    await expect(row).toContainText('Not a supported file. Use PDF, DOCX, TXT or MD.');
+    await expect(row).toContainText(reason!);
   }
 
   await expect(page.getByRole('heading', { name: /This session · 2 ready, 0 in progress/ })).toBeVisible();

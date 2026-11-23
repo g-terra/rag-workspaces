@@ -64,11 +64,29 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
 }
 
-/** Where a passage sits: "Week 3 slides · page 12", or its position when the document has no pages. */
+/** A time in a recording as people read it: 12:34, or 1:02:03 past an hour. */
+export function clock(seconds: number): string {
+  const s = Math.floor(seconds);
+  const [h, m] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60)];
+  const ss = String(s % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+
+/**
+ * Where a passage sits: "Week 3 slides · page 12", "Lecture 3 · at 12:34" for a recording, or its
+ * position when the document has neither.
+ */
 export function passageWhere({
   documentTitle,
   page,
+  startSeconds,
   chunkIndex,
-}: Pick<Passage, 'documentTitle' | 'page' | 'chunkIndex'>): string {
-  return `${documentTitle} · ${page === null ? `passage ${chunkIndex + 1}` : `page ${page}`}`;
+}: Pick<Passage, 'documentTitle' | 'page' | 'startSeconds' | 'chunkIndex'>): string {
+  const where =
+    page !== null
+      ? `page ${page}`
+      : startSeconds !== null
+        ? `at ${clock(startSeconds)}`
+        : `passage ${chunkIndex + 1}`;
+  return `${documentTitle} · ${where}`;
 }

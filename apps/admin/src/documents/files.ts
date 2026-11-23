@@ -2,12 +2,20 @@ import type { Document } from '@rag/shared';
 
 export type DocumentStatus = Document['status'];
 
-/** For the file input's `accept`. The API checks the content too; this only saves a pointless upload. */
-export const ACCEPT = '.pdf,.docx,.txt,.md';
+/** Video and audio, which the server transcribes before indexing, so they have a transcript. */
+export function isMedia(type: Document['type']): boolean {
+  return type === 'mp4' || type === 'mp3' || type === 'wav';
+}
+
+/**
+ * For the file input's `accept`. The API checks the content too; this only saves a pointless upload.
+ * Video and audio need the server's `video` profile; without it the API's 415 says so.
+ */
+export const ACCEPT = '.pdf,.docx,.txt,.md,.mp4,.mp3,.wav';
 /** The API's and nginx's default `MAX_UPLOAD_BYTES`. A larger limit on the server still answers 413 here. */
 const MAX_BYTES = 200 * 1024 * 1024;
 
-const UNSUPPORTED = 'Not a supported file. Use PDF, DOCX, TXT or MD.';
+const UNSUPPORTED = 'Not a supported file. Use PDF, DOCX, TXT, MD, MP4, MP3 or WAV.';
 const TOO_LARGE = 'Too large: the limit is 200 MB per file.';
 
 /** Why this file can't be uploaded, or null when it can. */
@@ -22,7 +30,7 @@ export function checkFile(file: { name: string; size: number }): string | null {
 /** A failed upload in words. `status` 0 means the request never got an answer. */
 export function uploadErrorMessage(status: number, detail: string): string {
   if (status === 413) return TOO_LARGE;
-  if (status === 415) return UNSUPPORTED;
+  if (status === 415) return detail || UNSUPPORTED;
   if (status === 403) return "You can't upload to this workspace.";
   if (status === 0) return "Couldn't reach the API. Check your connection and try again.";
   if (status === 400) return detail;

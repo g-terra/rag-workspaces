@@ -1,4 +1,4 @@
-import type { Document } from '@rag/shared';
+import type { Document, Transcript } from '@rag/shared';
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/auth/auth-context';
 import type { DocumentEvent } from './events';
@@ -80,5 +80,15 @@ export function useDownloadDocument(slug: string) {
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     },
+  });
+}
+
+/** A video or audio document's transcript. Only asked for when `enabled`, since other types have none. */
+export function useTranscript(slug: string, documentId: string, enabled: boolean) {
+  const { api } = useAuth();
+  return useQuery({
+    queryKey: [...documentsKey(slug), documentId, 'transcript'],
+    queryFn: () => api<Transcript>(`${documentsPath(slug)}/${encodeURIComponent(documentId)}/transcript`),
+    enabled,
   });
 }
