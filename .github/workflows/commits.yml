@@ -12,12 +12,15 @@ permissions:
 jobs:
   commitlint:
     name: Conventional Commit messages
-    runs-on: self-hosted
+    runs-on: rw-light
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: pnpm/action-setup@v4
+        with:
+          # Per runner: the default (~/setup-pnpm) is shared by every runner on the machine.
+          dest: ${{ runner.temp }}/setup-pnpm
       - uses: actions/setup-node@v4
         with:
           node-version: 22

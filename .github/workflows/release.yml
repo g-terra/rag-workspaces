@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   release-please:
-    runs-on: self-hosted
+    runs-on: rw-light
     outputs:
       released: ${{ steps.release.outputs.release_created }}
       version: ${{ steps.release.outputs.version }}
@@ -30,13 +30,15 @@ jobs:
     name: Publish images
     needs: release-please
     if: needs.release-please.outputs.released == 'true'
-    runs-on: self-hosted
+    runs-on: rw-light
     timeout-minutes: 30
     # Only this job pushes images.
     permissions:
       contents: read
       packages: write
     strategy:
+      # One at a time: the runners share ~/.docker, and one job's registry logout can break another's.
+      max-parallel: 1
       matrix:
         include:
           - image: api
