@@ -1,8 +1,8 @@
 ---
 title: Ask a workspace a question in the admin playground
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#55"
+status: in review
 areas: [admin]
 ---
 

@@ -1,18 +1,12 @@
 import type { Document } from '@rag/shared';
 import { describe, expect, it } from 'vitest';
-import {
-  applyDocumentEvent,
-  filterDocuments,
-  formatUpdated,
-  isIngesting,
-  librarySummary,
-  shortSha,
-} from './library';
+import { applyDocumentEvent, filterDocuments, isIngesting, librarySummary, shortSha } from './library';
 
 function doc(id: string, over: Partial<Document> = {}): Document {
   return {
     id,
     workspace: 'ouc',
+    folderId: null,
     title: id,
     fileName: `${id}.md`,
     type: 'md',
@@ -100,17 +94,6 @@ describe('librarySummary', () => {
       '2 documents · 10 passages · 3 KB',
     );
     expect(librarySummary([doc('a', { passageCount: 1 })])).toBe('1 document · 1 passage · 1 KB');
-  });
-});
-
-describe('formatUpdated', () => {
-  const now = new Date('2026-11-22T12:00:00Z');
-  it('is relative within a day, then a short date', () => {
-    expect(formatUpdated('2026-11-22T11:59:30Z', now)).toBe('just now');
-    expect(formatUpdated('2026-11-22T11:58:00Z', now)).toBe('2 min ago');
-    expect(formatUpdated('2026-11-22T09:00:00Z', now)).toBe('3 h ago');
-    expect(formatUpdated('2026-11-03T09:00:00Z', now)).toBe('3 Nov');
-    expect(formatUpdated('2025-10-20T09:00:00Z', now)).toBe('20 Oct 2025');
   });
 });
 

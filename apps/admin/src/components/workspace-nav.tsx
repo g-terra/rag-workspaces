@@ -1,4 +1,4 @@
-import { FileText, MessagesSquare, Sparkles, Upload } from 'lucide-react';
+import { BarChart3, FileText, MessagesSquare, Settings, Sparkles, Upload } from 'lucide-react';
 import { NavLink, useMatch } from 'react-router';
 import { navItemClass } from '@/lib/utils';
 import { useWorkspaces } from '@/workspaces/queries';
@@ -26,6 +26,17 @@ export function WorkspaceNav() {
       <NavLink to={`${base}/conversations`} className={navItemClass}>
         <MessagesSquare className="size-4" /> Conversations
       </NavLink>
+      {workspace.access !== 'reader' && (
+        <NavLink to={`${base}/usage`} className={navItemClass}>
+          <BarChart3 className="size-4" /> Usage
+        </NavLink>
+      )}
+      {/* Settings, members and delete all need admin access in the API, not merely editor. */}
+      {workspace.access === 'admin' && (
+        <NavLink to={`${base}/settings`} className={navItemClass}>
+          <Settings className="size-4" /> Settings
+        </NavLink>
+      )}
     </nav>
   );
 }
