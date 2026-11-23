@@ -1,6 +1,7 @@
 /**
- * Readiness checks. Each dependency (Postgres, Chroma, Langflow, Keycloak, the
- * model provider) registers one as it is wired in; `/ready` runs them all.
+ * Readiness checks. Each dependency (Postgres, Chroma, Langflow, Keycloak) registers one as it
+ * is wired in; `/ready` and `GET /v1/system` run them all. The model providers are not among
+ * them: LM Studio being off shouldn't make the API unready, so only `/v1/system` asks them.
  */
 export type ReadinessCheck = {
   name: string;

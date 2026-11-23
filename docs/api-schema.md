@@ -33,11 +33,27 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Conversation (+ messages) | `/v1/workspaces/{slug}/conversations` | reader; a conversation is visible only to whoever started it and to admins |
 | Usage | `/v1/usage`, `/v1/workspaces/{slug}/usage` | admin (global), editor (own workspace) |
 | User | `/v1/users` | admin |
-| System *(planned)* | `/v1/system` | admin |
+| System | `/v1/system` | admin |
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
 
-Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow, Keycloak and the model provider, including whether the configured models are available.
+Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down.
+
+```json
+// GET /v1/system → 200 (admin only)
+{ "version": "0.4.0", "status": "degraded",
+  "services": [{ "name": "postgres", "ok": true, "latencyMs": 2, "error": null },
+               { "name": "langflow", "ok": false, "latencyMs": 15, "error": "flows missing in Langflow: rw-chat" }],
+  "langflowKey": "auto",
+  "providers": [{ "id": "lmstudio", "configured": true, "reachable": true, "error": null, "embeddings": true,
+                  "models": ["qwen2.5-7b-instruct", "text-embedding-nomic-embed-text-v1.5"] },
+                { "id": "openai", "configured": false, "reachable": null, "error": "OPENAI_API_KEY is not set",
+                  "embeddings": true, "models": [] }],
+  "defaults": { "chat": { "provider": "lmstudio", "model": "qwen2.5-7b-instruct", "available": true },
+                "embedding": { "provider": "lmstudio", "model": "text-embedding-nomic-embed-text-v1.5", "available": true } } }
+```
+
+`providers` always lists `lmstudio`, `openai`, `gemini` and `anthropic`; a hosted one is asked only when its key is set, and keys are never returned. `langflowKey` is `auto` (minted at start), `env` (`LANGFLOW_API_KEY`) or `none` (not yet). `/ready` does not ask the model providers, so a stopped LM Studio shows here but doesn't make the API unready.
 
 ## Workspaces
 
@@ -62,7 +78,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 ```
 
 - `slug` is 3 to 40 characters, lowercase letters, digits and hyphens, and cannot be changed after creation (the collection and the upload folder are named after it). A taken slug returns `409`.
-- `chatProvider` and `embeddingProvider` are one of the providers configured in `.env`: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the configured providers and their models; choosing one that is not configured returns `422`. Provider keys are never accepted or returned by the API.
+- `chatProvider` and `embeddingProvider` are one of the providers configured in `.env`: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the providers and the models each offers; choosing one whose key is not set returns `422`. Provider keys are never accepted or returned by the API.
 - `null` settings use the global defaults from `.env`. `embeddingProvider` and `embeddingModel` are the exception: they are filled in from the default when the workspace is created and are never `null` afterwards, so a later change to `.env` cannot silently break search in existing workspaces. `PATCH` refuses to change them (`400`); change them with workspace reindex, since vectors from two models can't be compared.
 - `chunkSize` and `chunkOverlap` apply to documents ingested after the change; reindex applies them to everything.
 - `status` is `active` or `reindexing`. While reindexing, passage search and reads, answers and chat messages return `503` with `Retry-After: 30`; the document list still works, so progress can be watched (each document goes `queued`, `processing`, `ready`).
