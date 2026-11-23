@@ -16,7 +16,8 @@ second set. One run per setting can't separate differences of a question or two.
 
 ## Recommended settings (local models, OUC course material)
 
-The chunk size and overlap, top-k, minimum score and system prompt below are the defaults for workspaces that don't set
+The default chat model is the lighter `openai/gpt-oss-20b`, so a new install fits more machines. The chunk size and
+overlap, top-k, minimum score and system prompt below are the defaults for workspaces that don't set
 their own (`apps/api/src/config.ts`, `DEFAULT_SYSTEM_PROMPT` in `apps/api/src/services/generate.ts`). The default prompt
 says "this workspace's material" instead of "course material".
 

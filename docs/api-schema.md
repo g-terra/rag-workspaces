@@ -46,10 +46,10 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
                { "name": "langflow", "ok": false, "latencyMs": 15, "error": "flows missing in Langflow: rw-chat" }],
   "langflowKey": "auto",
   "providers": [{ "id": "lmstudio", "configured": true, "reachable": true, "error": null, "embeddings": true,
-                  "models": ["qwen2.5-7b-instruct", "text-embedding-nomic-embed-text-v1.5"] },
+                  "models": ["openai/gpt-oss-20b", "text-embedding-nomic-embed-text-v1.5"] },
                 { "id": "openai", "configured": false, "reachable": null, "error": "OPENAI_API_KEY is not set",
                   "embeddings": true, "models": [] }],
-  "defaults": { "chat": { "provider": "lmstudio", "model": "qwen2.5-7b-instruct", "available": true },
+  "defaults": { "chat": { "provider": "lmstudio", "model": "openai/gpt-oss-20b", "available": true },
                 "embedding": { "provider": "lmstudio", "model": "text-embedding-nomic-embed-text-v1.5", "available": true },
                 "workspace": { "chunkSize": 1200, "chunkOverlap": 200, "topK": 8, "minScore": 0.3,
                                "systemPrompt": "You answer questions about this workspace's material using only the numbered passages…",
@@ -113,7 +113,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
   "status": "complete", "grounded": true,
   "citations": [ { "rank": 1, "passageId": "psg_01J…", "documentId": "doc_01J…", "documentTitle": "Week 3 slides",
                    "page": 12, "startSeconds": null, "snippet": "RAG retrieves relevant passages …", "score": 0.83 } ],
-  "provider": "lmstudio", "model": "qwen2.5-7b-instruct",
+  "provider": "lmstudio", "model": "openai/gpt-oss-20b",
   "usage": { "promptTokens": 1840, "completionTokens": 212 },
   "latencyMs": 2310, "timeToFirstTokenMs": null, "error": null, "feedback": null, "createdAt": "…" }
 ```

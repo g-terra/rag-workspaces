@@ -53,7 +53,9 @@ http://api.rag.localhost/docs (API and Swagger UI) and http://auth.rag.localhost
 ### LM Studio (the default, runs offline)
 
 1. In LM Studio, download a chat model and an embedding model. The defaults in `.env` are
-   `qwen2.5-7b-instruct` and `text-embedding-nomic-embed-text-v1.5`.
+   `openai/gpt-oss-20b` (about 12 GB) and `text-embedding-nomic-embed-text-v1.5`. With memory to spare,
+   `qwen3.6-35b-a3b` with `DEFAULT_REASONING_EFFORT=none` answered one question more of 15 in our tuning, at about 21 GB
+   ([tuning.md](tuning.md)).
 2. Load both, and start the local server (Developer tab, port 1234).
 3. Check that the ids match `.env` exactly: `curl localhost:1234/v1/models`. If yours differ, set
    `DEFAULT_CHAT_MODEL` and `DEFAULT_EMBEDDING_MODEL` to them and run `docker compose up -d api`.
@@ -64,7 +66,7 @@ server settings). Every question then swaps the embedding model for the chat mod
 seconds each way. Load both yourself once LM Studio is running, and they stay loaded:
 
 ```sh
-lms load qwen2.5-7b-instruct
+lms load openai/gpt-oss-20b
 lms load text-embedding-nomic-embed-text-v1.5
 ```
 
