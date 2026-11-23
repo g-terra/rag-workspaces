@@ -1,7 +1,7 @@
 ---
 title: read fullwidth 【n】 citations as citation chips
 date: 2026-11-23
-pr: pending
+pr: "#77"
 status: in review
 areas: [admin]
 ---
