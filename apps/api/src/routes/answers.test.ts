@@ -346,11 +346,25 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
       }
     });
 
+    it("a custom style's instructions reach the model", async () => {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/v1/styles',
+        headers: { authorization: auth.admin },
+        payload: { slug: 'pirate', name: 'Pirate', description: '', instructions: 'Talk like a pirate.' },
+      });
+      expect(created.statusCode).toBe(201);
+      const res = await ask({ question: 'What is RAG?', style: 'pirate' });
+      expect(res.json().style).toBe('pirate');
+      expect(systemMessage().endsWith('\nTalk like a pirate.')).toBe(true);
+      expect(systemMessage()).toContain('Response style: Pirate.');
+    });
+
     it('an unknown style is a 400 and nothing is asked or stored', async () => {
       const before = (await t.db.select().from(answers)).length;
-      const res = await ask({ question: 'What is RAG?', style: 'pirate' });
+      const res = await ask({ question: 'What is RAG?', style: 'no-such-style' });
       expect(res.statusCode).toBe(400);
-      expect(res.json().detail).toContain('pirate');
+      expect(res.json().detail).toContain('no-such-style');
       expect(runs).toHaveLength(0);
       expect(await t.db.select().from(answers)).toHaveLength(before);
     });
