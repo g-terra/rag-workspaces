@@ -1,7 +1,7 @@
 ---
 title: Record the response styles' results after the hardening
 date: 2026-11-24
-pr: pending
+pr: "#129"
 status: in review
 areas: [docs]
 ---
