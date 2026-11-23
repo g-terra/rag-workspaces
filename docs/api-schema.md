@@ -52,8 +52,8 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
                   "embeddings": true, "models": [] }],
   "defaults": { "chat": { "provider": "lmstudio", "model": "qwen2.5-7b-instruct", "available": true },
                 "embedding": { "provider": "lmstudio", "model": "text-embedding-nomic-embed-text-v1.5", "available": true },
-                "workspace": { "chunkSize": 800, "chunkOverlap": 100, "topK": 5, "minScore": 0.3,
-                               "systemPrompt": "You answer questions using only the numbered passages…",
+                "workspace": { "chunkSize": 1200, "chunkOverlap": 200, "topK": 8, "minScore": 0.3,
+                               "systemPrompt": "You answer questions about this workspace's material using only the numbered passages…",
                                "reasoningEffort": null } } }
 ```
 
@@ -76,7 +76,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
   "settings": { "chatProvider": null, "chatModel": null,
                 "embeddingProvider": "lmstudio", "embeddingModel": "text-embedding-nomic-embed-text-v1.5",
                 "embeddingPrefixes": { "document": "search_document: ", "query": "search_query: " },
-                "systemPrompt": null, "chunkSize": 800, "chunkOverlap": 100, "topK": 5, "minScore": null,
+                "systemPrompt": null, "chunkSize": 1200, "chunkOverlap": 200, "topK": 8, "minScore": null,
                 "reasoningEffort": "none" },
   "access": "admin",
   "stats": { "documents": 42, "passages": 5120, "conversations": 7 },   // (planned)

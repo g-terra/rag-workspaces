@@ -37,13 +37,21 @@ test('an admin changes a workspace’s name and retrieval settings, and they sti
   // The slug is shown but fixed, and the embedding model is read-only: PATCH refuses both.
   await expect(page.getByLabel('Slug')).toBeDisabled();
   await expect(page.getByLabel('Slug')).toHaveValue(slug);
-  await expect(page.getByLabel('Embedding model')).toBeDisabled();
+  await expect(page.getByLabel('Embedding model', { exact: true })).toBeDisabled();
+
+  // …and changes through a reindex, which the button beside it opens, with the model in use picked.
+  await page.getByRole('button', { name: 'Change embedding model' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Embedding provider')).toHaveValue('lmstudio');
+  await expect(dialog.getByLabel('Embedding model')).not.toHaveValue('');
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
 
   // An empty setting shows the API's own default as its placeholder, not just "Default".
   await expect(page.getByLabel('Chunk size')).toHaveAttribute('placeholder', /^Default: \d+$/);
   await expect(page.getByLabel('Top-k passages')).toHaveAttribute('placeholder', /^Default: \d+$/);
   await expect(page.getByLabel('Relevance threshold')).toHaveAttribute('placeholder', /^Default: 0?\.\d+$/);
-  await expect(page.getByLabel('System prompt')).toHaveAttribute('placeholder', /Cite the passages/);
+  await expect(page.getByLabel('System prompt')).toHaveAttribute('placeholder', /Cite with square brackets/);
 
   // Nothing to save until something changes.
   const saveButton = page.getByRole('button', { name: 'Save changes' });
@@ -129,7 +137,7 @@ test('an admin reindexes a workspace', async ({ page }) => {
   // Unsaved chunking would need a second run to apply, so the button waits for the save.
   await page.getByLabel('Chunk size').fill('500');
   await expect(page.getByRole('button', { name: 'Reindex workspace' })).toBeDisabled();
-  await expect(page.getByText(/Save your changes first/)).toBeVisible();
+  await expect(page.getByText(/Save your changes first: a reindex/)).toBeVisible();
 });
 
 test('an admin sees where each provider key comes from, and a key the provider refuses is not saved', async ({

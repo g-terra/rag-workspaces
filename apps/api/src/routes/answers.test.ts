@@ -7,7 +7,7 @@ import { buildApp, type App } from '../app.js';
 import { apiKeyAuthenticator } from '../auth/api-keys.js';
 import { keycloakAuthenticator } from '../auth/keycloak.js';
 import { loadConfig } from '../config.js';
-import { AnswerService, NOT_FOUND_TEXT } from '../services/answers.js';
+import { AnswerService, DEFAULT_SYSTEM_PROMPT, NOT_FOUND_TEXT } from '../services/answers.js';
 import { ChromaService } from '../services/chroma.js';
 import { sealSecret } from '../services/secrets.js';
 import { testKeycloak } from '../test/tokens.js';
@@ -205,7 +205,7 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
       stream: false,
       reasoning_effort: '',
     });
-    expect(String(llm.system_message)).toContain('[n]');
+    expect(String(llm.system_message)).toBe(DEFAULT_SYSTEM_PROMPT);
     expect(runs[1]!.body.tweaks.Search).toMatchObject({ collection_name: 'ws_ouc', top_k: 4 });
 
     const [stored] = await t.db.select().from(answers).where(eq(answers.id, body.id));
