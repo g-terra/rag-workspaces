@@ -70,6 +70,10 @@ passage's text and file name) are fused with reciprocal rank fusion (k = 60), an
 is the fused order, and `score` (cosine) need not fall steadily down the list. The keyword index lives in the Langflow worker,
 one per collection, and is rebuilt when the collection's passage count changes or after two minutes.
 
+A question that asks several things (split at question marks, and at "and" before a question word such as "how" or an
+instruction such as "explain") is searched part by part: each part gets its own fused ranking, and the parts take turns filling
+the `top_k` results. Only the query's last line is split, since a chat search puts the previous question on the line before.
+
 ### `rw-answer`: retrieve, prompt, generate (streams)
 
 Same `Embeddings` and `Search` tweaks as `rw-retrieve`, plus:
