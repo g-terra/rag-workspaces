@@ -644,6 +644,89 @@ async function main() {
     );
   });
 
+  await step('a docs website is crawled into pages, cited by URL, crawled again and removed', async () => {
+    const base = '/v1/workspaces/' + slug + '/sites';
+    const docsUrl = 'http://standin:1234/site/docs/';
+    const waitForCrawl = async (id: string) => {
+      const deadline = Date.now() + READY_TIMEOUT_MS;
+      for (;;) {
+        const site = await call(token, 'GET', `${base}/${id}`);
+        if (site.status === 'ready' || site.status === 'failed') return site;
+        expect(Date.now() < deadline, `crawl still ${site.status} after ${READY_TIMEOUT_MS / 1000} s`);
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    };
+    const site = await call(token, 'POST', base, { url: docsUrl, maxPages: 10 });
+    let crawled = await waitForCrawl(site.id);
+    expect(crawled.status === 'ready', `crawl ended ${crawled.status}: ${crawled.lastError}`);
+    expect(
+      crawled.pages.new === 3 && crawled.documentCount === 3,
+      `expected 3 new pages, got ${JSON.stringify(crawled.pages)} and ${crawled.documentCount} documents`,
+    );
+    const { data: all } = await call(token, 'GET', `/v1/workspaces/${slug}/documents`);
+    const pages = all.filter((d: { siteId: string | null }) => d.siteId === site.id);
+    expect(
+      !pages.some((d: { sourceUrl: string }) => d.sourceUrl.endsWith('/private')),
+      'a page robots.txt disallows was imported',
+    );
+    await waitUntilReady(
+      token,
+      slug,
+      pages.map((d: Doc) => d.id),
+    );
+    const usage = pages.find((d: { sourceUrl: string }) => d.sourceUrl === `${docsUrl}usage`);
+    expect(usage, `no page for ${docsUrl}usage: ${pages.map((d: { sourceUrl: string }) => d.sourceUrl)}`);
+    const { data: passages } = await call(
+      token,
+      'GET',
+      `/v1/workspaces/${slug}/documents/${usage.id}/passages`,
+    );
+    const text = passages.map((p: { text: string }) => p.text).join(' ');
+    expect(/calibrate the widget sprocket/.test(text), `the page text is missing: ${text}`);
+    expect(!/Sidebar navigation|Footer copyright/.test(text), `navigation or footer was kept: ${text}`);
+    const hits = await call(
+      token,
+      'GET',
+      `/v1/workspaces/${slug}/passages?query=${encodeURIComponent('calibrate widget sprocket')}&minScore=0`,
+    );
+    expect(
+      hits.data[0]?.sourceUrl === `${docsUrl}usage`,
+      `the best hit should cite ${docsUrl}usage, got ${JSON.stringify(hits.data[0])}`,
+    );
+
+    await call(token, 'POST', `${base}/${site.id}/crawl`);
+    crawled = await waitForCrawl(site.id);
+    expect(
+      crawled.status === 'ready' &&
+        crawled.pages.unchanged === 3 &&
+        crawled.pages.new === 0 &&
+        crawled.pages.removed === 0,
+      `a second crawl of an unchanged site should change nothing: ${JSON.stringify(crawled.pages)}`,
+    );
+
+    // Langflow's SSRF guard refuses internal services: Chroma is one.
+    const internal = await call(token, 'POST', base, { url: 'http://chroma:8000/docs/' });
+    const refused = await waitForCrawl(internal.id);
+    expect(
+      refused.status === 'failed' && /SSRF|refused/i.test(refused.lastError ?? ''),
+      `crawling an internal service should fail, got ${refused.status}: ${refused.lastError}`,
+    );
+
+    await call(token, 'DELETE', `${base}/${site.id}`);
+    await call(token, 'DELETE', `${base}/${internal.id}`);
+    const left = await call(token, 'GET', `/v1/workspaces/${slug}/documents`);
+    expect(
+      !left.data.some((d: { siteId: string | null }) => d.siteId === site.id),
+      'removing the site left pages behind',
+    );
+    const gone = await chroma(`/collections/${collection}`);
+    expect(gone.ok, 'the collection should still exist');
+    expect(
+      (await passagesOf(collection, usage.id)).length === 0,
+      "the removed page's passages are still in Chroma",
+    );
+  });
+
   await step('deleted the workspace, its Chroma collection is gone', async () => {
     await call(token, 'DELETE', `/v1/workspaces/${slug}`);
     const res = await chroma(`/collections/${collection}`);
