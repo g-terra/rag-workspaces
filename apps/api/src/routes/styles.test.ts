@@ -120,6 +120,13 @@ describe.skipIf(!url)('response styles (against TEST_DATABASE_URL)', () => {
       name: 'Socratic',
       instructions: 'Ask one question back.',
     });
+    // Fields left out keep their values, description included.
+    expect(res.json().description).toBe(socratic.description);
+    const empty = await call('PATCH', '/v1/styles/socratic', 'admin', {});
+    expect(empty.json()).toMatchObject({
+      description: socratic.description,
+      instructions: 'Ask one question back.',
+    });
     expect((await call('PATCH', '/v1/styles/academic', 'admin', { name: 'Mine' })).statusCode).toBe(403);
     expect((await call('PATCH', '/v1/styles/nope', 'admin', { name: 'Mine' })).statusCode).toBe(404);
   });

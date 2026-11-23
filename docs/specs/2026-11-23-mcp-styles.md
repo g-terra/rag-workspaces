@@ -26,7 +26,7 @@ that API, so agents get what other callers get.
    `description` for each style. It leaves out `instructions`, because the agent only needs to choose. It is
    read-only.
 2. `ask` takes an optional `style` (a slug) and sends it to `POST /v1/workspaces/{slug}/answers`. It returns
-   the answer's `style`. With no `style`, the workspace's default applies, as before. An unknown slug comes
+   the answer's `style`. With no `style`, the workspace's default applies, as before; `null` asks for no style. An unknown slug comes
    back as a tool error with the API's `400` reason.
 
 ## Decisions and trade-offs
