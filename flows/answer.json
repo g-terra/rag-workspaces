@@ -1144,7 +1144,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"One chat-model node whose provider is chosen per request.\n\nThe workspace's model provider is a setting (LM Studio by default; OpenAI,\nAnthropic or Gemini as options), so the API passes provider, model_name and\napi_key as tweaks and one answer flow serves every workspace. The API holds the\nprovider keys and sends them per request; Langflow's environment holds none.\n\"\"\"\n\nfrom lfx.base.models.model import LCModelComponent\nfrom lfx.field_typing import LanguageModel\nfrom lfx.io import DropdownInput, FloatInput, MessageTextInput, SecretStrInput\n\nDEFAULT_BASE_URLS = {\"lmstudio\": \"http://host.docker.internal:1234/v1\"}\n\n\nclass WorkspaceChatModel(LCModelComponent):\n    display_name = \"Workspace Chat Model\"\n    description = \"Chat model whose provider (LM Studio, OpenAI, Anthropic, Gemini) is set per request.\"\n    icon = \"brain-circuit\"\n    name = \"WorkspaceChatModel\"\n\n    inputs = [\n        *LCModelComponent.get_base_inputs(),\n        DropdownInput(name=\"provider\", display_name=\"Provider\", options=[\"lmstudio\", \"openai\", \"anthropic\", \"gemini\"],\n                      value=\"lmstudio\", combobox=True),\n        MessageTextInput(name=\"model_name\", display_name=\"Model\", value=\"qwen2.5-7b-instruct\"),\n        SecretStrInput(name=\"api_key\", display_name=\"API Key\", value=\"lm-studio\", load_from_db=False,\n                       info=\"Sent by the API per request. LM Studio ignores it.\"),\n        MessageTextInput(name=\"base_url\", display_name=\"Base URL\", advanced=True,\n                         info=\"Defaults: LM Studio on the host; each cloud provider's own endpoint.\"),\n        FloatInput(name=\"temperature\", display_name=\"Temperature\", value=0.2),\n    ]\n\n    def build_model(self) -> LanguageModel:\n        provider = (self.provider or \"lmstudio\").lower()\n        base_url = self.base_url or DEFAULT_BASE_URLS.get(provider)\n        common = {\"temperature\": self.temperature}\n        if provider in {\"lmstudio\", \"openai\"}:\n            from langchain_openai import ChatOpenAI\n\n            return ChatOpenAI(model=self.model_name, api_key=self.api_key or \"lm-studio\", base_url=base_url,\n                              stream_usage=True, **common)\n        if provider == \"anthropic\":\n            from langchain_anthropic import ChatAnthropic\n\n            kwargs = {\"base_url\": base_url} if base_url else {}\n            return ChatAnthropic(model=self.model_name, api_key=self.api_key, max_tokens=1024, **kwargs, **common)\n        if provider == \"gemini\":\n            from langchain_google_genai import ChatGoogleGenerativeAI\n\n            return ChatGoogleGenerativeAI(model=self.model_name, google_api_key=self.api_key, **common)\n        msg = f\"Unknown provider: {provider}\"\n        raise ValueError(msg)\n",
+                "value": "\"\"\"One chat-model node whose provider is chosen per request.\n\nThe workspace's model provider is a setting (LM Studio by default; OpenAI,\nAnthropic or Gemini as options), so the API passes provider, model_name and\napi_key as tweaks and one answer flow serves every workspace. The API holds the\nprovider keys and sends them per request; Langflow's environment holds none.\n\n`reasoning_effort`, when set, goes to LM Studio and OpenAI as the chat completions parameter of that name:\n\"none\" stops Qwen 3 thinking before it answers. Anthropic and Gemini are not sent it.\n\"\"\"\n\nfrom lfx.base.models.model import LCModelComponent\nfrom lfx.field_typing import LanguageModel\nfrom lfx.io import DropdownInput, FloatInput, MessageTextInput, SecretStrInput\n\nDEFAULT_BASE_URLS = {\"lmstudio\": \"http://host.docker.internal:1234/v1\"}\n\n\nclass WorkspaceChatModel(LCModelComponent):\n    display_name = \"Workspace Chat Model\"\n    description = \"Chat model whose provider (LM Studio, OpenAI, Anthropic, Gemini) is set per request.\"\n    icon = \"brain-circuit\"\n    name = \"WorkspaceChatModel\"\n\n    inputs = [\n        *LCModelComponent.get_base_inputs(),\n        DropdownInput(name=\"provider\", display_name=\"Provider\", options=[\"lmstudio\", \"openai\", \"anthropic\", \"gemini\"],\n                      value=\"lmstudio\", combobox=True),\n        MessageTextInput(name=\"model_name\", display_name=\"Model\", value=\"qwen2.5-7b-instruct\"),\n        SecretStrInput(name=\"api_key\", display_name=\"API Key\", value=\"lm-studio\", load_from_db=False,\n                       info=\"Sent by the API per request. LM Studio ignores it.\"),\n        MessageTextInput(name=\"base_url\", display_name=\"Base URL\", advanced=True,\n                         info=\"Defaults: LM Studio on the host; each cloud provider's own endpoint.\"),\n        FloatInput(name=\"temperature\", display_name=\"Temperature\", value=0.2),\n        MessageTextInput(name=\"reasoning_effort\", display_name=\"Reasoning Effort\", advanced=True,\n                         info=\"none, minimal, low, medium or high; empty sends nothing. LM Studio and OpenAI only.\"),\n    ]\n\n    def build_model(self) -> LanguageModel:\n        provider = (self.provider or \"lmstudio\").lower()\n        base_url = self.base_url or DEFAULT_BASE_URLS.get(provider)\n        common = {\"temperature\": self.temperature}\n        if provider in {\"lmstudio\", \"openai\"}:\n            from langchain_openai import ChatOpenAI\n\n            effort = (self.reasoning_effort or \"\").strip()\n            extra = {\"reasoning_effort\": effort} if effort else {}\n            return ChatOpenAI(model=self.model_name, api_key=self.api_key or \"lm-studio\", base_url=base_url,\n                              stream_usage=True, **extra, **common)\n        if provider == \"anthropic\":\n            from langchain_anthropic import ChatAnthropic\n\n            kwargs = {\"base_url\": base_url} if base_url else {}\n            return ChatAnthropic(model=self.model_name, api_key=self.api_key, max_tokens=1024, **kwargs, **common)\n        if provider == \"gemini\":\n            from langchain_google_genai import ChatGoogleGenerativeAI\n\n            return ChatGoogleGenerativeAI(model=self.model_name, google_api_key=self.api_key, **common)\n        msg = f\"Unknown provider: {provider}\"\n        raise ValueError(msg)\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -1312,6 +1312,32 @@
                 "type": "float",
                 "_input_type": "FloatInput",
                 "load_from_db": false
+              },
+              "reasoning_effort": {
+                "tool_mode": false,
+                "trace_as_input": true,
+                "trace_as_metadata": true,
+                "load_from_db": false,
+                "list": false,
+                "list_add_label": "Add More",
+                "override_skip": false,
+                "required": false,
+                "placeholder": "",
+                "show": true,
+                "name": "reasoning_effort",
+                "value": "",
+                "display_name": "Reasoning Effort",
+                "advanced": true,
+                "api_editable": false,
+                "input_types": [
+                  "Message"
+                ],
+                "dynamic": false,
+                "info": "none, minimal, low, medium or high; empty sends nothing. LM Studio and OpenAI only.",
+                "title_case": false,
+                "track_in_telemetry": false,
+                "type": "str",
+                "_input_type": "MessageTextInput"
               }
             },
             "description": "Chat model whose provider (LM Studio, OpenAI, Anthropic, Gemini) is set per request.",
@@ -1366,7 +1392,8 @@
               "model_name",
               "api_key",
               "base_url",
-              "temperature"
+              "temperature",
+              "reasoning_effort"
             ],
             "beta": false,
             "legacy": false,

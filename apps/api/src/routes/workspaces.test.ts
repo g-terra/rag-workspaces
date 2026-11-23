@@ -164,6 +164,17 @@ describe.skipIf(!url)('workspaces (against TEST_DATABASE_URL)', () => {
     await call('DELETE', '/v1/workspaces/personal/members/bob-1', 'admin');
   });
 
+  it('PATCH takes a known reasoning effort or null, and refuses anything else', async () => {
+    expect(
+      (await call('PATCH', '/v1/workspaces/ouc', 'admin', { settings: { reasoningEffort: 'low' } })).json(),
+    ).toMatchObject({ settings: { reasoningEffort: 'low' } });
+    const bad = await call('PATCH', '/v1/workspaces/ouc', 'admin', { settings: { reasoningEffort: 'max' } });
+    expect(bad.statusCode).toBe(400);
+    expect(
+      (await call('PATCH', '/v1/workspaces/ouc', 'admin', { settings: { reasoningEffort: null } })).json(),
+    ).toMatchObject({ settings: { reasoningEffort: null } });
+  });
+
   it('PATCH cannot change the pinned embedding provider or model', async () => {
     for (const settings of [{ embeddingProvider: 'openai' }, { embeddingModel: 'other' }]) {
       const res = await call('PATCH', '/v1/workspaces/ouc', 'admin', { settings });

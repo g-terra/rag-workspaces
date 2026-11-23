@@ -55,6 +55,7 @@ export type GenerateConfig = Pick<
   Config,
   | 'DEFAULT_TOP_K'
   | 'DEFAULT_MIN_SCORE'
+  | 'DEFAULT_REASONING_EFFORT'
   | 'DEFAULT_CHAT_PROVIDER'
   | 'DEFAULT_CHAT_MODEL'
   | 'RETRIEVE_TIMEOUT_MS'
@@ -164,6 +165,8 @@ export class Generator {
           api_key: chat.apiKey,
           base_url: chat.baseUrl,
           system_message: workspace.settings.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
+          // Empty: not sent, and the model thinks as much as it does by default.
+          reasoning_effort: workspace.settings.reasoningEffort ?? config.DEFAULT_REASONING_EFFORT ?? '',
           stream: Boolean(onToken),
         },
       };

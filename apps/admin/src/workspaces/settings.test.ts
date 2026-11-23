@@ -38,6 +38,7 @@ const workspace = (over: Partial<Workspace> = {}): Workspace => ({
     chunkOverlap: 100,
     topK: 5,
     minScore: 0.35,
+    reasoningEffort: null,
     ...over.settings,
   },
   ...over,
@@ -67,7 +68,14 @@ const system = (over: Partial<SystemStatus> = {}): SystemStatus => ({
   defaults: {
     chat: { provider: 'lmstudio', model: 'local-a', available: true },
     embedding: { provider: 'lmstudio', model: 'embed-small', available: true },
-    workspace: { chunkSize: 800, chunkOverlap: 100, topK: 5, minScore: 0.3, systemPrompt: 'Cite as [n].' },
+    workspace: {
+      chunkSize: 800,
+      chunkOverlap: 100,
+      topK: 5,
+      minScore: 0.3,
+      systemPrompt: 'Cite as [n].',
+      reasoningEffort: null,
+    },
   },
   ...over,
 });
@@ -327,6 +335,7 @@ describe('chatDefaultNote', () => {
           topK: 5,
           minScore: 0.3,
           systemPrompt: 'Cite as [n].',
+          reasoningEffort: null,
         },
       },
     });

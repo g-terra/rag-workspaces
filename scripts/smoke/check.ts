@@ -517,6 +517,25 @@ async function main() {
     },
   );
 
+  await step("reasoning effort: the workspace's setting reaches the chat model", async () => {
+    // minScore 0, so the stand-in's rough embeddings always find something and the model is asked.
+    await call(token, 'PATCH', `/v1/workspaces/${slug}`, {
+      settings: { reasoningEffort: 'none', minScore: 0 },
+    });
+    await fetch(`${STANDIN}/_log`, { method: 'DELETE' });
+    const answer = await call(token, 'POST', `/v1/workspaces/${slug}/answers`, {
+      question: 'What does Chroma store?',
+    });
+    expect(answer.status === 'complete', `answer: ${JSON.stringify(answer)}`);
+    const chats = (
+      (await (await fetch(`${STANDIN}/_log`)).json()) as { path: string; reasoning_effort?: string }[]
+    ).filter((e) => e.path === '/v1/chat/completions');
+    expect(
+      chats.length > 0 && chats.every((e) => e.reasoning_effort === 'none'),
+      `chat requests: ${JSON.stringify(chats)}`,
+    );
+  });
+
   await step('a question about two topics searches each part, so both topics are found', async () => {
     // Ten notes match the first part's many words; one note answers the second part. Searched as one
     // query, the second topic's few words are outweighed and its note misses the top 5.

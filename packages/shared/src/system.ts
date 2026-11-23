@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ReasoningEffort } from './workspaces.js';
 
 /** One dependency of the API, as `/ready` checks it. */
 export const ServiceStatus = z.object({
@@ -43,6 +44,8 @@ export const WorkspaceDefaults = z.object({
   topK: z.number().int(),
   minScore: z.number(),
   systemPrompt: z.string(),
+  /** `null`: no reasoning effort is sent unless the workspace sets one. */
+  reasoningEffort: ReasoningEffort.nullable(),
 });
 export type WorkspaceDefaults = z.infer<typeof WorkspaceDefaults>;
 
