@@ -43,7 +43,7 @@ whole install, managed by admins, over styles per workspace ([decision 24](../de
 | -------- | ----------------------- | ------------ |
 | One list for every workspace, admins only | Per workspace, managed by editors | Guilherme's choice on 2026-11-23: a style is written once and used everywhere. |
 | Slug as the primary key | A generated id plus a unique slug | Requests, settings and stored answers all refer to the slug, so a second id would be unused. |
-| Deleting a style that a workspace uses as its default is `409` | Clear those defaults, or let answers fail with `400` | Nothing changes behind an admin's back, and a workspace never points at a style that no longer exists. |
+| Deleting a style that a workspace uses as its default is `409` | Clear those defaults, or let answers fail with `400` | Nothing changes behind an admin's back. The check and the delete are separate statements, so a workspace saved at the same instant could still point at a deleted style; `styleFor` then ignores that default rather than failing. |
 | Stored answers keep a deleted or edited style's slug | Copy the instructions onto each answer | Enough for analytics, and the answer text shows what the style did. |
 | Built-ins are `403` on `PATCH` and `DELETE` | Allow overriding them in the table | They are versioned with the prompt in code, and every install has the same ones. |
 | Instructions are capped at 2,000 characters | No cap | Keeps the prompt's added length bounded. The style is instructions, not a second system prompt. |
@@ -65,9 +65,6 @@ whole install, managed by admins, over styles per workspace ([decision 24](../de
 The API runs the migration on start. To remove a style that is in use, first set every workspace that uses it to
 another style or to `null`. Deleting a style can't be undone, but answers that used it keep its slug.
 
-Docs updated: `docs/api-schema.md` (the route table and the Response styles section) and `docs/decisions.md`
-(decision 24 now describes what exists).
-
 ## Testing
 
 - `apps/api/src/routes/styles.test.ts`: covers listing for people and API keys, and that a caller is required.
@@ -82,3 +79,8 @@ Docs updated: `docs/api-schema.md` (the route table and the Response styles sect
 
 - The admin UI page to manage styles, and the picker in the playground.
 - The MCP tool argument.
+
+## Docs updated
+
+`docs/api-schema.md` (the route table and the Response styles section) and `docs/decisions.md`
+(decision 24 now describes what exists).
