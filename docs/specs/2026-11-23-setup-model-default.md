@@ -1,7 +1,7 @@
 ---
 title: Take the default model id on Enter in the setup wizard
 date: 2026-11-23
-pr: pending
+pr: "#78"
 status: in review
 areas: [infra]
 ---
