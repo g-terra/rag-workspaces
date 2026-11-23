@@ -174,12 +174,8 @@
           "name": "answers_workspace_id_workspaces_id_fk",
           "tableFrom": "answers",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -229,12 +225,8 @@
           "name": "api_key_workspaces_api_key_id_api_keys_id_fk",
           "tableFrom": "api_key_workspaces",
           "tableTo": "api_keys",
-          "columnsFrom": [
-            "api_key_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["api_key_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -242,12 +234,8 @@
           "name": "api_key_workspaces_workspace_id_workspaces_id_fk",
           "tableFrom": "api_key_workspaces",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -255,10 +243,7 @@
       "compositePrimaryKeys": {
         "api_key_workspaces_api_key_id_workspace_id_pk": {
           "name": "api_key_workspaces_api_key_id_workspace_id_pk",
-          "columns": [
-            "api_key_id",
-            "workspace_id"
-          ]
+          "columns": ["api_key_id", "workspace_id"]
         }
       },
       "uniqueConstraints": {},
@@ -664,12 +649,8 @@
           "name": "conversations_workspace_id_workspaces_id_fk",
           "tableFrom": "conversations",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -907,12 +888,8 @@
           "name": "documents_workspace_id_workspaces_id_fk",
           "tableFrom": "documents",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -920,12 +897,8 @@
           "name": "documents_folder_id_folders_id_fk",
           "tableFrom": "documents",
           "tableTo": "folders",
-          "columnsFrom": [
-            "folder_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["folder_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -933,12 +906,8 @@
           "name": "documents_site_id_sites_id_fk",
           "tableFrom": "documents",
           "tableTo": "sites",
-          "columnsFrom": [
-            "site_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["site_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1014,12 +983,8 @@
           "name": "folders_workspace_id_workspaces_id_fk",
           "tableFrom": "folders",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1170,12 +1135,8 @@
           "name": "messages_conversation_id_conversations_id_fk",
           "tableFrom": "messages",
           "tableTo": "conversations",
-          "columnsFrom": [
-            "conversation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["conversation_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1241,12 +1202,8 @@
           "name": "provider_keys_workspace_id_workspaces_id_fk",
           "tableFrom": "provider_keys",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1254,10 +1211,7 @@
       "compositePrimaryKeys": {
         "provider_keys_workspace_id_provider_pk": {
           "name": "provider_keys_workspace_id_provider_pk",
-          "columns": [
-            "workspace_id",
-            "provider"
-          ]
+          "columns": ["workspace_id", "provider"]
         }
       },
       "uniqueConstraints": {},
@@ -1430,12 +1384,8 @@
           "name": "sites_workspace_id_workspaces_id_fk",
           "tableFrom": "sites",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1443,12 +1393,8 @@
           "name": "sites_folder_id_folders_id_fk",
           "tableFrom": "sites",
           "tableTo": "folders",
-          "columnsFrom": [
-            "folder_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["folder_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -1525,12 +1471,8 @@
           "name": "workspace_members_workspace_id_workspaces_id_fk",
           "tableFrom": "workspace_members",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1538,10 +1480,7 @@
       "compositePrimaryKeys": {
         "workspace_members_workspace_id_user_id_pk": {
           "name": "workspace_members_workspace_id_user_id_pk",
-          "columns": [
-            "workspace_id",
-            "user_id"
-          ]
+          "columns": ["workspace_id", "user_id"]
         }
       },
       "uniqueConstraints": {},
@@ -1636,85 +1575,47 @@
     "public.answer_status": {
       "name": "answer_status",
       "schema": "public",
-      "values": [
-        "complete",
-        "failed"
-      ]
+      "values": ["complete", "failed"]
     },
     "public.caller_kind": {
       "name": "caller_kind",
       "schema": "public",
-      "values": [
-        "user",
-        "key"
-      ]
+      "values": ["user", "key"]
     },
     "public.document_status": {
       "name": "document_status",
       "schema": "public",
-      "values": [
-        "queued",
-        "transcribing",
-        "processing",
-        "ready",
-        "failed"
-      ]
+      "values": ["queued", "transcribing", "processing", "ready", "failed"]
     },
     "public.document_type": {
       "name": "document_type",
       "schema": "public",
-      "values": [
-        "pdf",
-        "docx",
-        "txt",
-        "md",
-        "mp4",
-        "mp3",
-        "wav",
-        "web"
-      ]
+      "values": ["pdf", "docx", "txt", "md", "mp4", "mp3", "wav", "web"]
     },
     "public.feedback_rating": {
       "name": "feedback_rating",
       "schema": "public",
-      "values": [
-        "up",
-        "down"
-      ]
+      "values": ["up", "down"]
     },
     "public.message_role": {
       "name": "message_role",
       "schema": "public",
-      "values": [
-        "user",
-        "assistant"
-      ]
+      "values": ["user", "assistant"]
     },
     "public.site_status": {
       "name": "site_status",
       "schema": "public",
-      "values": [
-        "queued",
-        "crawling",
-        "ready",
-        "failed"
-      ]
+      "values": ["queued", "crawling", "ready", "failed"]
     },
     "public.workspace_role": {
       "name": "workspace_role",
       "schema": "public",
-      "values": [
-        "reader",
-        "editor"
-      ]
+      "values": ["reader", "editor"]
     },
     "public.workspace_status": {
       "name": "workspace_status",
       "schema": "public",
-      "values": [
-        "active",
-        "reindexing"
-      ]
+      "values": ["active", "reindexing"]
     }
   },
   "schemas": {},
