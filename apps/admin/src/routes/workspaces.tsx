@@ -1,15 +1,25 @@
+import { Plus } from 'lucide-react';
+import { useRef, useState, type MouseEvent } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '@/auth/auth-context';
+import { CreateWorkspaceDialog } from '@/components/create-workspace-dialog';
 import { ErrorState, Loading, Notice } from '@/components/states';
 import { TopBar } from '@/components/top-bar';
 import { Button } from '@/components/ui/button';
 import { WorkspaceAvatar } from '@/components/workspace-avatar';
 import { useWorkspaces } from '@/workspaces/queries';
 
-/** "All workspaces": a card per workspace the caller can see. */
+/** "All workspaces": a card per workspace the caller can see; admins can create one. */
 export function Workspaces() {
   const { me } = useAuth();
   const workspaces = useWorkspaces();
+  const [creating, setCreating] = useState(false);
+  // The button that opened the dialog, so focus goes back to it on close.
+  const opener = useRef<HTMLElement | null>(null);
+  const openCreate = (e: MouseEvent<HTMLElement>) => {
+    opener.current = e.currentTarget;
+    setCreating(true);
+  };
   const isAdmin = me?.isAdmin ?? false;
 
   return (
@@ -24,6 +34,11 @@ export function Workspaces() {
               them.
             </p>
           </div>
+          {isAdmin && (
+            <Button onClick={openCreate}>
+              <Plus /> New workspace
+            </Button>
+          )}
         </div>
         {workspaces.isPending && <Loading what="workspaces" />}
         {workspaces.isError && (
@@ -36,9 +51,13 @@ export function Workspaces() {
         {workspaces.data?.length === 0 &&
           (isAdmin ? (
             <Notice
-              title="No workspaces yet"
-              body="Workspaces are created by an administrator, with POST /v1/workspaces for now."
-            />
+              title="Create your first workspace"
+              body="A workspace holds one set of material and its API."
+            >
+              <Button onClick={openCreate}>
+                <Plus /> New workspace
+              </Button>
+            </Notice>
           ) : (
             <Notice
               title="No workspaces"
@@ -69,6 +88,7 @@ export function Workspaces() {
           </div>
         )}
       </div>
+      {isAdmin && <CreateWorkspaceDialog open={creating} onOpenChange={setCreating} returnFocusTo={opener} />}
     </>
   );
 }

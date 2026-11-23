@@ -73,3 +73,57 @@ test('an unknown workspace says it was not found or is not accessible', async ({
   await page.getByRole('link', { name: 'See all workspaces' }).click();
   await expect(page).toHaveURL(/\/workspaces$/);
 });
+
+test('an admin creates workspaces from the list and from the switcher', async ({ page }) => {
+  const c = { name: `E2E Gamma ${run}`, slug: `e2e-${run}-c` };
+  const d = { name: `E2E Delta ${run}`, slug: `e2e-${run}-d` };
+  await signIn(page, '/workspaces');
+
+  // From "All workspaces": the slug follows the name until edited.
+  await page.getByRole('button', { name: 'New workspace' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'Create workspace' });
+  await dialog.getByLabel('Name').fill('Thesis Research');
+  await expect(dialog.getByLabel('Slug')).toHaveValue('thesis-research');
+  created.push(c.slug);
+  await fillCreateDialog(page, c);
+  await expect(page).toHaveURL(new RegExp(`/w/${c.slug}$`));
+  await expect(page.getByRole('heading', { name: c.name })).toBeVisible();
+  await expect(page.getByTestId('current-workspace')).toHaveText(c.name);
+
+  // From the switcher; a taken slug is refused under the slug field.
+  await page.getByRole('button', { name: 'Switch workspace' }).click();
+  await page.getByRole('button', { name: /Create workspace/ }).click();
+  await fillCreateDialog(page, { name: 'Duplicate', slug: c.slug });
+  await expect(dialog.getByText(`The slug "${c.slug}" is taken.`)).toBeVisible();
+  await expect(dialog.getByLabel('Slug')).toHaveAccessibleDescription(`The slug "${c.slug}" is taken.`);
+  created.push(d.slug);
+  await fillCreateDialog(page, d);
+  await expect(page).toHaveURL(new RegExp(`/w/${d.slug}$`));
+  await expect(page.getByTestId('current-workspace')).toHaveText(d.name);
+
+  // Closing the dialog gives focus back to what opened it.
+  await page.getByRole('button', { name: 'Switch workspace' }).click();
+  await page.getByRole('button', { name: /Create workspace/ }).click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Switch workspace' })).toBeFocused();
+
+  // The list shows the new one without a reload.
+  await page.getByRole('link', { name: 'All workspaces' }).first().click();
+  await expect(page.getByText(`/v1/workspaces/${d.slug}`)).toBeVisible();
+  const newButton = page.getByRole('button', { name: 'New workspace' }).first();
+  await newButton.click();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(newButton).toBeFocused();
+});
+
+async function fillCreateDialog(page: Page, ws: { name: string; slug: string }) {
+  const dialog = page.getByRole('dialog', { name: 'Create workspace' });
+  await dialog.getByLabel('Name').fill(ws.name);
+  await dialog.getByLabel('Slug').fill(ws.slug);
+  await dialog.getByLabel('Description').fill('Made by the Playwright test');
+  await dialog.getByRole('button', { name: 'Create workspace' }).click();
+}
