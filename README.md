@@ -101,6 +101,8 @@ the stack's data) and `docker compose up -d --build`. To keep your data instead,
 the Keycloak admin console; for the people list (`GET /v1/users`, added 2026-11-23) that means creating the
 `api-directory` client as `realm.json` describes it, with `KEYCLOAK_DIRECTORY_SECRET` from `.env` as its
 secret.
+For the sign-in page styled like the admin UI (added 2026-11-23), run `docker compose up -d` so Keycloak
+mounts the theme, then pick `rag-workspaces` as the login theme under Realm settings > Themes.
 
 An install from before the local names (2026-11-23) keeps its `localhost` URLs, because `pnpm env:init`
 never changes existing values, and keeps working as before. To move it to the names:
