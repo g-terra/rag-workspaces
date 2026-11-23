@@ -3,6 +3,10 @@
 Guidance for AI coding agents (Claude Code, Codex, Cursor and others). People are welcome to read it too.
 `CLAUDE.md` only imports this file, so keep everything here.
 
+> **Handover (2026-11-23):** the work moved from Claude Code to another agent mid-build. Read
+> [docs/HANDOVER.md](docs/HANDOVER.md) first: the branches in flight, what is left in priority order and
+> the owner's open questions.
+
 ## What this is
 
 A self-hosted RAG platform built on Langflow: isolated **workspaces** of material, each with its own
