@@ -269,9 +269,6 @@ body {
   --pf-v5-c-button--m-link--Color: var(--rw-foreground);
   --pf-v5-c-button--m-link--hover--Color: var(--rw-foreground);
 }
-.pf-v5-c-check {
-  margin-top: 0.75rem;
-}
 .pf-v5-c-check__label {
   font-size: 0.875rem;
 }

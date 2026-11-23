@@ -1,8 +1,8 @@
 ---
 title: style Keycloak's sign-in page like the admin UI
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#104"
+status: in review
 areas: [infra]
 ---
 
@@ -37,8 +37,8 @@ product. Keycloak stays the login service (docs/decisions.md #8); only its look 
 - `messages/messages_en.properties`: `loginTitleHtml` (the header Keycloak renders above every page) carries
   the brand, the pitch and "Admin console", in the same words as `sign-in.tsx`. `loginAccountTitle` is
   "Sign in" and `doLogIn` "Sign in", as in the admin UI. `rwNoAccount` is the "No account?" note.
-- `footer.ftl`: keycloak.v2's documented footer extension point, showing `rwNoAccount` while
-  self-registration is off.
+- `footer.ftl`: keycloak.v2's documented footer extension point, showing `rwNoAccount` on the
+  sign-in pages (`pageId` `login`, `login-username`, `login-password`) while self-registration is off.
 - `resources/img/layers.svg`: lucide's `Layers` icon, the admin UI's logo.
 - `docker-compose.yml` mounts the theme read-only at `/opt/keycloak/themes/rag-workspaces`;
   `docker/keycloak/realm.json` sets `"loginTheme": "rag-workspaces"`.
@@ -80,7 +80,7 @@ Keycloak logs a warning and falls back to its stock theme.
   theme) and passing against `rag-workspaces`.
 - The admin UI's Playwright sign-in tests (`apps/admin/e2e/sign-in.spec.ts`) sign in through the themed page.
 - By hand: `docker compose up -d`, open the admin UI, press "Continue with Keycloak". Check light and dark
-  mode, a narrow window, and a wrong password (the error shows in red under the field).
+  mode, a narrow window, and a wrong password (Keycloak shows the error in red under the username field).
 
 ## Out of scope and follow-ups
 

@@ -165,7 +165,9 @@ function viaProxy(host: string, path: string): Promise<{ status: number; body: s
 }
 
 /** The realm's sign-in page uses our login theme (docker/keycloak/themes), and its stylesheet loads. */
-async function checkLoginTheme(keycloak: string, realm = 'rag-workspaces') {
+async function checkLoginTheme() {
+  const keycloak = KEYCLOAK;
+  const realm = 'rag-workspaces';
   // Start a sign-in as Keycloak's built-in account console would; the answer is the sign-in page.
   const auth = new URL(`${keycloak}/realms/${realm}/protocol/openid-connect/auth`);
   auth.search = new URLSearchParams({
@@ -179,8 +181,8 @@ async function checkLoginTheme(keycloak: string, realm = 'rag-workspaces') {
   const page = await fetch(auth, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   const html = await page.text();
   const css = html.match(/href="([^"]*\/login\/rag-workspaces\/css\/rag-workspaces\.css)"/)?.[1];
-  expect(page.ok && css, `${realm}'s sign-in page doesn't link the rag-workspaces stylesheet`);
-  expect(html.includes('Ask your own material'), `${realm}'s sign-in page lacks the theme's brand panel`);
+  expect(page.ok && css, `the sign-in page doesn't link the rag-workspaces stylesheet`);
+  expect(html.includes('Ask your own material'), `the sign-in page lacks the theme's brand panel`);
   const sheet = await fetch(new URL(css, keycloak), { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   expect(sheet.ok, `the theme's stylesheet answered ${sheet.status}`);
 }
@@ -206,7 +208,7 @@ async function main() {
       );
     }
   });
-  await step("Keycloak's sign-in page wears the admin UI's theme", () => checkLoginTheme(KEYCLOAK));
+  await step("Keycloak's sign-in page wears the admin UI's theme", checkLoginTheme);
   await step('password login enabled for admin-ui (this stack only)', async () => allowPasswordLogin());
   const token = await step('signed in through Keycloak', login);
   await step('GET /v1/me says admin', async () => {
