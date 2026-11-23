@@ -83,12 +83,14 @@ export function useDownloadDocument(slug: string) {
   });
 }
 
-/** A video or audio document's transcript. Only asked for when `enabled`, since other types have none. */
-export function useTranscript(slug: string, documentId: string, enabled: boolean) {
+/**
+ * A video or audio document's transcript. Its key sits beside the documents list, not under it, so the
+ * list's reload on every status-stream snapshot doesn't fetch a long transcript again.
+ */
+export function useTranscript(slug: string, documentId: string) {
   const { api } = useAuth();
   return useQuery({
-    queryKey: [...documentsKey(slug), documentId, 'transcript'],
+    queryKey: ['workspaces', slug, 'transcripts', documentId],
     queryFn: () => api<Transcript>(`${documentsPath(slug)}/${encodeURIComponent(documentId)}/transcript`),
-    enabled,
   });
 }

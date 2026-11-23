@@ -325,7 +325,7 @@ function DocumentDetail({
 
 /** The transcript of a video or audio document, which is what its passages were made from. */
 function DocumentTranscript({ slug, doc }: { slug: string; doc: Document }) {
-  const transcript = useTranscript(slug, doc.id, true);
+  const transcript = useTranscript(slug, doc.id);
   return (
     <section aria-label="Transcript" className="flex flex-col gap-2 border-t pt-3">
       <h3 className="text-[13px] font-semibold">

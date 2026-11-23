@@ -151,7 +151,7 @@ test('a recording shows its transcript, with the time each line starts', async (
   const transcript = page
     .getByRole('complementary', { name: 'Selected document' })
     .getByRole('region', { name: 'Transcript' });
-  await expect(transcript).toContainText('en');
+  await expect(transcript.getByRole('heading', { name: 'Transcript · en' })).toBeVisible();
   await expect(transcript.getByRole('listitem').nth(1)).toContainText('0:03');
   await expect(transcript.getByRole('listitem').nth(1)).toContainText(
     'Chroma stores embeddings with metadata.',
