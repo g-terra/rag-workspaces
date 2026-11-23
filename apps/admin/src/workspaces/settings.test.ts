@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '@/api/client';
 import {
   chatDefaultNote,
+  chatModelDefault,
+  defaultPlaceholder,
   chatProviderChoices,
   embeddingProviderChoices,
   formFor,
@@ -64,6 +66,7 @@ const system = (over: Partial<SystemStatus> = {}): SystemStatus => ({
   defaults: {
     chat: { provider: 'lmstudio', model: 'local-a', available: true },
     embedding: { provider: 'lmstudio', model: 'embed-small', available: true },
+    workspace: { chunkSize: 800, chunkOverlap: 100, topK: 5, minScore: 0.3, systemPrompt: 'Cite as [n].' },
   },
   ...over,
 });
@@ -317,6 +320,13 @@ describe('chatDefaultNote', () => {
       defaults: {
         chat: { provider: 'openai', model: 'hosted-a', available: false },
         embedding: { provider: 'lmstudio', model: 'embed-small', available: true },
+        workspace: {
+          chunkSize: 800,
+          chunkOverlap: 100,
+          topK: 5,
+          minScore: 0.3,
+          systemPrompt: 'Cite as [n].',
+        },
       },
     });
     expect(chatDefaultNote(broken)).toBe('Default: openai / hosted-a (not available right now)');
@@ -324,6 +334,31 @@ describe('chatDefaultNote', () => {
 
   it('says nothing it cannot know', () => {
     expect(chatDefaultNote(undefined)).toBe('');
+  });
+});
+
+describe('defaultPlaceholder', () => {
+  it('shows the value an empty field falls back to', () => {
+    expect(defaultPlaceholder(system(), 'chunkSize')).toBe('Default: 800');
+    expect(defaultPlaceholder(system(), 'chunkOverlap')).toBe('Default: 100');
+    expect(defaultPlaceholder(system(), 'topK')).toBe('Default: 5');
+    expect(defaultPlaceholder(system(), 'minScore')).toBe('Default: 0.3');
+    expect(defaultPlaceholder(system(), 'systemPrompt')).toBe('Default: Cite as [n].');
+  });
+
+  it('falls back to a plain "Default" without a system status', () => {
+    expect(defaultPlaceholder(undefined, 'topK')).toBe('Default');
+  });
+});
+
+describe('chatModelDefault', () => {
+  it('names the default model while the provider is left to the default', () => {
+    expect(chatModelDefault(system(), '')).toBe('Default: local-a');
+  });
+
+  it('says nothing once a provider is picked, or without a system status', () => {
+    expect(chatModelDefault(system(), 'openai')).toBeNull();
+    expect(chatModelDefault(undefined, '')).toBeNull();
   });
 });
 

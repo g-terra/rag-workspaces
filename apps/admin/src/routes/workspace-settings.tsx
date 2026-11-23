@@ -15,6 +15,8 @@ import { useUpdateWorkspace } from '@/workspaces/queries';
 import {
   chatProviderChoices,
   chatDefaultNote,
+  chatModelDefault,
+  defaultPlaceholder,
   formFor,
   hostedWarning,
   isDirty,
@@ -208,7 +210,7 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
                 id="ws-chat-model"
                 label="Chat model"
                 error={errors.chatModel}
-                hint={form.chatProvider ? undefined : 'Pick a provider first.'}
+                hint={form.chatProvider ? undefined : 'Pick a provider to choose another model.'}
               >
                 {models.length > 0 ? (
                   <select
@@ -235,7 +237,9 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
                     aria-invalid={!!errors.chatModel}
                     value={form.chatModel}
                     disabled={!form.chatProvider}
-                    placeholder="Model id, as the provider names it"
+                    placeholder={
+                      chatModelDefault(system.data, form.chatProvider) ?? 'Model id, as the provider names it'
+                    }
                     onChange={(e) => set('chatModel')(e.target.value)}
                   />
                 )}
@@ -270,7 +274,14 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
                 error={errors.chunkSize}
                 hint="Characters per passage."
               >
-                <NumberInput id="ws-chunk-size" field="chunkSize" form={form} errors={errors} set={set} />
+                <NumberInput
+                  id="ws-chunk-size"
+                  field="chunkSize"
+                  placeholder={defaultPlaceholder(system.data, 'chunkSize')}
+                  form={form}
+                  errors={errors}
+                  set={set}
+                />
               </Field>
               <Field
                 id="ws-chunk-overlap"
@@ -281,6 +292,7 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
                 <NumberInput
                   id="ws-chunk-overlap"
                   field="chunkOverlap"
+                  placeholder={defaultPlaceholder(system.data, 'chunkOverlap')}
                   form={form}
                   errors={errors}
                   set={set}
@@ -292,7 +304,14 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
                 error={errors.topK}
                 hint="How many passages an answer may cite."
               >
-                <NumberInput id="ws-topk" field="topK" form={form} errors={errors} set={set} />
+                <NumberInput
+                  id="ws-topk"
+                  field="topK"
+                  placeholder={defaultPlaceholder(system.data, 'topK')}
+                  form={form}
+                  errors={errors}
+                  set={set}
+                />
               </Field>
               <Field
                 id="ws-min-score"
@@ -300,7 +319,14 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
                 error={errors.minScore}
                 hint="Below this, answers say the material doesn't cover it."
               >
-                <NumberInput id="ws-min-score" field="minScore" form={form} errors={errors} set={set} />
+                <NumberInput
+                  id="ws-min-score"
+                  field="minScore"
+                  placeholder={defaultPlaceholder(system.data, 'minScore')}
+                  form={form}
+                  errors={errors}
+                  set={set}
+                />
               </Field>
             </div>
 
@@ -308,7 +334,7 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
               id="ws-system-prompt"
               label="System prompt"
               error={errors.systemPrompt}
-              hint="Empty uses the flow's own prompt."
+              hint="Empty uses the default prompt shown in the box."
             >
               <textarea
                 id="ws-system-prompt"
@@ -316,6 +342,7 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
                 aria-invalid={!!errors.systemPrompt}
                 className="border-input dark:bg-input/30 min-h-21 w-full resize-y rounded-md border bg-transparent px-3 py-2.5 text-sm leading-relaxed shadow-xs"
                 value={form.systemPrompt}
+                placeholder={defaultPlaceholder(system.data, 'systemPrompt')}
                 onChange={(e) => set('systemPrompt')(e.target.value)}
               />
             </Field>
@@ -400,9 +427,11 @@ function NumberInput({
   form,
   errors,
   set,
+  placeholder,
 }: {
   id: string;
   field: SettingsField;
+  placeholder: string;
   form: SettingsForm;
   errors: Errors;
   set(field: SettingsField): (value: string) => void;
@@ -414,7 +443,7 @@ function NumberInput({
       aria-invalid={!!errors[field]}
       inputMode="decimal"
       value={form[field]}
-      placeholder="Default"
+      placeholder={placeholder}
       onChange={(e) => set(field)(e.target.value)}
     />
   );

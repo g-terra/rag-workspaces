@@ -36,6 +36,16 @@ export const DefaultModel = z.object({
 });
 export type DefaultModel = z.infer<typeof DefaultModel>;
 
+/** The values a workspace uses for any setting it leaves empty (`null`). */
+export const WorkspaceDefaults = z.object({
+  chunkSize: z.number().int(),
+  chunkOverlap: z.number().int(),
+  topK: z.number().int(),
+  minScore: z.number(),
+  systemPrompt: z.string(),
+});
+export type WorkspaceDefaults = z.infer<typeof WorkspaceDefaults>;
+
 /** `GET /v1/system`: the detail behind `/ready`, for admins. */
 export const SystemStatus = z.object({
   version: z.string(),
@@ -45,6 +55,11 @@ export const SystemStatus = z.object({
   /** Where the API's Langflow key came from: minted at start (`auto`), `LANGFLOW_API_KEY` (`env`), or none yet. */
   langflowKey: z.enum(['auto', 'env', 'none']),
   providers: z.array(ProviderStatus),
-  defaults: z.object({ chat: DefaultModel, embedding: DefaultModel }),
+  defaults: z.object({
+    chat: DefaultModel,
+    embedding: DefaultModel,
+    /** What each empty workspace setting falls back to: the API's `.env` values and built-in prompt. */
+    workspace: WorkspaceDefaults,
+  }),
 });
 export type SystemStatus = z.infer<typeof SystemStatus>;
