@@ -13,7 +13,9 @@ areas: [docs]
 Removes `docs/HANDOVER.md` and the "Handover" banner at the top of `AGENTS.md`, and sets `status: merged`
 on the 55 specs whose PRs are merged but still said `in review`. The handover spec
 (`2026-11-23-handover.md`) is marked superseded by this one, and `2026-11-22-setup-cli-plan.md` gets the
-PR number it never had (#32). Nothing outside `docs/` and `AGENTS.md` changes.
+PR number it never had (#32). It also adds `.release-please-manifest.json` to `.prettierignore`, because
+the v0.2.0 release (#43) wrote that file in a shape Prettier rejects and `pnpm format:check` failed on
+`main`.
 
 ## Why
 
@@ -38,13 +40,17 @@ docs no longer told the truth about where the work stands:
 3. For every `docs/specs/*.md` whose `pr:` numbers are all merged on `main` and whose `status` is
    `in review`, set `status: merged`. The one exception is `2026-11-23-handover.md`, set to
    `superseded by 2026-11-23-retire-handover.md`.
-4. Set `pr: "#32"` on `2026-11-22-setup-cli-plan.md` (the docs PR that added the setup CLI to the plan).
+4. Add `.release-please-manifest.json` to `.prettierignore`. release-please rewrites it on every release
+   as compact JSON (`{".":"0.2.0"}`), so formatting it by hand would break again on the next release.
+   `CHANGELOG.md`, the other file it writes, is already ignored through `*.md`.
+5. Set `pr: "#32"` on `2026-11-22-setup-cli-plan.md` (the docs PR that added the setup CLI to the plan).
 
 ## Decisions and trade-offs
 
 | Decision | Alternatives considered | Why this one |
 | -------- | ----------------------- | ------------ |
 | Delete `docs/HANDOVER.md` | Rewrite it as a current status page | Its intro asks for deletion once done, and a second status page would drift from `docs/work-breakdown.md` and `docs/architecture.md`'s status table again |
+| Ignore `.release-please-manifest.json` in Prettier | Reformat it now; configure release-please's output | Release-please has no option to format that file, and a hand fix lasts one release. The file holds one version string, so nothing is lost by not formatting it |
 | Change only `status` (and one missing `pr:`) in merged specs | Also fix content drift found in the review | Merged specs are frozen records (`docs/specs/README.md`). The one drift worth noting is recorded below instead |
 | Leave Markdown out of Prettier, as `.prettierignore` does | Format every `.md` with Prettier | Prettier would rewrite 104 files and pad each table row to the widest cell (hundreds of characters in `docs/decisions.md`), which reads worse in raw Markdown. A scripted check of all 111 docs found no broken links or anchors, unclosed code fences, heading jumps or uneven tables |
 
@@ -68,6 +74,7 @@ None.
 
 No code changes. To check by hand:
 
+- `pnpm format:check` passes on top of the v0.2.0 release commit.
 - `git grep -n HANDOVER` finds nothing.
 - `grep -L '^status: \(merged\|superseded\)' docs/specs/2*.md` lists only this spec.
 
@@ -80,4 +87,4 @@ No code changes. To check by hand:
 
 ## Docs updated
 
-`AGENTS.md` (banner removed); `docs/HANDOVER.md` deleted; the front matter of 57 older specs.
+`AGENTS.md` (banner removed); `.prettierignore`; `docs/HANDOVER.md` deleted; the front matter of 57 older specs.
