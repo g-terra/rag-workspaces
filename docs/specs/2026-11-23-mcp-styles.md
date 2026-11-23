@@ -61,4 +61,4 @@ Rebuild the MCP server (`pnpm --filter '@rag/mcp...' build`) and restart the MCP
 
 ## Docs updated
 
-`README.md` (the MCP tools list).
+`docs/guide/api-keys.md` (the MCP tools table; the README no longer lists the tools).
