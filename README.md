@@ -90,13 +90,14 @@ switcher in the sidebar changes it. Admins create workspaces from "All workspace
 and admins upload files from "Upload" in the sidebar and watch each one through ingestion live.
 "Documents" lists everything in the workspace, live, with download for everyone and reindex and delete for
 editors and admins. "Playground" asks the workspace a question and streams the answer back word by word,
-the way an agent would through the API. Admins manage API keys for agents and scripts under "API keys": a
-new key's secret is shown once, with a `curl` example to try it. "Usage" charts requests, latency, top
-questions, cited documents and the raw request log — for one workspace (editors and admins) or across all
-of them (admins). "Settings" (admins) changes a workspace's name, description, chat model and retrieval
-settings, with the providers and models read from `GET /v1/system`; it is also where you grant and remove
-other people's access to the workspace, start a reindex (the only way to change the embedding model) and
-delete the workspace. The API docs are linked from the top bar of every page.
+the way an agent would through the API, or searches its passages with their scores and no model call at
+all. Admins manage API keys for agents and scripts under "API keys": a new key's secret is shown once,
+with a `curl` example to try it. "Usage" charts requests, latency, top questions, cited documents and the
+raw request log — for one workspace (editors and admins) or across all of them (admins). "Settings"
+(admins) changes a workspace's name, description, chat model and retrieval settings, with the providers
+and models read from `GET /v1/system`; it is also where you grant and remove other people's access to the
+workspace, start a reindex (the only way to change the embedding model) and delete the workspace. The API
+docs are linked from the top bar of every page.
 
 `docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
 
