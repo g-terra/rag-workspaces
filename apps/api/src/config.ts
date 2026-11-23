@@ -72,6 +72,8 @@ const ConfigSchema = z.object({
   RETRIEVE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   /** A whole answer (search, prompt, generation) gets this long. Local models can be slow. */
   ANSWER_TIMEOUT_MS: z.coerce.number().int().positive().default(180_000),
+  /** Earlier turns (a question and its reply) sent to the model with each chat message. */
+  CHAT_HISTORY_TURNS: z.coerce.number().int().min(0).max(50).default(10),
 
   // --- Langflow ---
   LANGFLOW_URL: z.url().default('http://langflow:7860'),
