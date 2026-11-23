@@ -57,7 +57,14 @@ export function searchTweaks(workspace: Workspace, config: RetrievalConfig, opts
   const limit = opts.limit ?? settings.topK ?? config.DEFAULT_TOP_K;
   const minScore = opts.minScore ?? settings.minScore ?? config.DEFAULT_MIN_SCORE;
   return {
-    Embeddings: { model: settings.embeddingModel, base_url: embeddings.baseUrl, api_key: embeddings.apiKey },
+    Embeddings: {
+      model: settings.embeddingModel,
+      base_url: embeddings.baseUrl,
+      api_key: embeddings.apiKey,
+      // Both, so the node never keeps a value from the flow file: documents are not embedded here.
+      document_prefix: settings.embeddingPrefixes?.document ?? '',
+      query_prefix: settings.embeddingPrefixes?.query ?? '',
+    },
     Search: {
       collection_name: ChromaService.collectionName(workspace.slug),
       top_k: limit,

@@ -168,6 +168,8 @@ services:
       # Pinned into each new workspace; changing them later affects only new workspaces.
       DEFAULT_EMBEDDING_PROVIDER: ${DEFAULT_EMBEDDING_PROVIDER:-lmstudio}
       DEFAULT_EMBEDDING_MODEL: ${DEFAULT_EMBEDDING_MODEL:-text-embedding-nomic-embed-text-v1.5}
+      # Task prefixes per embedding model, over the built-in ones; pinned with the model (needs a reindex).
+      EMBEDDING_PREFIXES: ${EMBEDDING_PREFIXES:-}
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080
       KEYCLOAK_REALM: rag-workspaces
       KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://auth.rag.localhost}

@@ -8,6 +8,15 @@ import { z } from 'zod';
 /** Compose passes unset variables as empty strings; treat those as missing. */
 const optionalString = z.preprocess((v) => (v === '' ? undefined : v), z.string().optional());
 
+/** `{"<embedding model id>": {"document": "…", "query": "…"}}`; a missing prefix is "". */
+const prefixMap = z.preprocess(
+  (v) => (v === '' || v === undefined ? {} : typeof v === 'string' ? JSON.parse(v) : v),
+  z.record(
+    z.string(),
+    z.object({ document: z.string().default(''), query: z.string().default('') }).strict(),
+  ),
+);
+
 const ConfigSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   HOST: z.string().default('0.0.0.0'),
@@ -41,6 +50,12 @@ const ConfigSchema = z.object({
   /** Pinned into a workspace when it is created; changing it later needs a reindex. */
   DEFAULT_EMBEDDING_PROVIDER: z.enum(['lmstudio', 'openai', 'gemini']).default('lmstudio'),
   DEFAULT_EMBEDDING_MODEL: z.string().default('text-embedding-nomic-embed-text-v1.5'),
+  /**
+   * Task prefixes per embedding model id, over the built-in ones (providers.ts): text put before each
+   * document and each query before embedding. Pinned into a workspace with its model, so changing them
+   * takes effect on the next reindex.
+   */
+  EMBEDDING_PREFIXES: prefixMap,
 
   /** Used by workspaces that do not pick their own chat model. */
   DEFAULT_CHAT_PROVIDER: z.enum(['lmstudio', 'openai', 'anthropic', 'gemini']).default('lmstudio'),

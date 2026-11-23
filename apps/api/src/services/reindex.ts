@@ -5,14 +5,14 @@ import { HttpProblem } from '../errors.js';
 import { ChromaService } from './chroma.js';
 import type { DocumentEvents } from './document-events.js';
 import type { IngestQueue } from './ingest-queue.js';
-import { embeddingEndpoint, ProviderNotConfigured } from './providers.js';
+import { embeddingEndpoint, embeddingPrefixes, ProviderNotConfigured } from './providers.js';
 
 export type ReindexDeps = {
   db: Database;
   chroma: ChromaService;
   queue: IngestQueue;
   events: DocumentEvents;
-  config: Pick<Config, 'LMSTUDIO_BASE_URL' | 'OPENAI_API_KEY' | 'GEMINI_API_KEY'>;
+  config: Pick<Config, 'LMSTUDIO_BASE_URL' | 'OPENAI_API_KEY' | 'GEMINI_API_KEY' | 'EMBEDDING_PREFIXES'>;
 };
 
 /** A new embedding provider or model for the workspace; the rest of its settings stay. */
@@ -46,6 +46,9 @@ export async function startReindex(
   const { db, chroma, queue, events, config } = deps;
   if (workspace.status === 'reindexing') throw alreadyReindexing(workspace.slug);
   const settings = { ...workspace.settings, ...definedOnly(change) };
+  // Every document is embedded again, so the prefixes can follow the current table (and EMBEDDING_PREFIXES).
+  if (settings.embeddingModel)
+    settings.embeddingPrefixes = embeddingPrefixes(settings.embeddingModel, config);
   try {
     embeddingEndpoint(settings.embeddingProvider ?? 'lmstudio', config);
   } catch (err) {

@@ -44,7 +44,7 @@ The API's list of names is `apps/api/src/flows.ts`; `/ready` fails if one is mis
 |---|---|
 | `Loader` | `file_path` (relative to `/data/uploads`), `document_id`, `filename`, `folder` (the folder id, empty at the top level) |
 | `Split` | `chunk_size`, `chunk_overlap` |
-| `Embeddings` | `model`, `base_url` |
+| `Embeddings` | `model`, `base_url`, `document_prefix`, `query_prefix` (the workspace's pinned prefixes; empty for none) |
 | `Upsert` | `collection_name`, `document_id` |
 
 Output `ChatOutput-result`: `{ collection, document_id, chunks, pages }` (`pages` is `null` for non-PDFs). Re-ingesting a document deletes its
@@ -58,7 +58,7 @@ A failure (for example, file not found) comes back as HTTP 500 with the reason i
 | Node | Tweak fields |
 |---|---|
 | `ChatInput` | the query goes in `input_value` (top-level) |
-| `Embeddings` | `model`, `base_url` |
+| `Embeddings` | `model`, `base_url`, `document_prefix`, `query_prefix` (the workspace's pinned prefixes; empty for none) |
 | `Search` | `collection_name`, `top_k`, `min_score`, `folder` |
 
 Output `ChatOutput-passages`: `{ collection, query, passages }`, where `passages` is a list of
