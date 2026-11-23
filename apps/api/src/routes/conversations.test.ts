@@ -209,6 +209,18 @@ describe.skipIf(!url)('conversations (against TEST_DATABASE_URL)', () => {
     expect(runs[0]!.body.input_value).toBe('q3\nand q4?');
   });
 
+  it('a reply stored before start times existed reads back with startSeconds null', async () => {
+    const id = await start();
+    replyText = 'Overlap keeps context [1].';
+    const reply = (await call('POST', `/conversations/${id}/messages`, { content: 'old one' })).json();
+    const [row] = await t.db.select().from(messages).where(eq(messages.id, reply.id));
+    const old = row!.citations.map(({ startSeconds: _, ...c }) => c);
+    await t.db.update(messages).set({ citations: old }).where(eq(messages.id, reply.id));
+    const got = (await call('GET', `/conversations/${id}`)).json();
+    const stored = got.messages.find((m: { id: string }) => m.id === reply.id);
+    expect(stored.citations[0]).toMatchObject({ page: 3, startSeconds: null });
+  });
+
   it('a failed reply is stored, left out of later history, and returned as 502', async () => {
     const id = await start();
     failChat = true;

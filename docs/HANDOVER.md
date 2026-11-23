@@ -198,13 +198,10 @@ The assignment's graded parts already exist on `main` (the M2 cut line in
    2. Admin-only system status banner from `GET /v1/system` (LM Studio, Langflow or Chroma down) and a
       System section (work-breakdown, workstream 2 item 9).
 5. **Backend:**
-   1. Finish M5 part 1 (the branch above).
-   2. M5 part 2, start times on passages and citations: `chroma_search.py` returns `start_seconds`;
-      update the copies embedded in `flows/retrieve.json`, `answer.json` and `chat.json` (the flow test
-      fails until they match); add `startSeconds: number | null` to Passage and Citation in
-      `packages/shared`, map it in `services/passages.ts` and `generate.ts`; update the docs.
-   3. Admin UI for media: add `.mp4`, `.mp3`, `.wav` to `ACCEPT` in `apps/admin/src/documents/files.ts`;
-      optionally show transcripts and timestamps.
+   1. M5 part 1, video and audio transcription: in review as #71. The 2 GB upload limit is #70.
+   2. M5 part 2, start times on passages and citations: in review as #72 (stacked on #71).
+   3. Admin UI for media (upload types, transcript panel, times on sources): in review as #73 (stacked
+      on #72).
    4. M6, in order: `pnpm doctor` (reuse the checks in `scripts/setup.ts`); `pnpm backup` / `restore`;
       `flows:export` and `flows:import` (start from `poc/client/build-flows.ts`); `docs/ingestion.md`
       and `docs/operations.md`.
