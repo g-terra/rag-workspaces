@@ -155,6 +155,8 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
       if (!parsed || !found || found.document.status !== 'ready')
         throw new HttpProblem(404, `No passage ${req.params.passageId}`);
       const { document, holder } = found;
+      // Through a composite, the source holding it may be rebuilding even though the composite isn't.
+      assertSearchable(holder);
 
       const i = parsed.chunkIndex;
       const wanted = [i - 1, i, i + 1].filter((n) => n >= 0).map((n) => vectorId(document.id, n));
