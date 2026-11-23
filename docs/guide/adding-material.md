@@ -35,13 +35,27 @@ Through the API: `POST /v1/workspaces/{slug}/documents` with multipart `files` p
 Folders inside a workspace (for example one per course) exist in the API so far: `POST …/folders`, then
 upload with `?folderId=` ([Using the API](../api.md#add-material-editor)).
 
-> **Coming soon: website import.** Importing pages from a website instead of files is being worked on.
-> This section will say how once it lands.
+## Websites
+
+**Add website** on the Documents page imports a documentation website. Give a start URL such as
+`https://auth0.com/docs`: pages under that path on the same host are fetched, each becomes a document of type
+`web`, and answers that cite one link back to the page. The crawl is polite (robots.txt and the sitemap are
+honoured, one request a second, one site at a time), stops at **Max pages**, and skips any paths you list under
+**Leave out**, such as translations (`/docs/fr-ca/`). When a site publishes `llms.txt`, each page's own Markdown is
+used instead of its HTML.
+
+The site's row above the library shows the crawl's progress and, when it ends, what changed. **Crawl again**
+fetches every page once more: changed pages are re-ingested, new pages added, and a page is removed only when it
+answers 404 or 410, robots.txt disallows it, or it now falls under **Leave out**. **Remove** deletes the site with
+all its pages. Pages that need JavaScript or a login to show their text are not supported, and a site on a
+private network needs `CRAWL_ALLOWED_HOSTS` ([Setup](../setup.md#documentation-websites)).
+
+Through the API: `POST /v1/workspaces/{slug}/sites` ([API schema](../api-schema.md#imported-websites)).
 
 ## Documents
 
 "Documents" lists everything in the workspace, live, with each document's type, number of passages, status and when it
-last changed. Everyone with access can preview and download a document: a PDF opens in a viewer inside
+last changed (a web page has a globe next to its title and a link to the page). Everyone with access can preview and download a document: a PDF opens in a viewer inside
 the app (from an answer's citation, on the cited page), and a recording shows its transcript with the time
 each line starts. Editors and admins can also
 reindex or delete one.

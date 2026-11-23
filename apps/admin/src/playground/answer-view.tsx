@@ -6,6 +6,7 @@ import { clock } from './answer';
 import { AnswerMarkdown } from './answer-markdown';
 import { answerFailure, type AnswerError } from './failure';
 import { formatScore } from './search';
+import { displayUrl } from '@/sites/sites';
 
 /**
  * Generated text rendered as markdown, with its `[n]` markers turned into buttons that open the passage
@@ -79,6 +80,9 @@ export function Sources({ citations, onOpen }: { citations: Citation[]; onOpen(p
             <span className="flex-1 truncate text-[13px] font-semibold">{c.documentTitle}</span>
             <span className="text-muted-foreground font-mono text-xs">{formatScore(c.score)}</span>
           </span>
+          {c.sourceUrl && (
+            <span className="text-muted-foreground truncate text-xs">{displayUrl(c.sourceUrl)}</span>
+          )}
           {c.page !== null && <span className="text-muted-foreground text-xs">page {c.page}</span>}
           {c.page === null && c.startSeconds !== null && (
             <span className="text-muted-foreground text-xs">at {clock(c.startSeconds)}</span>
