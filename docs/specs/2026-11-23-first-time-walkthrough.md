@@ -1,8 +1,8 @@
 ---
 title: walk first-time users through the admin app
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#107"
+status: in review
 areas: [admin, docs]
 ---
 
