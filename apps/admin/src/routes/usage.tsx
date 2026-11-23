@@ -212,7 +212,7 @@ function Tiles({ summary, stale }: { summary: UsageSummary; stale: boolean }) {
     [
       'Questions',
       formatCount(summary.questions),
-      `${formatCount(summary.ungrounded)} found nothing · ${formatCount(summary.feedback.up)} up / ${formatCount(summary.feedback.down)} down`,
+      `${formatCount(summary.ungrounded)} not answered from the material · ${formatCount(summary.feedback.up)} up / ${formatCount(summary.feedback.down)} down`,
     ],
   ];
   return (

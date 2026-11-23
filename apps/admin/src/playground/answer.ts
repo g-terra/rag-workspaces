@@ -3,6 +3,19 @@ import type { Answer, Passage } from '@rag/shared';
 /** Why a reply has no text: nothing in the workspace was relevant enough, so no model was called. */
 export const NOT_GROUNDED = 'Nothing in this workspace was close enough to that, so no reply was generated.';
 
+/** Shown under a reply that cites none of the passages the model read (`grounded: false` with citations). */
+export const UNCITED =
+  'This reply cites none of the passages below, so the material probably does not answer it.';
+
+/**
+ * Nothing in the workspace was relevant enough, so no model ran and there is no reply to show. A reply
+ * that is `grounded: false` but has citations is different: the model read those passages, cited none,
+ * and its own words (usually "the material does not cover it") are shown.
+ */
+export function foundNothing(reply: { grounded: boolean | null; citations: unknown[] }): boolean {
+  return reply.grounded === false && reply.citations.length === 0;
+}
+
 /** A piece of an answer: text to show, or the `[n]` marker of a citation to open. */
 export type AnswerPart = { text: string } | { rank: number };
 

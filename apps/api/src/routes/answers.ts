@@ -34,6 +34,7 @@ export const answerRoutes: FastifyPluginAsyncZod<AnswerRoutesOptions> = async (a
         description:
           "Answers one question from the workspace's material, with citations to the passages the model was given. " +
           'If nothing in the workspace is relevant enough, the answer is `grounded: false` with a fixed text, and no model is called. ' +
+          "A reply that cites none of the passages it was given (the model found nothing to use in them) is also `grounded: false`, with the model's text and those passages. " +
           'Every answer is stored, failed ones too, and can be fetched and rated later.\n\n' +
           'Send `Accept: text/event-stream` to stream it: `token` events (`{ text }`) as the model writes, ' +
           'then `citations` and `done` (the stored answer, with `timeToFirstTokenMs`). A failure after the stream ' +

@@ -221,6 +221,34 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
     expect(runs.map((r) => r.flow)).toEqual(['rw-retrieve']);
   });
 
+  it('a reply that cites none of its passages is ungrounded, but keeps its text and the passages it saw', async () => {
+    const reply = 'The material does not cover the capital of Peru.';
+    answerReply = () =>
+      Response.json(
+        outputBody({
+          'ChatOutput-answer': reply,
+          'ChatOutput-citations': fenced({ passages: hits }),
+        }),
+      );
+    const res = await ask({ question: 'What is the capital of Peru?' });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ grounded: false, text: reply, provider: 'lmstudio' });
+    expect(res.json().citations).toHaveLength(1);
+    const [stored] = await t.db.select().from(answers).where(eq(answers.id, res.json().id));
+    expect(stored).toMatchObject({ grounded: false });
+  });
+
+  it('a citation in the fullwidth style some models write counts; a number past the passages does not', async () => {
+    const replyWith = (text: string) => () =>
+      Response.json(
+        outputBody({ 'ChatOutput-answer': text, 'ChatOutput-citations': fenced({ passages: hits }) }),
+      );
+    answerReply = replyWith('RAG retrieves first 【1†L3-L5】.');
+    expect((await ask({ question: 'What is RAG?' })).json()).toMatchObject({ grounded: true });
+    answerReply = replyWith('RAG retrieves first [7].');
+    expect((await ask({ question: 'What is RAG?' })).json()).toMatchObject({ grounded: false });
+  });
+
   /** A folder in `ouc`, made straight in the database. */
   async function oucFolder() {
     const [ws] = await t.db.select().from(workspaces).where(eq(workspaces.slug, 'ouc'));

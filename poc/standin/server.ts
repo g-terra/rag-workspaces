@@ -74,7 +74,9 @@ function composeAnswer(model: string, messages: { role: string; content: unknown
     const score = tokenize(s).filter((t) => qTokens.has(t)).length;
     if (score > bestScore) { best = s; bestScore = score; }
   }
-  return `[stand-in ${model}] **Based on the provided context:** ${best || 'no context was given.'}`;
+  // Cite the first numbered passage, as the system prompt asks; the API counts an uncited reply as ungrounded.
+  const cite = /^\[(\d+)\] \(/m.exec(all)?.[1];
+  return `[stand-in ${model}] **Based on the provided context:** ${best || 'no context was given.'}${best && cite ? ` [${cite}]` : ''}`;
 }
 
 const server = createServer(async (req, res) => {

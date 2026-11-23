@@ -151,7 +151,7 @@ export function createServer(api: RagApi, version: string): McpServer {
       title: 'Ask the workspace',
       description:
         "An answer written by the workspace's model from its own material, with numbered citations. " +
-        '`grounded: false` means nothing in the workspace was relevant enough, and the model was not asked.',
+        '`grounded: false` means the material does not answer it: nothing was relevant enough, or the model cited none of the passages it read.',
       inputSchema: {
         workspace,
         question: z.string().min(1).describe('The question, in plain words.'),

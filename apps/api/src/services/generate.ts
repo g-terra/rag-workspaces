@@ -27,6 +27,25 @@ export const DEFAULT_SYSTEM_PROMPT =
 
 const SNIPPET_CHARS = 240;
 
+/**
+ * Citation markers in a reply: `[1]`, `[1, 2]`, or the fullwidth `【1】` / `【1†L3-L5】` some models
+ * (gpt-oss) write. The admin UI reads the same markers (apps/admin/src/playground/answer.ts).
+ */
+const MARKER = /\[(\d+(?:\s*,\s*\d+)*)\]|【(\d+(?:\s*,\s*\d+)*)(?:†[^】]*)?】/g;
+
+/**
+ * Whether a reply rests on the material: it cites at least one of the passages it was given. A model
+ * that finds nothing to use in its passages says so without citing any (the system prompt asks it to
+ * cite what it uses), so such a reply is not grounded, however well the passages scored.
+ */
+export function citesAny(text: string, ranks: number[]): boolean {
+  for (const m of text.matchAll(MARKER)) {
+    const cited = (m[1] ?? m[2]!).split(',').map((n) => Number(n.trim()));
+    if (cited.some((n) => ranks.includes(n))) return true;
+  }
+  return false;
+}
+
 /** A stored citation as the API returns it: ones stored before start times existed have none. */
 export function withStartSeconds(c: StoredCitation) {
   return { ...c, startSeconds: c.startSeconds ?? null };
@@ -89,6 +108,8 @@ type Generation = {
  * 2. Otherwise run `rw-answer` (or `rw-chat` with history), which searches again with the
  *    same settings, builds the prompt and calls the workspace's chat model. Its citations
  *    output is exactly the passages the model saw.
+ * 3. The reply is grounded only if it cites one of those passages (`citesAny`): passages can
+ *    score well and still not hold the answer, and then the model says so without citing.
  *
  * Never throws for a failed run: the failure comes back in the result, so callers can store it.
  */
@@ -177,7 +198,10 @@ export class Generator {
       return {
         status: 'complete',
         text,
-        grounded: true,
+        grounded: citesAny(
+          text,
+          cited.map((p) => p.rank),
+        ),
         citations: cited.map((p) => ({
           rank: p.rank,
           passageId: p.id,

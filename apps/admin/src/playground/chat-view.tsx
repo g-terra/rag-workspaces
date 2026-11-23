@@ -1,7 +1,7 @@
 import { Send, SquareIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
-import { answerMeta, NOT_GROUNDED } from './answer';
+import { answerMeta, foundNothing, NOT_GROUNDED, UNCITED } from './answer';
 import { AnswerFailure, AnswerText, Sources } from './answer-view';
 import type { ChatTurn } from './chat';
 import { QuestionBox } from './question-box';
@@ -77,7 +77,7 @@ export function TurnView({
       {(!failed || turn.text !== '') && (
         <div className="flex flex-wrap items-start gap-4">
           <div className="bg-card flex min-w-0 flex-[999_1_460px] flex-col gap-3 rounded-xl border p-5">
-            {turn.reply?.grounded === false ? (
+            {turn.reply && foundNothing(turn.reply) ? (
               <p className="text-muted-foreground text-[15px] leading-relaxed">
                 {NOT_GROUNDED} Ask in the words the material uses, or upload material that covers it.
               </p>
@@ -90,6 +90,11 @@ export function TurnView({
                   onOpen={onOpenPassage}
                 />
               </div>
+            )}
+            {turn.reply?.grounded === false && citations.length > 0 && (
+              <p className="text-muted-foreground border-t pt-3 text-[13px]" data-testid="uncited">
+                {UNCITED}
+              </p>
             )}
             {turn.status === 'stopped' && (
               <p className="text-muted-foreground border-t pt-3 text-[13px]">
