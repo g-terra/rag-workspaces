@@ -176,7 +176,7 @@ Rules that keep ingestion honest when things fail:
 - **Timeouts and retries.** A flow run has a timeout scaled by file size. Failures retry up to 3 times with backoff; after that the document is `failed` with the error text and a manual retry button.
 - **One file at a time across the whole install** by default (configurable). LM Studio is one local model server, so running workspaces in parallel only makes each file slower.
 - **Recovery on start.** Documents left in `transcribing` or `processing` by a crash are put back to `queued` when the API starts.
-- **Limits at the door.** Maximum file size (default 200 MB, 2 GB with the video profile), allowed types checked by content and not only by extension, and a clear `failed` reason for scanned PDFs with no text layer (OCR is out of scope).
+- **Limits at the door.** Maximum file size (`MAX_UPLOAD_BYTES`, 2 GB by default so lecture videos fit; the API and the admin UI's nginx read the same value), allowed types checked by content and not only by extension, and a clear `failed` reason for scanned PDFs with no text layer (OCR is out of scope).
 - **Postgres is the source of truth.** A document is searchable only when its row is `ready`. A `pnpm doctor` command compares rows, files on the volume and vectors in Chroma and reports orphans.
 - **Changing the embedding model** means a new vector size, so workspace reindex drops and recreates the collection. The workspace shows `reindexing` and search returns 503 until it finishes.
 

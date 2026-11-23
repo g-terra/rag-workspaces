@@ -87,7 +87,8 @@ running, or the model not loaded.
 1. Open http://rag.localhost and sign in as `RW_ADMIN_USERNAME` with `RW_ADMIN_PASSWORD` from `.env`. That
    account is the first admin.
 2. Create a workspace, for example `ouc`, from "All workspaces".
-3. Upload files from "Upload": PDF, DOCX, TXT and Markdown, up to 200 MB each and 20 per upload. Each one
+3. Upload files from "Upload": PDF, DOCX, TXT and Markdown, up to 2 GB each and 20 per upload
+   (`MAX_UPLOAD_BYTES` in `.env` changes the size limit, for the API and the admin UI alike). Each one
    goes `queued`, `processing`, `ready` (or `failed`, with the reason).
 
 People are created in Keycloak's own admin console (http://auth.rag.localhost/admin, sign in with
