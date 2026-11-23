@@ -31,7 +31,11 @@ export function DeleteWorkspaceDialog({
           be undone.
         </DialogDescription>
 
-        <Field id="delete-confirm" label={`Type ${workspace.slug} to confirm`}>
+        <Field
+          id="delete-confirm"
+          label={`Type ${workspace.slug} to confirm`}
+          hint="Exactly as shown; a slug is always lower case."
+        >
           <Input
             id="delete-confirm"
             aria-describedby="delete-confirm-note"

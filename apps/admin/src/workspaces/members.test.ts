@@ -67,17 +67,22 @@ describe('personLabel', () => {
 describe('personNote', () => {
   it('shows the email and when access was granted', () => {
     const [row] = memberRows([member('u1')], [user('u1')]);
-    expect(personNote(row!)).toBe('u1@example.test · added 12 Nov 2026');
+    expect(personNote(row!, true)).toBe('u1@example.test · added 12 Nov 2026');
   });
 
-  it('says plainly when the directory could not name the person', () => {
+  it('says plainly when the directory was read and did not know the person', () => {
     const [row] = memberRows([member('ghost')], [user('u1')]);
-    expect(personNote(row!)).toBe('not in the directory · added 12 Nov 2026');
+    expect(personNote(row!, true)).toBe('not in the directory · added 12 Nov 2026');
+  });
+
+  it('accuses nobody of not existing when the directory was never read', () => {
+    const [row] = memberRows([member('u1')], undefined);
+    expect(personNote(row!, false)).toBe('added 12 Nov 2026');
   });
 
   it('marks an account that cannot sign in', () => {
     const [row] = memberRows([member('u1')], [user('u1', { enabled: false })]);
-    expect(personNote(row!)).toContain('sign-in disabled');
+    expect(personNote(row!, true)).toContain('sign-in disabled');
   });
 });
 

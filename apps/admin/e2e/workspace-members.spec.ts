@@ -3,7 +3,7 @@ import { bearer, requireCredentials, signIn } from './sign-in';
 
 requireCredentials();
 
-// Unique per run: another worker drives the same stack and the same admin account.
+// Unique per run: another agent drives this same stack and admin account at the same time.
 const run = Date.now().toString(36);
 const made: string[] = [];
 
@@ -19,8 +19,11 @@ async function createWorkspace(page: Page, suffix: string) {
 }
 
 test.afterEach(async ({ page }) => {
+  const left = made.splice(0);
+  // Signing in may be what failed, and then there is no token to clean up with.
+  if (left.length === 0) return;
   const headers = await bearer(page);
-  for (const workspace of made.splice(0)) {
+  for (const workspace of left) {
     const res = await page.request.delete(`/api/v1/workspaces/${workspace}`, { headers });
     expect([204, 404]).toContain(res.status());
   }
@@ -71,7 +74,7 @@ test('an admin changes a member’s role and removes it', async ({ page }) => {
   await page.reload();
   await expect(page.getByLabel(`Role for ${userId}`)).toHaveValue('reader');
 
-  await page.getByRole('button', { name: 'Remove' }).click();
+  await page.getByRole('button', { name: `Remove ${userId}` }).click();
   await expect(page.getByText(/Nobody has been granted access yet/)).toBeVisible();
 });
 

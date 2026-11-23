@@ -1,5 +1,5 @@
-import type { Workspace, WorkspaceRole } from '@rag/shared';
-import { useState } from 'react';
+import type { Workspace, WorkspaceMember, WorkspaceRole } from '@rag/shared';
+import { useEffect, useState } from 'react';
 import { Field } from '@/components/field';
 import { ErrorState, Loading } from '@/components/states';
 import { Button } from '@/components/ui/button';
@@ -17,15 +17,30 @@ import {
 
 const selectClass =
   'border-input dark:bg-input/30 h-8 rounded-md border bg-transparent px-2 text-[13px] shadow-xs';
+const wideSelectClass =
+  'border-input dark:bg-input/30 h-9 rounded-md border bg-transparent px-2.5 text-sm shadow-xs';
+
+/** Keystrokes are cheap here but a search is not: each one asks Keycloak for every match's roles. */
+function useDebounced(value: string, ms = 300): string {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(timer);
+  }, [value, ms]);
+  return settled;
+}
 
 /**
  * Who has been granted access to this workspace, and how to grant or remove it. Accounts
  * themselves are made in Keycloak's console (decision 12); this screen only grants.
  */
 export function WorkspaceMembers({ workspace }: { workspace: Workspace }) {
+  // The search lives here, not in the picker, because the people it finds also name the rows: the
+  // person just granted is not in the unfiltered first page, and would come back as a bare id.
+  const [search, setSearch] = useState('');
   const members = useMembers(workspace.slug);
-  // Named from the directory. A failure here is not fatal: the rows fall back to raw ids.
   const directory = useUsers('');
+  const found = useUsers(useDebounced(search.trim()));
   const grant = useGrantMember(workspace.slug);
   const remove = useRemoveMember(workspace.slug);
 
@@ -40,7 +55,11 @@ export function WorkspaceMembers({ workspace }: { workspace: Workspace }) {
     );
   }
 
-  const rows = memberRows(members.data, directory.data);
+  const people = [...(directory.data ?? []), ...(found.data ?? [])];
+  const rows = memberRows(members.data, people);
+  // Only a directory that actually answered can say an id is unknown to it.
+  const directoryRead = directory.isSuccess;
+  const busy = grant.isPending || remove.isPending;
   const failure = grant.error ?? remove.error;
 
   return (
@@ -66,14 +85,19 @@ export function WorkspaceMembers({ workspace }: { workspace: Workspace }) {
                 <span className="block truncate text-sm font-medium" title={row.userId}>
                   {personLabel(row)}
                 </span>
-                <span className="text-muted-foreground block truncate text-xs">{personNote(row)}</span>
+                <span className="text-muted-foreground block truncate text-xs">
+                  {personNote(row, directoryRead)}
+                </span>
               </span>
               <select
                 aria-label={`Role for ${personLabel(row)}`}
                 className={selectClass}
                 value={row.role}
-                disabled={grant.isPending || remove.isPending}
-                onChange={(e) => grant.mutate({ userId: row.userId, role: e.target.value as WorkspaceRole })}
+                disabled={busy}
+                onChange={(e) => {
+                  remove.reset();
+                  grant.mutate({ userId: row.userId, role: e.target.value as WorkspaceRole });
+                }}
               >
                 {MEMBER_ROLES.map(({ role }) => (
                   <option key={role} value={role}>
@@ -85,10 +109,15 @@ export function WorkspaceMembers({ workspace }: { workspace: Workspace }) {
                 variant="ghost"
                 size="sm"
                 className="text-destructive"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate(row.userId)}
+                // Also while a role change is in flight: `PUT` upserts, so a DELETE that commits
+                // first would be undone by it and leave the person with access and no error.
+                disabled={busy}
+                onClick={() => {
+                  grant.reset();
+                  remove.mutate(row.userId);
+                }}
               >
-                Remove
+                Remove<span className="sr-only"> {personLabel(row)}</span>
               </Button>
             </li>
           ))}
@@ -101,7 +130,13 @@ export function WorkspaceMembers({ workspace }: { workspace: Workspace }) {
         </p>
       )}
 
-      <GrantAccess workspace={workspace} members={members.data} />
+      <GrantAccess
+        workspace={workspace}
+        members={members.data}
+        found={found}
+        search={search}
+        onSearch={setSearch}
+      />
 
       <p className="text-muted-foreground text-xs">
         {MEMBER_ROLES.map((r) => `${r.role}: ${r.can}`).join(' · ')} · admins see every workspace.
@@ -114,19 +149,25 @@ export function WorkspaceMembers({ workspace }: { workspace: Workspace }) {
 function GrantAccess({
   workspace,
   members,
+  found,
+  search,
+  onSearch,
 }: {
   workspace: Workspace;
-  members: Parameters<typeof candidates>[1];
+  members: WorkspaceMember[];
+  found: ReturnType<typeof useUsers>;
+  search: string;
+  onSearch(value: string): void;
 }) {
-  const [search, setSearch] = useState('');
   const [userId, setUserId] = useState('');
   const [role, setRole] = useState<WorkspaceRole>('reader');
-  const found = useUsers(search.trim());
   const grant = useGrantMember(workspace.slug);
   // 503 is "Keycloak is down, or its people list was never set up" — the one case a person still
-  // has to be granted by raw id, which is what the API has always accepted.
+  // has to be granted by raw id, which is what the API has always accepted. Anything else is a real
+  // failure and is shown as one.
   const byId = directoryUnavailable(found.error);
   const people = candidates(found.data, members);
+  const addable = people.filter((c) => c.already === null).length;
   const chosen = people.find((c) => c.user.id === userId);
   const blocked = byId ? userId.trim() === '' : !chosen || chosen.already !== null;
 
@@ -136,7 +177,7 @@ function GrantAccess({
       {
         onSuccess: () => {
           setUserId('');
-          setSearch('');
+          onSearch('');
         },
       },
     );
@@ -145,7 +186,7 @@ function GrantAccess({
     <>
       <select
         aria-label="Role to grant"
-        className="border-input dark:bg-input/30 h-9 flex-[1_1_120px] rounded-md border bg-transparent px-2.5 text-sm shadow-xs"
+        className={`${wideSelectClass} flex-[1_1_120px]`}
         value={role}
         onChange={(e) => setRole(e.target.value as WorkspaceRole)}
       >
@@ -164,7 +205,6 @@ function GrantAccess({
   return (
     <div className="flex flex-col gap-3 border-t pt-4">
       {byId ? (
-        // The people list is unavailable: granting by raw id is what the API has always accepted.
         <>
           <Field
             id="grant-user-id"
@@ -197,7 +237,7 @@ function GrantAccess({
               value={search}
               placeholder="Search Keycloak…"
               onChange={(e) => {
-                setSearch(e.target.value);
+                onSearch(e.target.value);
                 setUserId('');
               }}
             />
@@ -205,13 +245,11 @@ function GrantAccess({
           <div className="flex flex-wrap gap-2">
             <select
               aria-label="Person to grant"
-              className="border-input dark:bg-input/30 h-9 flex-[999_1_220px] rounded-md border bg-transparent px-2.5 text-sm shadow-xs"
+              className={`${wideSelectClass} flex-[999_1_220px]`}
               value={userId}
               onChange={(e) => setUserId(e.target.value)}
             >
-              <option value="">
-                {found.isPending ? 'Looking…' : `Choose a person (${people.length} found)…`}
-              </option>
+              <option value="">{pickerPrompt(found.isPending, addable, people.length)}</option>
               {people.map((c) => (
                 <option key={c.user.id} value={c.user.id} disabled={c.already !== null}>
                   {c.user.name ?? c.user.username}
@@ -230,4 +268,12 @@ function GrantAccess({
       )}
     </div>
   );
+}
+
+/** How many of the matches can actually be added, which is not how many were found. */
+function pickerPrompt(loading: boolean, addable: number, total: number): string {
+  if (loading) return 'Looking…';
+  if (total === 0) return 'Nobody found';
+  if (addable === 0) return `Choose a person (all ${total} found already have access)…`;
+  return `Choose a person (${addable} of ${total} found can be added)…`;
 }

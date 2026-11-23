@@ -21,9 +21,18 @@ export function personLabel(row: MemberRow): string {
   return row.person?.name ?? row.person?.username ?? row.userId;
 }
 
-/** The line under the name: how to recognise them, and when they were given access. */
-export function personNote(row: MemberRow): string {
-  const parts = [row.person ? (row.person.email ?? row.person.username) : 'not in the directory'];
+/**
+ * The line under the name: how to recognise them, and when they were given access.
+ *
+ * `directoryRead` is whether `GET /v1/users` actually answered. Without it a row has no person for
+ * three different reasons, and only one of them is "Keycloak doesn't know this id" — saying so while
+ * the list is still loading, or while it is answering 503, would accuse every real account on the
+ * page of not existing.
+ */
+export function personNote(row: MemberRow, directoryRead: boolean): string {
+  const parts: string[] = [];
+  if (row.person) parts.push(row.person.email ?? row.person.username);
+  else if (directoryRead) parts.push('not in the directory');
   if (row.person && !row.person.enabled) parts.push('sign-in disabled');
   parts.push(`added ${day(row.createdAt)}`);
   return parts.join(' · ');

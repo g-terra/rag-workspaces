@@ -28,9 +28,14 @@ the picker possible — before it, the only way to grant access was to paste a K
 1. **The module** (`src/workspaces/members.ts`, no React, unit-tested). `memberRows()` joins the
    granted roles to the people the directory returned. A member the directory cannot name is **kept**
    and shown by its raw id: the grant is real whatever Keycloak says, and hiding the row would hide
-   the access. `personLabel()` falls back name → username → id, and `personNote()` carries the email
-   (or "not in the directory"), "sign-in disabled" for a disabled account, and the day access was
-   granted in UTC.
+   the access. `personLabel()` falls back name → username → id, and `personNote()` carries the email,
+   "sign-in disabled" for a disabled account, and the day access was granted in UTC. It takes
+   `directoryRead` as well, because a row has no person for three different reasons and only one of
+   them is "Keycloak does not know this id": saying "not in the directory" while the list is still
+   loading, or while it is answering 503, would accuse every real account on the page of not existing.
+   The names come from the unfiltered first page **and** from whatever the picker's search returned,
+   so the person just granted is named at once instead of appearing as a bare id — the unfiltered page
+   holds 50 accounts and a newly found person is usually not among them.
 2. **Granting** (`src/components/workspace-members.tsx`). The picker is a search box over
    `GET /v1/users?search=`, Keycloak's own search across username, email and name, with a select of
    what came back. `candidates()` marks, rather than hides, the people a grant would not change:
@@ -43,7 +48,12 @@ the picker possible — before it, the only way to grant access was to paste a K
 3. **Changing and removing** (`src/workspaces/member-queries.ts`). The role select writes with the
    same `PUT .../members/{userId}` that grants, because the route upserts. Removing is a direct
    `DELETE`, with no confirmation: it is the one destructive action on this page that is undone by
-   granting again. Both invalidate `['workspaces', slug, 'members']`.
+   granting again. Both invalidate `['workspaces', slug, 'members']`, and both controls are disabled
+   while *either* is in flight — the `PUT` upserts, so a `DELETE` that commits first would be undone
+   by it and leave the person with access and no error on screen. Starting one clears the other's
+   error, so a failed role change cannot leave its message above a list that is now correct. Each
+   row's Remove button carries the person's name in its accessible name, so the buttons are told
+   apart by anyone reading them out.
 4. **Deleting** (`src/components/delete-workspace-dialog.tsx`). The dialog names what goes —
    documents, uploaded files, the Chroma collection, conversations, usage history — and that an API
    key able to reach only this workspace is revoked with it, which is the part a reader is least
@@ -66,6 +76,11 @@ the picker possible — before it, the only way to grant access was to paste a K
 | `replace` on the way to `/workspaces` | A plain push | Back would otherwise return to a workspace whose every request now 404s |
 | The role select writes on change | A separate save button per row | The route upserts, so the change is one request; a per-row save adds a step for a one-value form |
 | Invalidate `['api-keys']` after a delete | Leave it | A key bound only to this workspace is revoked by the API, so the keys page would otherwise show it active |
+| Name rows from the search's results too | Only the unfiltered first page | The person just granted is rarely in the first 50, and would come back as a bare id labelled as unknown |
+| "not in the directory" only once the list answered | Say it whenever no person matched | With no `KEYCLOAK_DIRECTORY_SECRET` it would be said about every real account, and it would flash on every load |
+| The search is debounced by 300 ms | A request per keystroke | Each search makes the API ask Keycloak for every match's realm roles, so a five-letter name was hundreds of admin calls |
+| Both controls disabled while either writes | Disable each on its own | `PUT` upserts, so Remove racing a role change silently re-grants access |
+| "N of M found can be added" | "M found" | Matches that already have access are shown but not selectable, so a bare count can promise people who cannot be picked |
 
 ## Interfaces and contracts
 
@@ -89,11 +104,11 @@ granting by Keycloak user id still works.
 
 ## Testing
 
-- `apps/admin/src/workspaces/members.test.ts` (19 cases): the join in both directions including a
+- `apps/admin/src/workspaces/members.test.ts` (20 cases): the join in both directions including a
   member the directory does not know and a directory that has not answered, the label's three
   fallbacks, the note with an email, with "not in the directory" and with a disabled account,
-  `candidates()` marking an existing member and an admin, `directoryUnavailable()` on 503 and not on
-  anything else, the member and delete messages in words, and the slug confirmation (trimmed, and
+  `candidates()` marking an existing member and an admin, the note accusing nobody when the directory
+  was never read, `directoryUnavailable()` on 503 and not on anything else, the member and delete messages in words, and the slug confirmation (trimmed, and
   case-sensitive).
 - `apps/admin/e2e/workspace-members.spec.ts` (3 tests, real stack): a throwaway workspace per run.
   The first checks a new workspace says nobody has been granted access and that the signed-in admin
@@ -109,8 +124,9 @@ key shows as revoked on the API keys page.
 
 ## Out of scope and follow-ups
 
-Paging the people list (the picker shows the first 50 matches of Keycloak's own search, which is what
-`GET /v1/users` pages; a `nextCursor` loop would be the follow-up for a large realm). Also not here:
+Paging the people list (the picker shows the first 50 matches of Keycloak's own search, and the rows
+are named from those matches plus the unfiltered first 50; following `nextCursor`, or asking the API
+for a person by id, is the follow-up for a realm large enough that a member falls outside both). Also not here:
 inviting or creating accounts, which belongs in Keycloak's console (decision 12); the mock's row for
 the signed-in admin as a locked member, since admins are not members at all; and a count of what a
 delete will remove, which would mean asking for every document, conversation and passage first.

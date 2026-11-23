@@ -1,5 +1,5 @@
 import type { User, WorkspaceMember, WorkspaceRole } from '@rag/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/auth/auth-context';
 
 const path = (slug: string) => `/v1/workspaces/${encodeURIComponent(slug)}/members`;
@@ -28,6 +28,8 @@ export function useUsers(search: string) {
     queryFn: async () => (await api<{ data: User[] }>(`/v1/users?${query}`)).data,
     // Accounts are made in Keycloak's console, so the list barely moves while a page is open.
     staleTime: 60_000,
+    // Each new search is a new key; without this the picker would empty between keystrokes.
+    placeholderData: keepPreviousData,
   });
 }
 
