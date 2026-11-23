@@ -1,7 +1,7 @@
 ---
 title: Pick a response style in the playground and workspace settings
 date: 2026-11-23
-pr: pending
+pr: "#112"
 status: in review
 areas: [admin, docs]
 ---
@@ -29,7 +29,8 @@ and the playground is where he tries questions.
    builds the request body part.
 2. `apps/admin/src/styles/queries.ts`: `useStyles()` reads `GET /v1/styles` and caches it for a minute.
 3. `apps/admin/src/playground/style-picker.tsx`: the select. Until the list loads it offers only the default and
-   No style, so asking never waits on it.
+   No style, so asking never waits on it. A picked style that disappears from the list (deleted meanwhile) falls
+   back to the workspace default (`isGone`), so the picker never shows one choice and sends another.
 4. Ask mode (`ask-panel.tsx`, `use-ask.ts`): the picker sits next to the passages count, and `ask()` takes the
    choice. Chat mode (`chat-panel.tsx`, `use-chat.ts`): the picker sits in the box's footer, and the choice
    applies to each message as it is sent. A retry uses the current choice.
@@ -75,4 +76,4 @@ None. Rebuild the admin image as usual.
 
 ## Docs updated
 
-None needed: the API docs describe styles. The admin UI has no separate user guide.
+`README.md` (the Playground and Settings descriptions).

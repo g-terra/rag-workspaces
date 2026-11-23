@@ -1,6 +1,6 @@
 import type { ResponseStyle } from '@rag/shared';
 import { describe, expect, it } from 'vitest';
-import { NO_STYLE, styleChoices, styleRequest, WORKSPACE_DEFAULT } from './styles';
+import { isGone, NO_STYLE, styleChoices, styleRequest, WORKSPACE_DEFAULT } from './styles';
 
 const style = (slug: string, name: string, builtIn = true): ResponseStyle => ({
   slug,
@@ -48,5 +48,18 @@ describe('styleChoices', () => {
 
   it('the no-style value can never be a real slug', () => {
     expect(NO_STYLE).not.toMatch(/^[a-z0-9][a-z0-9-]{0,39}$/);
+  });
+});
+
+describe('isGone', () => {
+  it('spots a picked style that is no longer listed (deleted meanwhile)', () => {
+    expect(isGone('removed', styles)).toBe(true);
+    expect(isGone('academic', styles)).toBe(false);
+    expect(isGone(WORKSPACE_DEFAULT, styles)).toBe(false);
+    expect(isGone(NO_STYLE, styles)).toBe(false);
+  });
+
+  it('says nothing until the list has loaded', () => {
+    expect(isGone('academic', undefined)).toBe(false);
   });
 });

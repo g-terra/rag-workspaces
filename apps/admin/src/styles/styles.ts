@@ -25,3 +25,12 @@ export function styleChoices(
     ...styles.map((s) => ({ value: s.slug, label: s.name })),
   ];
 }
+
+/**
+ * Whether the picked style has left the list (deleted while the page was open). The picker then falls
+ * back to the workspace default, so it never shows one choice and sends another. Unknown until loaded.
+ */
+export function isGone(choice: string, styles: readonly ResponseStyle[] | undefined): boolean {
+  if (!styles || choice === WORKSPACE_DEFAULT || choice === NO_STYLE) return false;
+  return !styles.some((s) => s.slug === choice);
+}

@@ -33,6 +33,16 @@ export const CreateStyle = z.object({
 });
 export type CreateStyle = z.infer<typeof CreateStyle>;
 
-/** `PATCH /v1/styles/{slug}`: the slug never changes, since answers and workspaces refer to it. */
-export const UpdateStyle = CreateStyle.omit({ slug: true }).partial().strict();
+/**
+ * `PATCH /v1/styles/{slug}`: the slug never changes, since answers and workspaces refer to it. Built
+ * without `CreateStyle`'s description default, which would otherwise reset a description left out.
+ */
+export const UpdateStyle = z
+  .object({
+    name: CreateStyle.shape.name,
+    description: z.string().trim().max(200),
+    instructions: CreateStyle.shape.instructions,
+  })
+  .partial()
+  .strict();
 export type UpdateStyle = z.infer<typeof UpdateStyle>;

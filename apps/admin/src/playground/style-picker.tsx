@@ -1,5 +1,6 @@
 import { useStyles } from '@/styles/queries';
-import { styleChoices } from '@/styles/styles';
+import { useEffect } from 'react';
+import { isGone, styleChoices, WORKSPACE_DEFAULT } from '@/styles/styles';
 import { useCurrentWorkspace } from '@/workspaces/current';
 
 /**
@@ -10,6 +11,10 @@ import { useCurrentWorkspace } from '@/workspaces/current';
 export function StylePicker({ value, onChange }: { value: string; onChange(value: string): void }) {
   const w = useCurrentWorkspace();
   const styles = useStyles();
+  const gone = isGone(value, styles.data);
+  useEffect(() => {
+    if (gone) onChange(WORKSPACE_DEFAULT);
+  }, [gone, onChange]);
   return (
     <select
       aria-label="Response style"
