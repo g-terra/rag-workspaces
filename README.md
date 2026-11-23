@@ -52,6 +52,14 @@ for scripts and agents calling the API are in [docs/api.md](docs/api.md).
 Requirements: Docker with Compose, about 6 GB of free RAM for the containers, and LM Studio on the host (from M1).
 
 ```bash
+pnpm install
+pnpm run setup           # checks the machine, writes .env, picks the models, starts the stack
+```
+
+`pnpm run setup` asks a few questions and can be run again at any time; it keeps your secrets (`--yes` takes
+the defaults without asking). By hand, the same is:
+
+```bash
 pnpm env:init            # once: writes .env with fresh random secrets (or: node scripts/env-init.ts)
 docker compose up -d     # first start pulls about 2 GB of images and takes a few minutes
 docker compose ps        # every service should say (healthy)
@@ -81,7 +89,17 @@ After signing in, the admin UI opens the workspace you used last (or your first 
 switcher in the sidebar changes it. Admins create workspaces from "All workspaces" or the switcher. Editors
 and admins upload files from "Upload" in the sidebar and watch each one through ingestion live.
 "Documents" lists everything in the workspace, live, with download for everyone and reindex and delete for
-editors and admins. The API docs are linked from the top bar of every page.
+editors and admins. "Playground" asks the workspace a question and streams the answer back word by word,
+the way an agent would through the API; it also searches its passages with their scores and no model call
+at all, and holds a conversation where a follow-up is answered from the thread. "Conversations" lists your
+conversations with the workspace and opens one in full, to read, carry on or delete. Admins manage API
+keys for agents and scripts under "API keys": a new key's secret is shown once, with a `curl` example to
+try it. "Usage" charts requests, latency, top questions, cited documents and the raw request log — for one
+workspace (editors and admins) or across all of them (admins). "Settings" (admins) changes a workspace's
+name, description, chat model and retrieval settings, with the providers and models read from
+`GET /v1/system`; it is also where you grant and remove other people's access to the workspace, start a
+reindex (the only way to change the embedding model) and delete the workspace. The API docs are linked
+from the top bar of every page.
 
 `docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
 

@@ -1,6 +1,6 @@
 import { Document } from '@rag/shared';
 import { z } from 'zod';
-import type { SseEvent } from './sse';
+import type { SseEvent } from '@/api/sse';
 
 /** What `GET /v1/workspaces/{slug}/documents/events` says, decoded. */
 export type DocumentEvent =
