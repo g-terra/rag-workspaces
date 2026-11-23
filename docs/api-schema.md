@@ -11,7 +11,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 |---|---|
 | Versioning | `/v1`; breaking changes go to `/v2` |
 | Auth | `Authorization: Bearer <token or key>`: a Keycloak access token (people) or an API key (agents and scripts) |
-| Isolation | A caller only sees workspaces it is granted; others return 404, not 403, so their existence is not revealed |
+| Isolation | A caller only sees workspaces it is granted; others return 404, not 403, so their existence is not revealed. The one exception: a [composite](#composite-workspaces) lists its sources' slugs to its own readers |
 | Ids | Prefixed ULIDs: `ws_`, `fld_`, `doc_`, `ans_`, `cnv_`, `msg_`, `key_`. Passages are `psg_<document ulid>_<chunk index>`, so they are stable across re-indexing with the same settings. Users are identified by their Keycloak user id. Workspaces are addressed by `slug` |
 | Fields | JSON, camelCase, ISO 8601 UTC timestamps |
 | Lists | `?limit=20&cursor=…` returns `{ "data": [...], "nextCursor": "…" | null }` |
@@ -109,7 +109,7 @@ from their material, under its own slug, members, API keys, chat settings, style
 - Every workspace has `kind` (`standard` or `composite`, fixed at creation) and `sources` (`null` for a standard
   workspace; the source slugs in order for a composite).
 - A source must be an existing standard workspace, listed once. `PATCH` with `sources` replaces the whole list (composite
-  only). Deleting a source drops it from every composite.
+  only). Deleting a source drops it from every composite, which can leave it with fewer than two.
 - A composite has no embedding model, chunking or `minScore`: each source searches with its own. Creating or patching a
   composite with one of them is `400`. Its chat provider and model, system prompt, reasoning effort, style and `topK`
   apply to its answers.

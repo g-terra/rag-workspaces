@@ -43,11 +43,10 @@ export const WorkspaceSettings = z.object({
 export type WorkspaceSettings = z.infer<typeof WorkspaceSettings>;
 
 /** `standard` holds documents; `composite` holds none and answers from its `sources`. */
-export const WorkspaceKind = z.enum(['standard', 'composite']);
-export type WorkspaceKind = z.infer<typeof WorkspaceKind>;
+const WorkspaceKind = z.enum(['standard', 'composite']);
 
 /** A composite's sources: two to ten standard workspaces, by slug, in the order they are listed. */
-export const CompositeSources = z
+const CompositeSources = z
   .array(WorkspaceSlug)
   .min(2)
   .max(10)

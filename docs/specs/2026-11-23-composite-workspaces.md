@@ -1,22 +1,22 @@
 ---
-title: Composite workspaces that answer from several workspaces
+title: Composite workspaces that name several source workspaces
 date: 2026-11-23
 pr: "#116"
 status: in review
-areas: [api, db, docs]
+areas: [api, db, admin, docs]
 ---
 
-# Composite workspaces that answer from several workspaces
+# Composite workspaces that name several source workspaces
 
 ## Summary
 
 A workspace can now be **composite**: it holds no documents of its own and instead names two or more
 ordinary workspaces as its **sources** (for example `study` = `ouc` + `personal`). It has its own slug,
-routes, API keys, members, chat settings, style and usage, and its answers, chats and passage searches
-draw on every source's material. This PR adds the data model and the workspace routes: creating a
-composite, changing its sources, and refusing the routes that only make sense for a workspace with
-documents. Answering across the sources follows in the next PR of the stack, the admin UI after it; the
-design of all three is here so the stack reads as one feature.
+routes, API keys, members, chat settings, style and usage. This PR adds the data model and the workspace
+routes: creating a composite, changing its sources, and refusing the routes that only make sense for a
+workspace with documents. Answering, chat and search across the sources are the next PR of the stack
+(merged straight after this one, so main never offers composites that cannot answer), the admin UI the
+one after; their parts below are the plan, and each of those PRs adds its own spec.
 
 ## Why
 
@@ -49,13 +49,18 @@ models and provider keys). It is recorded as decision 25.
   standard workspace.
 - Every workspace in a response carries `kind` and `sources` (`null` for a standard workspace; for a
   composite, the slugs in order). A source the caller cannot see is still listed: the admin chose to
-  expose it through the composite, and the slug alone reveals nothing else.
+  expose it through the composite, and the slug alone reveals nothing else. This is the one exception
+  to the isolation rule in `docs/api-schema.md`. Two to ten is checked when the list is written; deleting
+  sources later can leave fewer.
 - A composite answers `409` with a problem explaining that its documents live in its sources on:
   uploads and every other `documents` route, `folders`, `reindex`, and a document's passages. `GET` of the
   document list also answers 409 rather than an empty list, so a client does not think the composite is
-  empty.
+  empty. A `preHandler` on the documents and folders plugins (`standardOnly`) gives that 409, only to a
+  caller with access, so others still get 404.
+- `setSources` locks the composite's row (`FOR UPDATE`) and the sources (`FOR SHARE`), so two edits at
+  once take turns and a source deleted meanwhile is a 400, not a foreign-key error.
 
-### Answering across sources (next PR)
+### Answering across sources (next PR, plan)
 
 1. The question is searched in each source with **that source's** embedding model, prefixes, provider
    keys and `minScore`, through `rw-retrieve` as today. Each source returns up to the composite's `topK`.
@@ -76,7 +81,7 @@ models and provider keys). It is recorded as decision 25.
 6. Each citation and searched passage gains `workspace`: the slug of the source it came from. The passage
    preview routes (`GET …/passages/{id}`) on a composite look the document up among its sources.
 
-### Admin UI (last PR)
+### Admin UI (last PR, plan)
 
 A "Composite" choice in the create-workspace wizard with a pick-the-sources step instead of the embedding
 and retrieval steps; a Sources section in settings; Upload, Library and Folders hidden for a composite;
@@ -106,8 +111,8 @@ and the sources' `minScore` are the knobs.
   `settings.embeddingProvider` and `settings.embeddingModel` are `null` for a composite. `CreateWorkspace`
   takes `kind` (default `standard`) and `sources` (required for a composite, refused otherwise).
   `UpdateWorkspace` takes `sources` (composite only). `409` from document, folder, reindex and document
-  passage routes on a composite; `422`-style validation errors (400 problem) for unknown, composite or
-  repeated sources. Next PR: `Citation.workspace` and `ScoredPassage.workspace` (source slug).
+  passage routes on a composite; 400 for unknown, composite or repeated
+  sources. Next PR: `Citation.workspace` and `ScoredPassage.workspace` (source slug).
 - **Configuration**: None.
 - **Data**: migration `0011_composite_workspaces.sql`: enum `workspace_kind`, column `workspaces.kind`,
   table `composite_sources`.
@@ -123,11 +128,14 @@ keys bound only to it are revoked as for any workspace); its sources are untouch
 
 ## Testing
 
-- `apps/api/src/routes/workspaces.test.ts`: create a composite (sources returned in order, no Chroma
-  collection made), refusals (one source, unknown source, a composite as a source, repeats, `sources` on a
-  standard workspace), `PATCH` replaces the sources, deleting a source drops it from the composite, list
-  and get show `kind` and `sources`.
-- `apps/api/src/routes/documents.test.ts`, `folders.test.ts`, `reindex.test.ts`: a composite answers 409.
+- `apps/api/src/routes/workspaces.test.ts` (describe "composite workspaces"): create a composite (sources
+  in order, no Chroma collection), refusals on create and `PATCH` (one source, unknown source, a composite
+  as a source, repeats, `sources` on a standard workspace, chunking or `minScore` on a composite), `PATCH`
+  replaces the sources and bumps `updatedAt`, a reader sees the sources, deleting a source drops it,
+  deleting a composite touches no collection.
+- `apps/api/src/routes/composites.test.ts`: documents, folders and reindex answer 409 on a composite,
+  404 for a caller without access, and the sources keep their own routes.
+- `apps/api/src/routes/passages.test.ts` (last case): a document's passages through a composite: 409.
 - By hand: `curl -X POST /v1/workspaces -d '{"slug":"study","name":"Study","kind":"composite","sources":["ouc","personal"]}'`
   then `GET /v1/workspaces/study`.
 

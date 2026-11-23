@@ -15,8 +15,8 @@ import {
 import { and, desc, eq, inArray, isNull, notInArray, type SQL } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { standardOnly } from '../services/composites.js';
 import { requireWorkspace } from '../auth/access.js';
+import { standardOnly } from '../services/composites.js';
 import { openEventStream } from '../sse.js';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
