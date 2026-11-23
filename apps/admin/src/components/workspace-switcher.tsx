@@ -24,6 +24,7 @@ export function WorkspaceSwitcher() {
       <PopoverTrigger
         ref={triggerRef}
         aria-label="Switch workspace"
+        data-tour="switcher"
         className="bg-card hover:bg-accent flex w-full items-center gap-2.5 rounded-lg border p-2 text-left"
       >
         {current ? (

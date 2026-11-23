@@ -21,10 +21,15 @@ const MAX_BYTES = 2 * 1024 ** 3;
 const UNSUPPORTED = 'Not a supported file. Use PDF, DOCX, TXT, MD, MP4, MP3 or WAV.';
 const TOO_LARGE = 'Too large: the limit is 2 GB per file.';
 
+/** Whether the name has an extension the platform can index. */
+export function isSupported(name: string): boolean {
+  const ext = /\.([^.]+)$/.exec(name)?.[1]?.toLowerCase();
+  return !!ext && ACCEPT.split(',').includes(`.${ext}`);
+}
+
 /** Why this file can't be uploaded, or null when it can. */
 export function checkFile(file: { name: string; size: number }): string | null {
-  const ext = /\.([^.]+)$/.exec(file.name)?.[1]?.toLowerCase();
-  if (!ext || !ACCEPT.split(',').includes(`.${ext}`)) return UNSUPPORTED;
+  if (!isSupported(file.name)) return UNSUPPORTED;
   if (file.size === 0) return 'The file is empty.';
   if (file.size > MAX_BYTES) return TOO_LARGE;
   return null;

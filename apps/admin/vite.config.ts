@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
@@ -5,7 +6,13 @@ import { defineConfig } from 'vitest/config';
 
 // In development the UI calls `/api/...` and Vite forwards it to the API, the same
 // way nginx does in the container, so the UI never needs CORS or the API's own URL.
+// The release version (src/lib/version.ts): release-please bumps the root package.json on every release.
+const rootPackage = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
+  version: string;
+};
+
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(rootPackage.version) },
   plugins: [react(), tailwindcss()],
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   server: {

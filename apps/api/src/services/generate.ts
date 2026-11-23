@@ -1,4 +1,5 @@
 import type { StoredCitation, Database, Workspace } from '@rag/db';
+import type { ResponseStyle } from '@rag/shared';
 import {
   LangflowError,
   messageText,
@@ -16,6 +17,7 @@ import { FLOWS } from '../flows.js';
 import { normalise, resolveHits, retrieve, searchTweaks } from './passages.js';
 import { chatEndpoint, ProviderNotConfigured, type ChatEndpoint } from './providers.js';
 import { withWorkspaceKeys } from './provider-keys.js';
+import { composeSystemPrompt } from './styles.js';
 
 /** The reply when nothing in the workspace is relevant enough. The model is not asked. */
 export const NOT_FOUND_TEXT = "I couldn't find anything about this in this workspace's material.";
@@ -49,7 +51,7 @@ const MARKER = /\[(\d+(?:\s*,\s*\d+)*)\]|【(\d+(?:\s*,\s*\d+)*)(?:†[^】]*)?�
  * that finds nothing to use in its passages says so without citing any (the system prompt asks it to
  * cite what it uses), so such a reply is not grounded, however well the passages scored.
  */
-export function citesAny(text: string, ranks: number[]): boolean {
+function citesAny(text: string, ranks: number[]): boolean {
   for (const m of text.matchAll(MARKER)) {
     const cited = (m[1] ?? m[2]!).split(',').map((n) => Number(n.trim()));
     if (cited.some((n) => ranks.includes(n))) return true;
@@ -89,6 +91,8 @@ type GenerateInput = {
   maxPassages?: number;
   /** Search only this folder (already checked to belong to the workspace). */
   folderId?: string;
+  /** Tone, length and format, added after the system prompt. `null`: none. */
+  style: ResponseStyle | null;
   /** Langflow session id; one per run, so runs never share Langflow-side memory. */
   sessionId: string;
   /** Stream the reply: called with each piece of text as the model writes it. */
@@ -105,6 +109,8 @@ type Generation = {
   citations: StoredCitation[];
   provider: string | null;
   model: string | null;
+  /** The style's slug, recorded whether or not the model was called. */
+  style: string | null;
   promptTokens: number | null;
   completionTokens: number | null;
   latencyMs: number;
@@ -131,7 +137,7 @@ export class Generator {
 
   async generate(input: GenerateInput): Promise<Generation> {
     const { db, langflow } = this.deps;
-    const { workspace, question, history, maxPassages, folderId, sessionId, onToken, signal } = input;
+    const { workspace, question, history, maxPassages, folderId, style, sessionId, onToken, signal } = input;
     const searchQuery = input.searchQuery ?? question;
     const started = performance.now();
     const elapsed = () => Math.round(performance.now() - started);
@@ -141,6 +147,7 @@ export class Generator {
       citations: [],
       provider: null,
       model: null,
+      style: style?.slug ?? null,
       promptTokens: null,
       completionTokens: null,
       error: null,
@@ -179,7 +186,11 @@ export class Generator {
           model_name: chat.model,
           api_key: chat.apiKey,
           base_url: chat.baseUrl,
-          system_message: workspace.settings.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
+          system_message: composeSystemPrompt(
+            workspace.settings.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
+            style,
+            workspace.settings.systemPrompt == null,
+          ),
           // Empty: not sent, and the model thinks as much as it does by default.
           reasoning_effort: workspace.settings.reasoningEffort ?? config.DEFAULT_REASONING_EFFORT ?? '',
           stream: Boolean(onToken),
@@ -233,6 +244,7 @@ export class Generator {
         })),
         provider: chat.provider,
         model: chat.model,
+        style: style?.slug ?? null,
         ...messageUsage(outputs['ChatOutput-answer']),
         latencyMs: elapsed(),
         timeToFirstTokenMs,

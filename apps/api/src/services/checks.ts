@@ -2,7 +2,7 @@ import type { Config } from '../config.js';
 import type { ReadinessCheck } from '../readiness.js';
 
 /** GET a URL and require a 2xx answer. */
-export function httpCheck(name: string, url: string, fetchFn: typeof fetch = fetch): ReadinessCheck {
+function httpCheck(name: string, url: string, fetchFn: typeof fetch = fetch): ReadinessCheck {
   return {
     name,
     check: async (signal) => {

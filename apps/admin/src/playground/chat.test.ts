@@ -11,6 +11,7 @@ const reply = (over: Partial<Message> = {}): Message => ({
   grounded: true,
   citations: [],
   model: 'a-model',
+  style: null,
   usage: { promptTokens: 1840, completionTokens: 212 },
   latencyMs: 2340,
   timeToFirstTokenMs: 310,
