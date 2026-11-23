@@ -122,6 +122,10 @@ async function fillCreateDialog(page: Page, ws: { name: string; slug: string }) 
   await dialog.getByLabel('Name').fill(ws.name);
   await dialog.getByLabel('Slug').fill(ws.slug);
   await dialog.getByLabel('Description').fill('Made by the Playwright test');
+  // Every other step keeps its defaults; the workspace is created from the review.
+  for (const next of ['Chat', 'Embeddings', 'Retrieval', 'Review']) {
+    await dialog.getByRole('button', { name: `Next: ${next}` }).click();
+  }
   await dialog.getByRole('button', { name: 'Create workspace' }).click();
 }
 
@@ -135,29 +139,35 @@ test('an admin sets up a workspace step by step, and the settings it was created
   await dialog.getByLabel('Name').fill(w.name);
   await dialog.getByLabel('Slug').fill(w.slug);
 
-  // Models: LM Studio's models are listed (the smoke stack's stand-in model server).
-  await dialog.getByRole('button', { name: 'Next: Models' }).click();
+  // Chat: a hosted provider without a key in .env asks for one first, and a made-up key does not pass.
+  await dialog.getByRole('button', { name: 'Next: Chat' }).click();
+  await dialog.getByLabel('Chat provider').selectOption('gemini');
+  await expect(dialog.getByLabel('Chat model')).toBeHidden();
+  await dialog.getByRole('button', { name: 'Next: Embeddings' }).click();
+  await expect(dialog.getByText('Add a gemini key and check it, or pick another provider.')).toBeVisible();
+  await dialog.getByLabel('gemini API key').fill('not-a-real-gemini-key-000');
+  await dialog.getByRole('button', { name: 'Check key' }).click();
+  await expect(dialog.getByText(/The key doesn't work|couldn't be asked/)).toBeVisible();
+
+  // LM Studio needs no key, and its models are listed (the smoke stack's stand-in model server).
   await dialog.getByLabel('Chat provider').selectOption('lmstudio');
   const chatModel = dialog.getByLabel('Chat model');
   await chatModel.selectOption({ index: 1 });
   const picked = await chatModel.inputValue();
   expect(picked).not.toBe('');
 
-  // A hosted provider without a key in .env asks for one, and a made-up key does not pass.
-  await dialog.getByLabel('Embedding provider').selectOption('gemini');
-  await dialog.getByLabel('gemini API key').fill('not-a-real-gemini-key-000');
-  await dialog.getByRole('button', { name: 'Check key' }).click();
-  await expect(dialog.getByText(/The key doesn't work|couldn't be asked/)).toBeVisible();
-  // Creating now would leave Gemini without a key, so the wizard says so instead.
-  await dialog.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(dialog.getByText('Add a key for gemini, or pick another provider.')).toBeVisible();
-  await dialog.getByLabel('Embedding provider').selectOption('');
-
-  // Retrieval, then the review lists what was chosen.
+  // Embeddings and retrieval, then the review lists what was chosen.
+  await dialog.getByRole('button', { name: 'Next: Embeddings' }).click();
   await dialog.getByRole('button', { name: 'Next: Retrieval' }).click();
   await dialog.getByLabel('Top-k passages').fill('6');
   await dialog.getByRole('button', { name: 'Next: Review' }).click();
   await expect(dialog.getByText(`lmstudio / ${picked}`)).toBeVisible();
+
+  // The timeline goes back to a step and forward again, keeping what was filled in.
+  const steps = dialog.getByRole('list', { name: 'Steps' });
+  await steps.getByRole('button', { name: 'Chat' }).click();
+  await expect(dialog.getByLabel('Chat model')).toHaveValue(picked);
+  await steps.getByRole('button', { name: 'Review' }).click();
 
   created.push(w.slug);
   await dialog.getByRole('button', { name: 'Create workspace' }).click();

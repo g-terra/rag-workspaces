@@ -173,11 +173,12 @@ existing install" says what to change by hand when that file changes.
 
 | Symptom | Likely cause and fix |
 |---|---|
+| Something isn't working and you don't know what | Open "System" in the admin UI (admins): it shows each service and model provider with its error, and links to Langflow, Keycloak and Swagger |
 | `docker compose ps` shows a service `unhealthy` | `docker compose logs <service>`. Keycloak and Langflow are slow on the first start: give them a few minutes |
-| Port 80 or another port is taken | Set `PROXY_PORT` (and the ports in the URLs), `API_PORT`, `WEB_PORT`, `LANGFLOW_PORT` or `KEYCLOAK_PORT` in `.env`. A Langflow already running on the host often holds 7860 |
+| Port 80 or another port is taken | Set `PROXY_PORT` (and the ports in the URLs, `LANGFLOW_PUBLIC_URL` included), `API_PORT`, `WEB_PORT`, `LANGFLOW_PORT` or `KEYCLOAK_PORT` in `.env`. A Langflow already running on the host often holds 7860 |
 | `rag.localhost` doesn't open | Some browsers and tools don't resolve `*.localhost`: add the `/etc/hosts` line from the README, or use the `localhost` ports |
 | Documents stay `failed` with an embedding error | LM Studio isn't running, or the embedding model id doesn't match `DEFAULT_EMBEDDING_MODEL`. Fix it, then reindex the document |
-| Answers fail with `502` or `504` | The chat model failed or timed out; check `GET /v1/system` and LM Studio's log |
+| Answers fail with `502` or `504` | The chat model failed or timed out; check the System page (`GET /v1/system`) and LM Studio's log |
 | `429 Too Many Requests` | A rate limit (600 requests, 30 model calls a minute per person or key). Wait for `Retry-After`, or raise `RATE_LIMIT_PER_MINUTE` and `RATE_LIMIT_MODEL_PER_MINUTE` in `.env` |
 | `503` on search right after a reindex | The workspace is `reindexing`; it answers again once every document is `ready` |
 | A workspace-wide search misses passages that a search inside one folder finds | The workspace was created before the search-recall settings (2026-11-23). Reindex it once (`POST /v1/workspaces/{slug}/reindex`, no body) |

@@ -1,6 +1,7 @@
 {
   "realm": "rag-workspaces",
   "displayName": "rag-workspaces",
+  "loginTheme": "rag-workspaces",
   "enabled": true,
   "registrationAllowed": false,
   "resetPasswordAllowed": false,
