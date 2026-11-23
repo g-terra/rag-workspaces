@@ -132,13 +132,12 @@ const deleteFlow = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e04', 'rw-delete', 'rw
 
 // ---- chat: like answer, plus the conversation so far. Stateless: the API sends the history. ----
 // The chat input is what gets searched for: the API sends the latest message plus the previous
-// question, so a follow-up like "and in week 4?" still finds passages. `Question` is the latest
-// message alone, for the prompt; `History` is the last turns as text. (The search must hang off
-// the chat input: Langflow only returns outputs downstream of it, so a separate text input for
-// the query loses the citations output.)
+// question, so a follow-up like "and in week 4?" still finds passages. The latest message alone
+// and the last turns as text are tweaked straight onto the prompt's `question` and `history`
+// fields, so the flow needs no extra input nodes. (The search must hang off the chat input:
+// Langflow only returns outputs downstream of it, so a separate text input for the query loses
+// the citations output.)
 const cIn = chatInput(0, 0);
-const cQuestion = node('Question', 'TextInput', 0, 150, { input_value: '' });
-const cHistory = node('History', 'TextInput', 0, 450, { input_value: '' });
 const cEmb = embeddings(0, 300);
 const cSearch = node('Search', ext('ChromaWorkspaceSearch'), 350, 0);
 const cPrompt = node('Prompt', 'Prompt Template', 700, 0, {
@@ -158,10 +157,10 @@ const cLlm = node('LLM', ext('WorkspaceChatModel'), 1050, 0, {
 const cOut = chatOutput('ChatOutput-answer', 1400, 0, true);
 const cCites = chatOutput('ChatOutput-citations', 1050, 300);
 const chat = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e05', 'rw-chat', 'rw-chat',
-  'Answer the latest message of a conversation from the workspace collection, streaming tokens. The API sends the history. Tweak Question, History, Search, Embeddings, LLM, Prompt.',
-  [cIn, cQuestion, cHistory, cEmb, cSearch, cPrompt, cLlm, cOut, cCites],
-  [edge(cIn, 'message', cSearch, 'search_query'), edge(cQuestion, 'text', cPrompt, 'question'),
-   edge(cHistory, 'text', cPrompt, 'history'), edge(cEmb, 'embeddings', cSearch, 'embedding'),
+  'Answer the latest message of a conversation from the workspace collection, streaming tokens. The API sends the history. Tweak Search, Embeddings, LLM, Prompt (question and history).',
+  [cIn, cEmb, cSearch, cPrompt, cLlm, cOut, cCites],
+  [edge(cIn, 'message', cSearch, 'search_query'),
+   edge(cEmb, 'embeddings', cSearch, 'embedding'),
    edge(cSearch, 'context', cPrompt, 'context'), edge(cPrompt, 'prompt', cLlm, 'input_value'),
    edge(cLlm, 'text_output', cOut, 'input_value'), edge(cSearch, 'passages', cCites, 'input_value')]);
 

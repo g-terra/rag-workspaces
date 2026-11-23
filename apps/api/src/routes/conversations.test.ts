@@ -1,4 +1,4 @@
-import { documents, messages, newId, workspaces } from '@rag/db';
+import { documents, folders, messages, newId, workspaces } from '@rag/db';
 import { createTestDatabase } from '@rag/db/testing';
 import { LangflowClient } from '@rag/langflow-client';
 import { eq } from 'drizzle-orm';
@@ -157,14 +157,34 @@ describe.skipIf(!url)('conversations (against TEST_DATABASE_URL)', () => {
     expect(runs.map((r) => r.flow)).toEqual(['rw-retrieve', 'rw-chat']);
     const chat = runs[1]!.body;
     expect(chat.input_value).toBe('How large should chunk overlap be?');
-    expect(chat.tweaks.Question).toEqual({ input_value: 'How large should chunk overlap be?' });
-    expect(chat.tweaks.History).toEqual({ input_value: '(this is the first message)' });
+    expect(chat.tweaks.Prompt).toEqual({
+      question: 'How large should chunk overlap be?',
+      history: '(this is the first message)',
+    });
 
     const got = await call('GET', `/conversations/${id}`);
     expect(got.json()).toMatchObject({
       title: 'How large should chunk overlap be?',
       messages: [{ role: 'user' }, { role: 'assistant', content: 'Overlap keeps context [1].' }],
     });
+  });
+
+  /** A folder in `ouc`, made straight in the database. */
+  async function oucFolder() {
+    const [ws] = await t.db.select().from(workspaces).where(eq(workspaces.slug, 'ouc'));
+    const id = newId('folder');
+    await t.db.insert(folders).values({ id, workspaceId: ws!.id, name: id });
+    return id;
+  }
+
+  it('a message can limit its search to a folder; a folder from elsewhere is 404', async () => {
+    const id = await start();
+    const folderId = await oucFolder();
+    const res = await call('POST', `/conversations/${id}/messages`, { content: 'In this folder?', folderId });
+    expect(res.statusCode).toBe(201);
+    expect(runs.map((r) => r.body.tweaks.Search!.folder)).toEqual([folderId, folderId]);
+    const bad = await call('POST', `/conversations/${id}/messages`, { content: 'x', folderId: 'fld_nope' });
+    expect(bad.statusCode).toBe(404);
   });
 
   it('follow-ups send the last turns as history and search with the previous question too', async () => {
@@ -181,9 +201,11 @@ describe.skipIf(!url)('conversations (against TEST_DATABASE_URL)', () => {
     await call('POST', `/conversations/${id}/messages`, { content: 'and q4?' });
     const chat = runs.find((r) => r.flow === 'rw-chat')!.body;
     // CHAT_HISTORY_TURNS=2: only the last two turns.
-    expect(chat.tweaks.History).toEqual({ input_value: 'User: q2\nAssistant: a2\nUser: q3\nAssistant: a3' });
+    expect(chat.tweaks.Prompt).toEqual({
+      question: 'and q4?',
+      history: 'User: q2\nAssistant: a2\nUser: q3\nAssistant: a3',
+    });
     expect(chat.input_value).toBe('q3\nand q4?');
-    expect(chat.tweaks.Question).toEqual({ input_value: 'and q4?' });
     expect(runs[0]!.body.input_value).toBe('q3\nand q4?');
   });
 
@@ -199,7 +221,7 @@ describe.skipIf(!url)('conversations (against TEST_DATABASE_URL)', () => {
     runs.length = 0;
     await call('POST', `/conversations/${id}/messages`, { content: 'again' });
     const chat = runs.find((r) => r.flow === 'rw-chat')!.body;
-    expect(chat.tweaks.History).toEqual({ input_value: 'User: will fail' });
+    expect(chat.tweaks.Prompt).toMatchObject({ history: 'User: will fail' });
   });
 
   it('streams a reply', async () => {

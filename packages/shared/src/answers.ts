@@ -51,5 +51,7 @@ export const AskQuestion = z.object({
   question: z.string().trim().min(1).max(4000),
   /** How many passages the model gets. Defaults to the workspace's `topK`, then `DEFAULT_TOP_K`. */
   maxPassages: z.number().int().min(1).max(20).optional(),
+  /** Only use passages from documents in this folder. */
+  folderId: z.string().min(1).optional(),
 });
 export type AskQuestion = z.infer<typeof AskQuestion>;

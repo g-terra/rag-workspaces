@@ -22,6 +22,8 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  /* The one series colour the usage charts draw with (dark mode picks its own step below). */
+  --chart-1: #2563eb;
 }
 
 .dark {
@@ -41,6 +43,8 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  /* A lighter step, chosen against the dark card (not an automatic flip of the light one). */
+  --chart-1: #3b82f6;
 }
 
 @theme inline {
@@ -64,6 +68,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
 }
 
 @layer base {
