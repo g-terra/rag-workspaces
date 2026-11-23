@@ -68,7 +68,8 @@ similarity and hits below `min_score` are left out. An unknown collection return
 The search is hybrid: the 200 best passages by meaning (cosine similarity) and the 200 best by words (BM25 over each
 passage's text and file name) are fused with reciprocal rank fusion (k = 60), and the top `top_k` are kept. So "best first"
 is the fused order, and `score` (cosine) need not fall steadily down the list. The keyword index and the passages' vectors live
-in the Langflow worker, one set per collection, and are rebuilt when the collection's passage count changes or after two
+in the Langflow worker, one set per collection (in a module registered in `sys.modules`, because Langflow builds the
+component from its source on every run and a plain module-level variable would start empty each time), and are rebuilt when the collection's passage count changes or after two
 minutes (a rebuild reads only the vectors of new passages). The meaning ranking is exact: every cached vector is scored. Only a
 collection with more than 64 million vector numbers (about 80,000 passages of 768 dimensions) falls back to Chroma's
 approximate HNSW search.
