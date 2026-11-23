@@ -11,6 +11,7 @@ export type AskInput = {
   caller: Principal;
   question: string;
   maxPassages?: number;
+  folderId?: string;
   requestId?: string;
   /** Stream the reply: called with each piece of text as the model writes it. */
   onToken?: (text: string) => void;
@@ -35,6 +36,7 @@ export class AnswerService {
       workspace: input.workspace,
       question: input.question,
       maxPassages: input.maxPassages,
+      folderId: input.folderId,
       sessionId: id,
       onToken: input.onToken,
       signal: input.signal,

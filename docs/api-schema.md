@@ -17,7 +17,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Lists | `?limit=20&cursor=…` returns `{ "data": [...], "nextCursor": "…" | null }` |
 | Errors | RFC 9457 problem JSON: `{ "type", "title", "status", "detail", "requestId" }`; validation errors add `errors: [{ "path", "message" }]`. See [errors](#errors) |
 | Roles | One global role, `admin`. Inside a workspace, people and keys are `reader` or `editor` |
-| Rate limits *(planned)* | Per key and per user; `429` with `Retry-After` and `RateLimit-*` headers |
+| Rate limits | Per person and per API key, per minute: every `/v1` request counts against `RATE_LIMIT_PER_MINUTE` (600), and search, answers and chat messages also against `RATE_LIMIT_MODEL_PER_MINUTE` (30). Responses carry `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset` (seconds) for the tighter one; over it, `429` with `Retry-After` |
 | Streaming | `Accept: text/event-stream` on answers and messages streams `token`, `citations`, `done`, `error` events |
 | Tracing | Every response has `X-Request-Id`, also stored in the usage log |
 
@@ -26,18 +26,34 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Resource | Path | Who |
 |---|---|---|
 | Workspace | `/v1/workspaces` | admin creates; members and keys see their own |
-| Folder *(planned)* | `/v1/workspaces/{slug}/folders` | editor |
+| Folder | `/v1/workspaces/{slug}/folders` | reader to list, editor to change |
 | Document | `/v1/workspaces/{slug}/documents` | editor to change, reader to list |
 | Passage | `/v1/workspaces/{slug}/passages` | reader |
 | Answer (+ feedback) | `/v1/workspaces/{slug}/answers` | reader; an answer is visible only to whoever asked and to admins |
 | Conversation (+ messages) | `/v1/workspaces/{slug}/conversations` | reader; a conversation is visible only to whoever started it and to admins |
 | Usage | `/v1/usage`, `/v1/workspaces/{slug}/usage` | admin (global), editor (own workspace) |
-| User *(planned)* | `/v1/users` | admin |
-| System *(planned)* | `/v1/system` | admin |
+| User | `/v1/users` | admin |
+| System | `/v1/system` | admin |
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
 
-Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow, Keycloak and the model provider, including whether the configured models are available.
+Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down.
+
+```json
+// GET /v1/system → 200 (admin only)
+{ "version": "0.4.0", "status": "degraded",
+  "services": [{ "name": "postgres", "ok": true, "latencyMs": 2, "error": null },
+               { "name": "langflow", "ok": false, "latencyMs": 15, "error": "flows missing in Langflow: rw-chat" }],
+  "langflowKey": "auto",
+  "providers": [{ "id": "lmstudio", "configured": true, "reachable": true, "error": null, "embeddings": true,
+                  "models": ["qwen2.5-7b-instruct", "text-embedding-nomic-embed-text-v1.5"] },
+                { "id": "openai", "configured": false, "reachable": null, "error": "OPENAI_API_KEY is not set",
+                  "embeddings": true, "models": [] }],
+  "defaults": { "chat": { "provider": "lmstudio", "model": "qwen2.5-7b-instruct", "available": true },
+                "embedding": { "provider": "lmstudio", "model": "text-embedding-nomic-embed-text-v1.5", "available": true } } }
+```
+
+`providers` always lists `lmstudio`, `openai`, `gemini` and `anthropic`; a hosted one is asked only when its key is set, and keys are never returned. `langflowKey` is `auto` (minted at start), `env` (`LANGFLOW_API_KEY`) or `none` (not yet). `/ready` does not ask the model providers, so a stopped LM Studio shows here but doesn't make the API unready.
 
 ## Workspaces
 
@@ -46,7 +62,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 | GET | `/v1/workspaces` | Workspaces the caller can see, each with `access`: `admin`, `editor` or `reader` |
 | POST | `/v1/workspaces` | Create: `{ "slug": "personal", "name": "Personal", "description": "…", "settings": { … } }` |
 | GET, PATCH, DELETE | `/v1/workspaces/{slug}` | Read, update name, description or settings; delete with all its data |
-| POST | `/v1/workspaces/{slug}/reindex` *(planned)* | Re-run ingestion for every document (needed after changing the embedding model or chunking). Returns `202`; the workspace is `reindexing` until every document is `ready` or `failed` |
+| POST | `/v1/workspaces/{slug}/reindex` | Admin. Empty the Chroma collection and re-run ingestion for every document, optionally with a new model: body `{ "embeddingProvider": "openai", "embeddingModel": "text-embedding-3-small" }`, or no body to keep the model (for example after changing chunking). Returns `202` with the workspace; it is `reindexing` until every document is `ready` or `failed`. `409` while a reindex runs, `422` for a provider whose key is not set, `400` for a provider without a model |
 | GET | `/v1/workspaces/{slug}/members` | People with access and their role |
 | PUT, DELETE | `/v1/workspaces/{slug}/members/{userId}` | Grant (`{ "role": "reader" | "editor" }`) or remove a person's access |
 
@@ -62,10 +78,10 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 ```
 
 - `slug` is 3 to 40 characters, lowercase letters, digits and hyphens, and cannot be changed after creation (the collection and the upload folder are named after it). A taken slug returns `409`.
-- `chatProvider` and `embeddingProvider` are one of the providers configured in `.env`: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the configured providers and their models; choosing one that is not configured returns `422`. Provider keys are never accepted or returned by the API.
-- `null` settings use the global defaults from `.env`. `embeddingProvider` and `embeddingModel` are the exception: they are filled in from the default when the workspace is created and are never `null` afterwards, so a later change to `.env` cannot silently break search in existing workspaces. `PATCH` refuses to change them (`400`); changing them will go through workspace reindex *(planned)*.
+- `chatProvider` and `embeddingProvider` are one of the providers configured in `.env`: `lmstudio`, `openai`, `gemini`, `anthropic` (chat only) or a custom OpenAI-compatible one. `GET /v1/system` lists the providers and the models each offers; choosing one whose key is not set returns `422`. Provider keys are never accepted or returned by the API.
+- `null` settings use the global defaults from `.env`. `embeddingProvider` and `embeddingModel` are the exception: they are filled in from the default when the workspace is created and are never `null` afterwards, so a later change to `.env` cannot silently break search in existing workspaces. `PATCH` refuses to change them (`400`); change them with workspace reindex, since vectors from two models can't be compared.
 - `chunkSize` and `chunkOverlap` apply to documents ingested after the change; reindex applies them to everything.
-- `status` is `active` or `reindexing` *(planned; always `active` today)*. While reindexing, passages, answers and messages return `503` with `Retry-After`.
+- `status` is `active` or `reindexing`. While reindexing, passage search and reads, answers and chat messages return `503` with `Retry-After: 30`; the document list still works, so progress can be watched (each document goes `queued`, `processing`, `ready`).
 - Deleting a workspace removes its collection, files, documents, conversations and answers, and unbinds it from API keys; a key left with no workspace is revoked. Usage rows are kept with the workspace marked deleted.
 
 ## Asking
@@ -78,13 +94,13 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 | POST, GET | `/v1/workspaces/{slug}/conversations` | Start or list conversations |
 | GET, DELETE | `/v1/workspaces/{slug}/conversations/{conversationId}` | A conversation with its messages; delete it with its messages |
 | POST | `/v1/workspaces/{slug}/conversations/{conversationId}/messages` | Send a message, get the reply with citations |
-| GET | `/v1/workspaces/{slug}/passages?query=…&limit=5&minScore=…` | Best matching passages with scores, no AI answer (`folderId` filter planned) |
+| GET | `/v1/workspaces/{slug}/passages?query=…&limit=5&minScore=…&folderId=…` | Best matching passages with scores, no AI answer; `folderId` searches one folder only |
 | GET | `/v1/workspaces/{slug}/passages/{passageId}` | One passage with its neighbours |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/passages` | A document's passages in order, paginated (used by the document detail screen) |
 
 ```json
 // POST /v1/workspaces/ouc/answers
-{ "question": "What is retrieval-augmented generation?", "maxPassages": 5 }
+{ "question": "What is retrieval-augmented generation?", "maxPassages": 5, "folderId": "fld_01J…" }
 // 201
 { "id": "ans_01J…", "workspace": "ouc", "question": "…", "text": "Retrieval-augmented generation combines …",
   "status": "complete", "grounded": true,
@@ -95,13 +111,15 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
   "latencyMs": 2310, "timeToFirstTokenMs": null, "error": null, "feedback": null, "createdAt": "…" }
 ```
 
-- Citations are the passages that were given to the model, in rank order; `rank` is the `[n]` the text may cite. `folderId` and `startSeconds` join them with folders and audio *(planned)*.
+`folderId` (optional) uses only passages from that folder's documents; a folder that isn't in the workspace is `404`, here and on passages and messages.
+
+- Citations are the passages that were given to the model, in rank order; `rank` is the `[n]` the text may cite. `startSeconds` will join them with audio *(planned)*; a citation's `documentId` leads to its folder.
 - Every answer is stored, failures too (`status: "failed"` with `error`), so usage counts them; the caller still gets the error status.
 - An answer, and a conversation, is visible only to the person or key that created it, and to admins; anyone else gets `404`.
 - When nothing in the workspace scores above `minScore`, the answer is still `201` with `"grounded": false`, a fixed "not found in this workspace" text and empty citations; the chat model is not called.
 - `usage` token counts can be `null` when the provider does not report them.
 - Streaming adds `timeToFirstTokenMs`. A stream that fails midway ends with an `error` event and the answer is stored as failed, so it still shows in usage.
-- The message body is `{ "content": "…" }` (`folderId` planned). A conversation's history sent to the model is capped (last 10 turns by default).
+- The message body is `{ "content": "…", "folderId": "fld_…" }`; `folderId` is optional and limits that message's search to one folder. A conversation's history sent to the model is capped (last 10 turns by default).
 
 Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv_…", "role": "assistant", "content": "…", "citations": [...], "usage": {...} }`.
 
@@ -109,24 +127,24 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
 
 | Method | Path | Does |
 |---|---|---|
-| GET, POST | `/v1/workspaces/{slug}/folders` *(planned)* | List or create folders |
-| PATCH, DELETE | `/v1/workspaces/{slug}/folders/{folderId}` *(planned)* | Rename or delete a folder (documents move to the root) |
-| POST | `/v1/workspaces/{slug}/documents` | Upload (multipart, one or more `files` parts; `folderId` and `tags` planned). Returns `{ "data": [{ "document": {…}, "duplicate": false }] }`, one entry per file; a file already in the workspace returns the existing document with `duplicate: true` |
-| GET | `/v1/workspaces/{slug}/documents?status=…&type=…` | List documents (`folderId` filter planned) |
-| GET, PATCH, DELETE | `/v1/workspaces/{slug}/documents/{documentId}` | Read; move or retag *(PATCH planned)*; delete with its vectors (`409` while it is processing) |
+| GET, POST | `/v1/workspaces/{slug}/folders` | List folders by name, each with its `documentCount`; create one (`{ "name" }`, unique in the workspace ignoring case, else `409`) |
+| PATCH, DELETE | `/v1/workspaces/{slug}/folders/{folderId}` | Rename (`{ "name" }`); delete, moving its documents and their passages to the top level (`409` while one of them is processing) |
+| POST | `/v1/workspaces/{slug}/documents?folderId=…` | Upload (multipart, one or more `files` parts) into the top level or the folder given. Returns `{ "data": [{ "document": {…}, "duplicate": false }] }`, one entry per file; a file already in the workspace returns the existing document with `duplicate: true` |
+| GET | `/v1/workspaces/{slug}/documents?status=…&type=…&folderId=…` | List documents; `folderId=none` gives the ones at the top level |
+| GET, PATCH, DELETE | `/v1/workspaces/{slug}/documents/{documentId}` | Read; move (`folderId`, `null` for the top level), rename (`title`) or retag (`tags`), where a move updates its passages too; delete with its vectors. PATCH and DELETE answer `409` while it is processing |
 | POST | `/v1/workspaces/{slug}/documents/{documentId}/reindex` | Delete its vectors and run the ingest flow again; `202`, or `409` while it is processing |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/file` | Download the original |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/transcript` *(planned)* | The timestamped transcript (video and audio only) |
 | GET | `/v1/workspaces/{slug}/documents/events` | Live status changes (server-sent events); see below |
 
 ```json
-{ "id": "doc_01J…", "workspace": "ouc", "title": "Week 3 slides",
+{ "id": "doc_01J…", "workspace": "ouc", "folderId": "fld_01J…", "title": "Week 3 slides",
   "fileName": "week3.pdf", "type": "pdf", "sizeBytes": 2483011, "sha256": "9f2c…",
   "status": "processing", "attempts": 1, "error": null, "passageCount": null,
   "tags": ["rag"], "createdAt": "…", "updatedAt": "…" }
 ```
 
-`status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit return `413`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. (`folderId` on documents is planned.)
+`status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit return `413`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. `folderId` is `null` for a document at the top level.
 
 The events stream (`text/event-stream`, read with `fetch` since `EventSource` can't send `Authorization`) sends:
 
@@ -161,7 +179,13 @@ Question text is kept for a configurable time (`USAGE_QUESTION_RETENTION_DAYS`, 
 | GET, POST | `/v1/api-keys` | List keys (last used; request count planned); create one. The admin UI's "API keys" page drives these |
 | GET, PATCH, DELETE | `/v1/api-keys/{keyId}` | Read; rename, change workspaces or expiry (the role can't change: `400`); revoke (the key stays listed with `revokedAt`) |
 | GET | `/v1/me` | The signed-in user or the key, with roles and workspaces |
-| GET | `/v1/users` *(planned)* | People known to Keycloak (id, name, email, admin or not), read-only, so an admin can grant access before someone's first login |
+| GET | `/v1/users?search=…&limit=…&cursor=…` | People in Keycloak (id, username, name, email, admin or not, enabled), read-only, so an admin can grant access before someone's first login. Admins only; `503` when Keycloak can't be reached or the people list isn't set up |
+
+```json
+// GET /v1/users?search=ali → 200 (admin only). The id is the userId for workspace members.
+{ "data": [{ "id": "5b0d1c5e-…", "username": "alice", "email": "alice@example.com", "name": "Alice Example",
+  "isAdmin": false, "enabled": true }], "nextCursor": null }
+```
 
 ```json
 // POST /v1/api-keys → 201 (admin only)
@@ -179,11 +203,11 @@ Question text is kept for a configurable time (`USAGE_QUESTION_RETENTION_DAYS`, 
 | 401 | Missing, expired or revoked token or key |
 | 403 | Authenticated, in the workspace, but the role does not allow the action |
 | 404 | No such resource, or a workspace the caller has no access to |
-| 409 | Slug already taken; deleting or reindexing a document while it is processing; changing a revoked API key |
+| 409 | Slug already taken; deleting or reindexing a document while it is processing; reindexing a workspace that is already reindexing; changing a revoked API key |
 | 413, 415 | File too large; file type not supported |
-| 429 | Rate limit |
+| 429 | Over a rate limit; `Retry-After` says how many seconds to wait |
 | 502, 504 | Langflow failed (or the model returned an empty answer) or timed out |
-| 503 | Langflow not ready yet (with `Retry-After`) or unreachable; a provider key missing; Keycloak unreachable; workspace reindexing *(planned)* |
+| 503 | Langflow not ready yet (with `Retry-After`) or unreachable; a provider key missing; Keycloak unreachable; workspace reindexing |
 
 ## Mapping to the assignment brief
 

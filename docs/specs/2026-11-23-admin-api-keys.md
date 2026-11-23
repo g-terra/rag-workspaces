@@ -1,8 +1,8 @@
 ---
 title: API keys page in the admin UI
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#54"
+status: in review
 areas: [admin]
 ---
 
