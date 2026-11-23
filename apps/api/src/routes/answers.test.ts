@@ -453,6 +453,18 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
     expect(stored).toMatchObject({ grounded: false });
   });
 
+  it('a refusal that cites its passages anyway is ungrounded, and keeps its text and passages', async () => {
+    const reply =
+      'The material does not cover configuring a Kubernetes ingress; the passages are about RAG [1].';
+    answerReply = () =>
+      Response.json(
+        outputBody({ 'ChatOutput-answer': reply, 'ChatOutput-citations': fenced({ passages: hits }) }),
+      );
+    const res = await ask({ question: 'How do I configure a Kubernetes ingress?' });
+    expect(res.json()).toMatchObject({ grounded: false, text: reply });
+    expect(res.json().citations).toHaveLength(1);
+  });
+
   it('a citation in the fullwidth style some models write counts; a number past the passages does not', async () => {
     const replyWith = (text: string) => () =>
       Response.json(
