@@ -1,7 +1,7 @@
 ---
 title: point the user guide at the response style measurements
 date: 2026-11-23
-pr: pending
+pr: "#128"
 status: in review
 areas: [docs]
 ---
