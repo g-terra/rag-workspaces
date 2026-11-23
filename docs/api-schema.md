@@ -34,7 +34,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Usage | `/v1/usage`, `/v1/workspaces/{slug}/usage` | admin (global), editor (own workspace) |
 | User | `/v1/users` | admin |
 | System | `/v1/system` | admin |
-| Provider key | `/v1/workspaces/{slug}/providers` | admin |
+| Provider key | `/v1/workspaces/{slug}/providers`, `/v1/providers/{provider}/models` | admin |
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
 
@@ -104,9 +104,11 @@ A hosted provider's key can be saved for one workspace from the admin UI, and th
 
 // PUT /v1/workspaces/{slug}/providers/{provider}/key  { "apiKey": "..." } → 200 with that provider, as above
 // DELETE /v1/workspaces/{slug}/providers/{provider}/key → 204; the workspace goes back to .env's key
+// POST /v1/providers/{provider}/models { "apiKey": "..." } → 200 with the provider's models; nothing saved
 ```
 
 - `PUT` asks the provider for its models with the key first and saves nothing when it refuses (`422` with the provider's reason) or can't be asked (`502`, or `504` when too slow). `lmstudio` takes no key (`400`). Without `SECRETS_KEY` in `.env` keys can't be saved (`503`).
+- `POST /v1/providers/{provider}/models` is for setting up a workspace that doesn't exist yet (the admin UI's create wizard): it checks a key the same way and lists the models, without storing or logging the key.
 - Keys are stored encrypted (AES-256-GCM under `SECRETS_KEY`, bound to the workspace and provider) and never returned: only the last four characters. Deleting the workspace deletes its keys. A saved key that no longer opens (`SECRETS_KEY` changed) is reported in the list and refused by every run, never replaced by `.env`'s key.
 
 ## Asking

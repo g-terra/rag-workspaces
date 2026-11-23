@@ -124,3 +124,47 @@ async function fillCreateDialog(page: Page, ws: { name: string; slug: string }) 
   await dialog.getByLabel('Description').fill('Made by the Playwright test');
   await dialog.getByRole('button', { name: 'Create workspace' }).click();
 }
+
+test('an admin sets up a workspace step by step, and the settings it was created with stick', async ({
+  page,
+}) => {
+  const w = { name: `E2E Wizard ${run}`, slug: `e2e-${run}-wizard` };
+  await signIn(page, '/workspaces');
+  await page.getByRole('button', { name: 'New workspace' }).first().click();
+  const dialog = page.getByRole('dialog', { name: 'Create workspace' });
+  await dialog.getByLabel('Name').fill(w.name);
+  await dialog.getByLabel('Slug').fill(w.slug);
+
+  // Models: LM Studio's models are listed (the smoke stack's stand-in model server).
+  await dialog.getByRole('button', { name: 'Next: Models' }).click();
+  await dialog.getByLabel('Chat provider').selectOption('lmstudio');
+  const chatModel = dialog.getByLabel('Chat model');
+  await chatModel.selectOption({ index: 1 });
+  const picked = await chatModel.inputValue();
+  expect(picked).not.toBe('');
+
+  // A hosted provider without a key in .env asks for one, and a made-up key does not pass.
+  await dialog.getByLabel('Embedding provider').selectOption('gemini');
+  await dialog.getByLabel('gemini API key').fill('not-a-real-gemini-key-000');
+  await dialog.getByRole('button', { name: 'Check key' }).click();
+  await expect(dialog.getByText(/The key doesn't work|couldn't be asked/)).toBeVisible();
+  // Creating now would leave Gemini without a key, so the wizard says so instead.
+  await dialog.getByRole('button', { name: 'Create workspace' }).click();
+  await expect(dialog.getByText('Add a key for gemini, or pick another provider.')).toBeVisible();
+  await dialog.getByLabel('Embedding provider').selectOption('');
+
+  // Retrieval, then the review lists what was chosen.
+  await dialog.getByRole('button', { name: 'Next: Retrieval' }).click();
+  await dialog.getByLabel('Top-k passages').fill('6');
+  await dialog.getByRole('button', { name: 'Next: Review' }).click();
+  await expect(dialog.getByText(`lmstudio / ${picked}`)).toBeVisible();
+
+  created.push(w.slug);
+  await dialog.getByRole('button', { name: 'Create workspace' }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${w.slug}$`));
+
+  await page.goto(`/w/${w.slug}/settings`);
+  await expect(page.getByLabel('Top-k passages')).toHaveValue('6');
+  await expect(page.getByLabel('Chat provider')).toHaveValue('lmstudio');
+  await expect(page.getByLabel('Chat model')).toHaveValue(picked);
+});
