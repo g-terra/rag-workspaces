@@ -35,9 +35,6 @@ Through the API: `POST /v1/workspaces/{slug}/documents` with multipart `files` p
 Folders inside a workspace (for example one per course) exist in the API so far: `POST …/folders`, then
 upload with `?folderId=` ([Using the API](../api.md#add-material-editor)).
 
-> **Coming soon: website import.** Importing pages from a website instead of files is being worked on.
-> This section will say how once it lands.
-
 ## Documents
 
 "Documents" lists everything in the workspace, live, with each document's type, number of passages, status and when it
@@ -47,6 +44,29 @@ each line starts. Editors and admins can also
 reindex or delete one.
 
 ![Documents](../images/documents.png)
+
+## Import a documentation website
+
+Give a workspace the start URL of a documentation website and it is crawled politely: same host, under the
+start URL's path, robots.txt and the sitemap honoured, one request a second, within page and depth limits.
+Each page becomes a document of type `web`, turned into clean Markdown without the navigation, and its
+passages and citations carry the page's address (`sourceUrl`), so an answer links straight to the page.
+Crawling again refreshes changed pages, adds new ones and removes pages that are gone.
+
+So far this is in the API (editors and admins); a page for it in the admin UI is in review
+([#121](https://github.com/g-terra/rag-workspaces/pull/121)).
+
+```bash
+curl -s http://api.rag.localhost/v1/workspaces/ouc/sites -H "Authorization: Bearer rw_..." \
+  -H 'content-type: application/json' \
+  -d '{ "url": "https://docs.example.com/guide/", "maxPages": 50, "excludePaths": ["/guide/fr/"] }'
+```
+
+`GET …/sites/{siteId}` shows its status and counters, `POST …/sites/{siteId}/crawl` crawls it again,
+`PATCH` changes its limits or folder, and `DELETE` removes it with all its pages. Start with a small
+`maxPages` to check the result: a large site takes a while. Sites that need JavaScript or a login aren't
+supported, and private addresses are refused unless listed in `CRAWL_ALLOWED_HOSTS`
+([Setup](../setup.md#documentation-websites) has the details).
 
 ## Video and audio
 

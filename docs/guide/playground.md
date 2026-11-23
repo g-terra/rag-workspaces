@@ -7,7 +7,8 @@ modes, picked at the top of the page (the mode is in the URL, so a link opens th
 
 One question, one answer written from the workspace's material. The answer streams in word by word, with
 numbered citations like `[1]` that point to the passages it used. Each source shows its document and page
-(or `at 12:34` for a recording) and opens the document there. Nothing is remembered between questions.
+(or `at 12:34` for a recording, or the page's address for an imported website) and opens the document
+there. Nothing is remembered between questions.
 
 ![Ask mode: a streamed answer with its sources](../images/playground-answer.png)
 
@@ -58,7 +59,12 @@ built in:
 Pick one per question with `"style": "concise"` on an answer or chat message, or set a workspace default
 with `PATCH /v1/workspaces/{slug} { "settings": { "style": "academic" } }`. A request's style wins over
 the workspace's; `"style": null` asks for none. `GET /v1/styles` lists them with their full instructions.
-Choosing a style in the admin UI isn't there yet, so the playground uses the workspace default.
+
+Admins can add their own styles with `POST /v1/styles` (a slug, name, description and instructions), and
+change or delete them with `PATCH` and `DELETE /v1/styles/{slug}`. A custom style works like a built-in one
+in every workspace, behind the same reminder of the grounding rules. Agents can pick one too: the MCP
+server has `list_styles`, and `ask` takes a `style` ([API keys and agents](api-keys.md#connect-an-ai-agent-mcp)).
+A style picker in the playground and settings is in review ([#112](https://github.com/g-terra/rag-workspaces/pull/112)); until it lands, the playground uses the workspace default.
 
 ## Conversations
 
