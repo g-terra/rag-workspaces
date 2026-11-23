@@ -1,7 +1,7 @@
 ---
 title: add a contributing guide
 date: 2026-11-23
-pr: pending
+pr: "#110"
 status: in review
 areas: [docs]
 ---
