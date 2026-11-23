@@ -1,7 +1,7 @@
 ---
 title: add the answer quality tuning guide
 date: 2026-11-23
-pr: pending
+pr: "#92"
 status: in review
 areas: [docs]
 ---
