@@ -1,8 +1,8 @@
 ---
 title: Smoke-test the website import on the compose stack
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#122"
+status: merged
 areas: [smoke, poc, docs]
 ---
 
