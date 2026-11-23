@@ -3,8 +3,10 @@ import { Loader2 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Field } from '@/components/field';
 import { Notice } from '@/components/states';
+import { DeleteWorkspaceDialog } from '@/components/delete-workspace-dialog';
 import { ReindexDialog } from '@/components/reindex-dialog';
 import { TopBar } from '@/components/top-bar';
+import { WorkspaceMembers } from '@/components/workspace-members';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useSystem } from '@/system/queries';
@@ -62,6 +64,7 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
   const [errors, setErrors] = useState<Errors>({});
   const [saved, setSaved] = useState(false);
   const [reindexing, setReindexing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const system = useSystem();
   const save = useUpdateWorkspace(workspace.slug);
   const dirty = isDirty(form, loaded);
@@ -345,6 +348,24 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
               )}
             </div>
           </Section>
+
+          <Section
+            title="Members"
+            note="People sign in through Keycloak; accounts are created there. Here you only grant access to this workspace."
+          >
+            <WorkspaceMembers workspace={workspace} />
+          </Section>
+
+          <Section
+            title="Delete workspace"
+            note="Removes its documents, files, vectors, conversations and usage history. API keys lose access to it."
+          >
+            <div>
+              <Button variant="destructive" size="sm" onClick={() => setDeleting(true)}>
+                Delete workspace…
+              </Button>
+            </div>
+          </Section>
         </div>
       </div>
 
@@ -355,6 +376,7 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
           onOpenChange={(open) => setReindexing(open)}
         />
       )}
+      {deleting && <DeleteWorkspaceDialog workspace={workspace} onOpenChange={(open) => setDeleting(open)} />}
     </>
   );
 }
