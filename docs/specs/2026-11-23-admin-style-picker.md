@@ -76,4 +76,4 @@ None. Rebuild the admin image as usual.
 
 ## Docs updated
 
-`README.md` (the Playground and Settings descriptions).
+`docs/guide/playground.md` (choosing a style in the playground) and `docs/guide/workspaces.md` (the default response style setting); the README no longer describes each page.

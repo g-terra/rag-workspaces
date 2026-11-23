@@ -70,4 +70,4 @@ None.
 
 ## Docs updated
 
-`README.md` (the admin pages paragraph). `docs/api-schema.md` already describes the routes this page uses.
+`docs/guide/playground.md` (the Response styles page); the README no longer describes each page. `docs/api-schema.md` already describes the routes this page uses. `docs/guide/README.md` (the admin row of the roles table).
