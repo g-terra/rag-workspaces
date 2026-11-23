@@ -1,7 +1,7 @@
 ---
 title: explain the playground modes and hide conversation ids
 date: 2026-11-23
-pr: pending
+pr: "#68"
 status: in review
 areas: [admin]
 ---
