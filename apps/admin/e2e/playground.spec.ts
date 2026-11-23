@@ -52,7 +52,9 @@ test.afterEach(async ({ page }) => {
   }
 });
 
-test('streams an answer, says when nothing matches, and stops on request', async ({ page }) => {
+test('streams an answer with its sources, says when nothing matches, and stops on request', async ({
+  page,
+}) => {
   // Signing in, ingesting two documents and three answers take longer than the default budget.
   test.setTimeout(240_000);
   await signIn(page, '/workspaces');
@@ -71,6 +73,24 @@ test('streams an answer, says when nothing matches, and stops on request', async
   await expect(page.getByTestId('answer-meta')).toContainText(/\d+(\.\d+)? (ms|s)/, { timeout: 60_000 });
   await expect(page.getByText(/^ans_/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ask' })).toBeVisible();
+
+  // The passages the model was given are listed, and one opens with the text around it.
+  const sources = page.getByRole('complementary', { name: 'Sources' });
+  await expect(sources.getByTestId('source')).toHaveCount(1);
+  await expect(sources).toContainText('retrieval-notes');
+  await sources.getByTestId('source').first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: 'retrieval-notes' })).toBeVisible();
+  await expect(dialog.getByTestId('passage-text')).toContainText('Retrieval-augmented generation');
+  await expect(dialog.getByText(/^psg_/)).toBeVisible();
+
+  // The passage links to its document, which opens selected in the library.
+  await dialog.getByRole('link', { name: 'Open the document' }).click();
+  await expect(page.getByRole('heading', { name: 'Document library' })).toBeVisible();
+  const panel = page.getByRole('complementary', { name: 'Selected document' });
+  await expect(panel.getByRole('heading', { name: 'retrieval-notes' })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Playground' })).toBeVisible();
 
   // Stop aborts the request. The route is held open rather than answered, so there is always a
   // request in flight to abort: letting the real answer race the click makes the test flaky.
