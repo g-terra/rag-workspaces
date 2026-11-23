@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { ACCEPT, checkFile, uploadErrorMessage } from '@/documents/files';
 import {
   filesFromInput,
+  mergeSkipped,
   planUpload,
   skippedSummary,
   walkEntries,
@@ -88,7 +89,11 @@ function Uploader({ slug }: { slug: string }) {
   const nextKey = useRef(0);
   const input = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
-  const [skipped, setSkipped] = useState<string | null>(null);
+  // Files left out of this session's folders, per extension, and whether the last pick had nothing.
+  const [skipped, setSkipped] = useState<Record<string, number>>({});
+  const [nothing, setNothing] = useState(false);
+  // Only shown where the browser can pick folders (not iOS Safari, for one).
+  const [canPickFolder] = useState(() => 'webkitdirectory' in HTMLInputElement.prototype);
   const [queue] = useState(() => createLimiter(PARALLEL_UPLOADS));
   const abort = useRef(new AbortController());
 
@@ -129,9 +134,10 @@ function Uploader({ slug }: { slug: string }) {
   });
 
   /** Queues what was picked or dropped; inside folders, unsupported files are only counted. */
-  function addFiles(picked: PickedFile[]) {
+  function addFiles(picked: PickedFile[], unreadable = 0) {
     const plan = planUpload(picked);
-    setSkipped(skippedSummary(plan.skipped));
+    setSkipped((s) => mergeSkipped(s, unreadable ? { ...plan.skipped, unreadable } : plan.skipped));
+    setNothing(!plan.files.length && !unreadable && !Object.keys(plan.skipped).length);
     const files = plan.files.map(({ file, path }) => ({
       file,
       path,
@@ -200,7 +206,7 @@ function Uploader({ slug }: { slug: string }) {
       addFiles(filesFromInput(e.dataTransfer.files));
       return;
     }
-    void walkEntries(entries).then(addFiles);
+    void walkEntries(entries).then(({ files, unreadable }) => addFiles(files, unreadable));
   };
 
   return (
@@ -229,9 +235,11 @@ function Uploader({ slug }: { slug: string }) {
           <Button variant="outline" size="sm" onClick={() => input.current?.click()}>
             Browse files
           </Button>
-          <Button variant="outline" size="sm" onClick={() => folderInput.current?.click()}>
-            Browse folder
-          </Button>
+          {canPickFolder && (
+            <Button variant="outline" size="sm" onClick={() => folderInput.current?.click()}>
+              Browse folder
+            </Button>
+          )}
         </div>
         <input
           ref={input}
@@ -274,9 +282,9 @@ function Uploader({ slug }: { slug: string }) {
         <StatusBadge tone="failed" label="Failed" />
       </div>
 
-      {skipped && (
+      {(nothing || skippedSummary(skipped)) && (
         <p role="status" className="text-muted-foreground text-sm">
-          {skipped}
+          {nothing ? 'Nothing to upload there: no files, or only hidden ones.' : skippedSummary(skipped)}
         </p>
       )}
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   filesFromInput,
+  mergeSkipped,
   planUpload,
   skippedSummary,
   walkEntries,
@@ -58,6 +59,15 @@ describe('skippedSummary', () => {
       "Skipped 3 files that can't be indexed: 2 .pptx, 1 .zip.",
     );
     expect(skippedSummary({ '.zip': 1 })).toBe("Skipped 1 file that can't be indexed: 1 .zip.");
+    expect(skippedSummary({ '.zip': 1, unreadable: 2 })).toBe(
+      "Skipped 3 files that can't be indexed: 2 unreadable, 1 .zip.",
+    );
+  });
+});
+
+describe('mergeSkipped', () => {
+  it('adds the counts of a new pick to the session so far', () => {
+    expect(mergeSkipped({ '.zip': 1 }, { '.zip': 2, '.pptx': 1 })).toEqual({ '.zip': 3, '.pptx': 1 });
   });
 });
 
@@ -105,7 +115,8 @@ describe('walkEntries', () => {
       ]),
       fileEntry('loose.txt'),
     ];
-    const paths = (await walkEntries(tree)).map((p) => p.path).sort();
+    const walked = await walkEntries(tree);
+    const paths = walked.files.map((p) => p.path).sort();
     expect(paths).toEqual([
       'COS512/Week 1/notes.md',
       'COS512/a.pdf',
@@ -115,6 +126,16 @@ describe('walkEntries', () => {
     ]);
   });
 
+  it('counts a folder it cannot list as unreadable', async () => {
+    const locked: EntryLike = {
+      name: 'locked',
+      isFile: false,
+      isDirectory: true,
+      createReader: () => ({ readEntries: (_ok, fail) => fail?.(new Error('NotReadableError')) }),
+    };
+    expect(await walkEntries([locked])).toEqual({ files: [], unreadable: 1 });
+  });
+
   it('skips an entry it cannot read instead of failing the whole drop', async () => {
     const broken: EntryLike = {
       name: 'locked.pdf',
@@ -122,7 +143,8 @@ describe('walkEntries', () => {
       isDirectory: false,
       file: (_ok, fail) => fail?.(new Error('NotReadableError')),
     };
-    const paths = (await walkEntries([broken, fileEntry('ok.pdf')])).map((p) => p.path);
-    expect(paths).toEqual(['ok.pdf']);
+    const walked = await walkEntries([broken, fileEntry('ok.pdf')]);
+    expect(walked.files.map((p) => p.path)).toEqual(['ok.pdf']);
+    expect(walked.unreadable).toBe(1);
   });
 });

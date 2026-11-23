@@ -100,7 +100,7 @@ test('uploads a whole folder, subfolders included, and skips what it cannot inde
   await page.goto(`/w/${ws.slug}/upload`);
   await expect(page.getByRole('heading', { name: 'Upload material' })).toBeVisible();
 
-  // Browse folder: course/ holds overview.md, week-1/reading.txt and slides.pptx.
+  // Browse folder: course/ holds overview.md, slides.pptx and week-1/reading.txt.
   await page.getByLabel('Choose a folder to upload').setInputFiles(path.join(fixtures, 'course'));
   for (const name of ['course/overview.md', 'course/week-1/reading.txt']) {
     const row = page.getByTestId('upload-row').filter({ hasText: name });

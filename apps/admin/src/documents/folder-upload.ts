@@ -1,4 +1,4 @@
-import { ACCEPT } from './files';
+import { isSupported } from './files';
 
 /** A file to upload, with its path inside what was picked or dropped (`COS512/Week 1/intro.pdf`). */
 export interface PickedFile {
@@ -27,32 +27,38 @@ export function filesFromInput(list: Iterable<File>): PickedFile[] {
 
 /**
  * Every file under the dropped entries, subfolders included. A directory reader hands its entries out
- * in batches (100 at a time in Chrome), so it is read until it returns none. An entry that can't be
- * read is left out rather than failing the whole drop.
+ * in batches (100 at a time in Chrome), so it is read until it returns none. A file or folder that
+ * can't be read is counted in `unreadable` rather than failing the whole drop.
  */
-export async function walkEntries(entries: EntryLike[], parent = ''): Promise<PickedFile[]> {
-  const out: PickedFile[] = [];
+export async function walkEntries(
+  entries: EntryLike[],
+  parent = '',
+): Promise<{ files: PickedFile[]; unreadable: number }> {
+  const out = { files: [] as PickedFile[], unreadable: 0 };
   for (const entry of entries) {
     const path = parent ? `${parent}/${entry.name}` : entry.name;
     if (entry.isFile && entry.file) {
       const read = entry.file.bind(entry);
       const file = await new Promise<File | null>((ok) => read(ok, () => ok(null)));
-      if (file) out.push({ file, path });
+      if (file) out.files.push({ file, path });
+      else out.unreadable++;
     } else if (entry.isDirectory && entry.createReader) {
       const reader = entry.createReader();
       const children: EntryLike[] = [];
       for (;;) {
-        const batch = await new Promise<EntryLike[]>((ok) => reader.readEntries(ok, () => ok([])));
-        if (!batch.length) break;
+        const batch = await new Promise<EntryLike[] | null>((ok) => reader.readEntries(ok, () => ok(null)));
+        if (!batch) out.unreadable++;
+        if (!batch?.length) break;
         children.push(...batch);
       }
-      out.push(...(await walkEntries(children, path)));
+      const inner = await walkEntries(children, path);
+      out.files.push(...inner.files);
+      out.unreadable += inner.unreadable;
     }
   }
   return out;
 }
 
-const SUPPORTED = ACCEPT.split(',');
 /** Files an operating system leaves in folders, never material. */
 const SYSTEM_FILES = new Set(['thumbs.db', 'desktop.ini']);
 
@@ -78,9 +84,9 @@ export function planUpload(picked: PickedFile[]): UploadPlan {
     }
     const name = segments.at(-1)!;
     if (segments.some((s) => s.startsWith('.')) || SYSTEM_FILES.has(name.toLowerCase())) continue;
-    const ext = /\.([^.]+)$/.exec(name)?.[1]?.toLowerCase();
-    if (ext && SUPPORTED.includes(`.${ext}`)) plan.files.push(p);
+    if (isSupported(name)) plan.files.push(p);
     else {
+      const ext = /\.([^.]+)$/.exec(name)?.[1]?.toLowerCase();
       const key = ext ? `.${ext}` : 'no extension';
       plan.skipped[key] = (plan.skipped[key] ?? 0) + 1;
     }
@@ -88,7 +94,17 @@ export function planUpload(picked: PickedFile[]): UploadPlan {
   return plan;
 }
 
-/** "Skipped 3 files that can't be indexed: 2 .pptx, 1 .zip.", or null when nothing was skipped. */
+/** The skipped counts of the session so far plus those of a new pick. */
+export function mergeSkipped(a: Record<string, number>, b: Record<string, number>): Record<string, number> {
+  const out = { ...a };
+  for (const [ext, n] of Object.entries(b)) out[ext] = (out[ext] ?? 0) + n;
+  return out;
+}
+
+/**
+ * "Skipped 3 files that can't be indexed: 2 .pptx, 1 .zip.", or null when nothing was skipped. The page
+ * counts files the browser couldn't read under `unreadable`.
+ */
 export function skippedSummary(skipped: Record<string, number>): string | null {
   const counts = Object.entries(skipped).sort((a, b) => b[1] - a[1]);
   const total = counts.reduce((n, [, c]) => n + c, 0);

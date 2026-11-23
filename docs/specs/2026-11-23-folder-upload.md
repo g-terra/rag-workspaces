@@ -26,20 +26,23 @@ one.
 ## Design
 
 1. **Picking** (`apps/admin/src/routes/upload.tsx`): a second hidden `<input type="file" webkitdirectory>`
-   behind a **Browse folder** button. The browser gives every file under the chosen folder, each with
-   `webkitRelativePath` (`COS512/Week 1/intro.pdf`).
+   behind a **Browse folder** button, shown only where the browser supports `webkitdirectory` (not iOS
+   Safari). The browser gives every file under the chosen folder, each with `webkitRelativePath`
+   (`COS512/Week 1/intro.pdf`).
 2. **Dropping**: the drop handler reads `dataTransfer.items` while the event is live (the list is emptied
    once the handler returns), takes each item's `webkitGetAsEntry()`, then walks directory entries with
    `walkEntries` (`apps/admin/src/documents/folder-upload.ts`). A directory reader returns its entries in
    batches (about 100 at a time in Chrome), so `readEntries` is called until it returns none. A dropped
-   plain file comes back with its own name as its path, so files and folders can be dropped together.
+   plain file comes back with its own name as its path, so files and folders can be dropped together. A
+   file or folder the browser can't read (permissions) is counted as `unreadable`, not fatal.
    Without entry support the page falls back to `dataTransfer.files`, as before.
 3. **Planning** (`planUpload` in `folder-upload.ts`, pure). From `{ file, path }` pairs it:
    - drops hidden files and anything under a hidden folder (a path segment starting with `.`, such as
      `.git/` or `.DS_Store`) and the system files `Thumbs.db` and `desktop.ini`;
    - skips files inside a folder whose extension isn't supported, counted per extension for the summary
      ("Skipped 3 files that can't be indexed: 2 .pptx, 1 .zip");
-   - keeps everything else, named by its path. A file picked or dropped on its own that isn't supported
+   - keeps everything else, named by its path. The skipped counts add up over the session, so a later
+     pick doesn't hide an earlier folder's summary; a pick with nothing in it says so. A file picked or dropped on its own that isn't supported
      still gets a rejected row, as before, because the person chose that file.
 4. **Uploading**: unchanged. Each file is its own `POST /v1/workspaces/{slug}/documents` through
    `uploadFile` (`apps/admin/src/documents/upload.ts`), three at a time through the page's limiter, with a
@@ -72,12 +75,13 @@ None. A front-end change only.
 
 - `apps/admin/src/documents/folder-upload.test.ts`: `planUpload` (hidden and system files ignored,
   unsupported files in folders counted per extension, loose unsupported files kept for a rejected row);
-  `skippedSummary` wording; `walkEntries` on fake directory entries, including nested folders and a
-  reader that returns its entries over several calls; `filesFromInput` reading `webkitRelativePath`.
+  `skippedSummary` wording and `mergeSkipped`; `walkEntries` on fake directory entries, including nested
+  folders, a reader that returns its entries over several calls, and a file or folder that can't be
+  read; `filesFromInput` reading `webkitRelativePath`.
 - `apps/admin/e2e/upload.spec.ts`: picks a fixture folder with **Browse folder**; its two supported files
   (one in a subfolder) reach Ready with their paths shown, and the `.pptx` is counted in the summary.
-- By hand: `pnpm smoke --keep`, sign in at `http://localhost:18080`, open a workspace's Upload page and
-  drop a folder from Finder.
+- By hand (not covered by e2e, since Playwright can't build a real folder drop): `pnpm smoke --keep`, sign
+  in at `http://localhost:18080`, open a workspace's Upload page and drop a folder from Finder.
 
 ## Out of scope and follow-ups
 
