@@ -90,4 +90,20 @@ describe('ModelCatalog', () => {
       error: 'OpenAI refused the key (HTTP 401)',
     });
   });
+
+  it('tells a refused key (Gemini answers 400) from a provider that is down or busy', async () => {
+    const { models } = catalog({ GEMINI_API_KEY: 'bad', OPENAI_API_KEY: 'good' }, (url) =>
+      url.includes('generativelanguage')
+        ? new Response('{}', { status: 400 })
+        : new Response('{}', { status: url.includes('openai') ? 503 : 200 }),
+    );
+    expect(await models.check('gemini', signal)).toMatchObject({
+      refused: true,
+      status: { reachable: false, error: 'Gemini refused the key (HTTP 400)' },
+    });
+    expect(await models.check('openai', signal)).toMatchObject({
+      refused: false,
+      status: { reachable: false, error: 'OpenAI answered (HTTP 503)' },
+    });
+  });
 });

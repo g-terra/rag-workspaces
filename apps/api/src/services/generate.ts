@@ -120,7 +120,7 @@ export class Generator {
   constructor(private readonly deps: { db: Database; langflow: LangflowClient; config: GenerateConfig }) {}
 
   async generate(input: GenerateInput): Promise<Generation> {
-    const { db, langflow, config } = this.deps;
+    const { db, langflow } = this.deps;
     const { workspace, question, history, maxPassages, folderId, sessionId, onToken, signal } = input;
     const searchQuery = input.searchQuery ?? question;
     const started = performance.now();
@@ -137,15 +137,16 @@ export class Generator {
     };
 
     try {
-      // The workspace's own provider keys, where it has saved any, over the ones in .env.
-      const keyed = await withWorkspaceKeys(db, config, workspace.id);
-      chat = chatEndpoint(workspace.settings, keyed);
+      // The workspace's own provider keys, where it has saved any, over the ones in .env. Shadows the
+      // API's config so nothing below can reach a key the workspace has replaced.
+      const config = await withWorkspaceKeys(db, this.deps.config, workspace.id);
+      chat = chatEndpoint(workspace.settings, config);
       const opts = { limit: maxPassages, folderId };
       // Resolve before deciding: a hit whose document was deleted or is not ready doesn't count.
       const hits = await resolveHits(
         db,
         workspace.id,
-        await retrieve(langflow, workspace, searchQuery, keyed, opts),
+        await retrieve(langflow, workspace, searchQuery, config, opts),
       );
       if (!hits.length) {
         timeToFirstTokenMs = onToken ? elapsed() : null;

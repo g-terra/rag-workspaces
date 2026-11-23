@@ -161,8 +161,6 @@ export const providerKeys = pgTable(
   (t) => [primaryKey({ columns: [t.workspaceId, t.provider] })],
 );
 
-export type ProviderKey = typeof providerKeys.$inferSelect;
-
 /**
  * Optional groupings inside a workspace (a course code, a project), usable as a filter when
  * searching and asking. Flat, and they isolate nothing. Passages carry the folder id in their
