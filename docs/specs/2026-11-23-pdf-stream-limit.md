@@ -1,7 +1,7 @@
 ---
 title: Read PDF pages with very long content streams
 date: 2026-11-23
-pr: pending
+pr: "#79"
 status: in review
 areas: [flows, langflow]
 ---
