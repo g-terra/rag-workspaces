@@ -1,7 +1,7 @@
 ---
 title: make the tuned settings the workspace defaults
 date: 2026-11-23
-pr: pending
+pr: "#93"
 status: in review
 areas: [api, docs]
 ---
