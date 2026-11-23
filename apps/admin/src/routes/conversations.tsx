@@ -11,7 +11,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } fr
 import { formatRelative } from '@/lib/dates';
 import { cn } from '@/lib/utils';
 import { answerMeta } from '@/playground/answer';
-import { Sources } from '@/playground/answer-view';
+import { AnswerText, Sources } from '@/playground/answer-view';
 import { lastTurn } from '@/playground/chat';
 import { ChatBox, Sent, TurnView } from '@/playground/chat-view';
 import { PassageDialog } from '@/playground/passage-dialog';
@@ -194,7 +194,9 @@ function StoredMessage({
   return (
     <div data-testid="stored-reply" className="flex flex-wrap items-start gap-4">
       <div className="bg-card flex min-w-0 flex-[999_1_460px] flex-col gap-3 rounded-xl border p-5">
-        {text && <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{text}</p>}
+        {text && (
+          <AnswerText text={text} citations={message.citations} streaming={false} onOpen={onOpenPassage} />
+        )}
         {error && (
           <p role="alert" className="text-destructive text-sm whitespace-pre-wrap">
             {error}

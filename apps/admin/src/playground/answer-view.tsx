@@ -2,13 +2,14 @@ import type { Citation } from '@rag/shared';
 import { Notice } from '@/components/states';
 import { Button } from '@/components/ui/button';
 import { useCurrentWorkspace } from '@/workspaces/current';
-import { answerParts } from './answer';
+import { AnswerMarkdown } from './answer-markdown';
 import { answerFailure, type AnswerError } from './failure';
 import { formatScore } from './search';
 
 /**
- * Generated text with its `[n]` markers turned into buttons that open the passage they point at, and a
- * caret while it is still arriving. Ask mode and Chat mode render the same thing, in their own card.
+ * Generated text rendered as markdown, with its `[n]` markers turned into buttons that open the passage
+ * they point at, and a caret while it is still arriving. Ask mode, Chat mode and a stored conversation
+ * render the same thing, in their own card.
  */
 export function AnswerText({
   text,
@@ -22,23 +23,16 @@ export function AnswerText({
   onOpen(passageId: string | null): void;
 }) {
   return (
-    <>
-      {answerParts(
-        text,
-        citations.map((c) => c.rank),
-      ).map((part, i) =>
-        'rank' in part ? (
-          <CitationMarker
-            key={i}
-            rank={part.rank}
-            onOpen={() => onOpen(passageOfRank(citations, part.rank))}
-          />
-        ) : (
-          <span key={i}>{part.text}</span>
-        ),
-      )}
-      {streaming && <span className="bg-foreground ml-0.5 inline-block h-4 w-1.5 animate-pulse" />}
-    </>
+    <div className="answer-md text-[15px] leading-relaxed">
+      <AnswerMarkdown
+        text={text}
+        ranks={citations.map((c) => c.rank)}
+        streaming={streaming}
+        renderCitation={(rank) => (
+          <CitationMarker rank={rank} onOpen={() => onOpen(passageOfRank(citations, rank))} />
+        )}
+      />
+    </div>
   );
 }
 

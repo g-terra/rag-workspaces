@@ -69,14 +69,14 @@ export function AskPanel() {
                   <span data-testid="answer-meta">{answerMeta(ask.answer)}</span>
                 </div>
               )}
-              <p data-testid="answer" className="text-[15px] leading-relaxed whitespace-pre-wrap">
+              <div data-testid="answer">
                 <AnswerText
                   text={ask.text}
                   citations={citations}
                   streaming={streaming}
                   onOpen={setOpenPassage}
                 />
-              </p>
+              </div>
               {ask.status === 'stopped' && (
                 <p className="text-muted-foreground border-t pt-3 text-[13px]">
                   Stopped. What had arrived is above; the API stopped generating too and stored the answer as

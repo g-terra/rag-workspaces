@@ -59,7 +59,8 @@ function messageText(content: unknown): string {
 }
 
 // Compose a deterministic answer: name the model, then quote the first context
-// sentence that shares the most words with the question.
+// sentence that shares the most words with the question. The bold lead-in is there so
+// the admin UI's e2e test can see the answer rendered as markdown.
 function composeAnswer(model: string, messages: { role: string; content: unknown }[]): string {
   const all = messages.map((m) => messageText(m.content)).join('\n');
   const question = /question:\s*(.+)/i.exec(all)?.[1] ?? messageText(messages.at(-1)?.content);
@@ -72,7 +73,7 @@ function composeAnswer(model: string, messages: { role: string; content: unknown
     const score = tokenize(s).filter((t) => qTokens.has(t)).length;
     if (score > bestScore) { best = s; bestScore = score; }
   }
-  return `[stand-in ${model}] Based on the provided context: ${best || 'no context was given.'}`;
+  return `[stand-in ${model}] **Based on the provided context:** ${best || 'no context was given.'}`;
 }
 
 const server = createServer(async (req, res) => {
