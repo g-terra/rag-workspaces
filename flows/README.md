@@ -65,10 +65,13 @@ Output `ChatOutput-passages`: `{ collection, query, passages }`, where `passages
 `{ rank, id, text, score, document_id, filename, folder, page, start_seconds, chunk_index }`, best first; `score` is cosine
 similarity and hits below `min_score` are left out. An unknown collection returns an empty list.
 
-The search is hybrid: the 200 best passages by meaning (Chroma's vector search) and the 200 best by words (BM25 over each
+The search is hybrid: the 200 best passages by meaning (cosine similarity) and the 200 best by words (BM25 over each
 passage's text and file name) are fused with reciprocal rank fusion (k = 60), and the top `top_k` are kept. So "best first"
-is the fused order, and `score` (cosine) need not fall steadily down the list. The keyword index lives in the Langflow worker,
-one per collection, and is rebuilt when the collection's passage count changes or after two minutes.
+is the fused order, and `score` (cosine) need not fall steadily down the list. The keyword index and the passages' vectors live
+in the Langflow worker, one set per collection, and are rebuilt when the collection's passage count changes or after two
+minutes (a rebuild reads only the vectors of new passages). The meaning ranking is exact: every cached vector is scored. Only a
+collection with more than 64 million vector numbers (about 80,000 passages of 768 dimensions) falls back to Chroma's
+approximate HNSW search.
 
 A question that asks several things (split at question marks, and at "and" before a question word such as "how" or an
 instruction such as "explain") is searched part by part: each part gets its own fused ranking, and the parts take turns filling
