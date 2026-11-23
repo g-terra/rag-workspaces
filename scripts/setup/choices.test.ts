@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   CUSTOM_MODEL,
+  lmStudioModelsToLoad,
   modelIdError,
   modelOptions,
   providerOptions,
@@ -117,5 +118,35 @@ describe('modelIdError', () => {
 
   it('accepts any typed id', () => {
     assert.equal(modelIdError('gpt-4o-mini', ''), undefined);
+  });
+});
+
+describe('lmStudioModelsToLoad', () => {
+  it('lists the chat and embedding models LM Studio serves, chat first', () => {
+    assert.deepEqual(
+      lmStudioModelsToLoad({
+        DEFAULT_CHAT_PROVIDER: 'lmstudio',
+        DEFAULT_CHAT_MODEL: 'qwen3.6-35b-a3b',
+        DEFAULT_EMBEDDING_PROVIDER: 'lmstudio',
+        DEFAULT_EMBEDDING_MODEL: 'text-embedding-nomic-embed-text-v1.5',
+      }),
+      ['qwen3.6-35b-a3b', 'text-embedding-nomic-embed-text-v1.5'],
+    );
+  });
+
+  it('leaves out a model a hosted provider serves, and lists nothing when none is local', () => {
+    assert.deepEqual(
+      lmStudioModelsToLoad({
+        DEFAULT_CHAT_PROVIDER: 'openai',
+        DEFAULT_CHAT_MODEL: 'gpt-5-mini',
+        DEFAULT_EMBEDDING_PROVIDER: 'lmstudio',
+        DEFAULT_EMBEDDING_MODEL: 'text-embedding-nomic-embed-text-v1.5',
+      }),
+      ['text-embedding-nomic-embed-text-v1.5'],
+    );
+    assert.deepEqual(
+      lmStudioModelsToLoad({ DEFAULT_CHAT_PROVIDER: 'openai', DEFAULT_EMBEDDING_PROVIDER: 'gemini' }),
+      [],
+    );
   });
 });

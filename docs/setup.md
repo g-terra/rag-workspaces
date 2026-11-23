@@ -58,6 +58,19 @@ http://api.rag.localhost/docs (API and Swagger UI) and http://auth.rag.localhost
 3. Check that the ids match `.env` exactly: `curl localhost:1234/v1/models`. If yours differ, set
    `DEFAULT_CHAT_MODEL` and `DEFAULT_EMBEDDING_MODEL` to them and run `docker compose up -d api`.
 
+**Keep both models loaded.** If LM Studio loads models on demand ("just in time"), it keeps only the last
+one by default (the `unloadPreviousJITModelOnLoad` setting, "Only Keep Last JIT Loaded Model" in the
+server settings). Every question then swaps the embedding model for the chat model and back, about 5
+seconds each way. Load both yourself once LM Studio is running, and they stay loaded:
+
+```sh
+lms load qwen2.5-7b-instruct
+lms load text-embedding-nomic-embed-text-v1.5
+```
+
+Use your ids from `.env`; `lms ls` lists what is downloaded. `pnpm run setup` offers to run these for you
+when `lms` is installed.
+
 The containers reach LM Studio at `host.docker.internal:1234` (`LMSTUDIO_BASE_URL`).
 
 ### A hosted provider instead

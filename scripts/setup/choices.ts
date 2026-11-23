@@ -97,3 +97,17 @@ export function transcriptionEnv(on: boolean, model: string, profiles: string): 
 export function modelIdError(value: string | undefined, fallback: string): string | undefined {
   return !value?.trim() && !fallback ? 'A model id is required.' : undefined;
 }
+
+/**
+ * The LM Studio models to load by hand (`lms load <id>`), chat model first: the default chat and
+ * embedding models that LM Studio serves. Loaded on demand ("just in time") instead, LM Studio keeps only
+ * the last such model by default, so every question would swap the embedding model for the chat model
+ * and back, seconds each. Models loaded with `lms load` stay loaded.
+ */
+export function lmStudioModelsToLoad(env: Record<string, string | undefined>): string[] {
+  const models = [
+    env.DEFAULT_CHAT_PROVIDER === 'lmstudio' ? env.DEFAULT_CHAT_MODEL : undefined,
+    env.DEFAULT_EMBEDDING_PROVIDER === 'lmstudio' ? env.DEFAULT_EMBEDDING_MODEL : undefined,
+  ].filter((m): m is string => !!m?.trim());
+  return [...new Set(models)];
+}

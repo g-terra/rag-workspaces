@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import * as p from '@clack/prompts';
 import {
   CUSTOM_MODEL,
+  lmStudioModelsToLoad,
   modelIdError,
   modelOptions,
   providerOptions,
@@ -331,6 +332,38 @@ async function chooseModels(env: Record<string, string>): Promise<Record<string,
   return changes;
 }
 
+/**
+ * Load the LM Studio models with `lms`, so they stay loaded. On demand, LM Studio keeps only the last
+ * model it loaded, and would swap the embedding and chat models on every question.
+ */
+async function loadLocalModels(env: Record<string, string>) {
+  const models = lmStudioModelsToLoad(env);
+  if (!models.length) return;
+  const commands = models.map((m) => `lms load ${m}`).join('\n');
+  const hasLms = run('lms', ['version'], { quiet: true }).ok;
+  if (yes || !hasLms) {
+    p.note(
+      `${commands}\n\nRun these once after LM Studio starts${hasLms ? '' : " (lms is LM Studio's command line tool)"},\nso both models stay loaded instead of swapping on every question.`,
+      'Load the LM Studio models',
+    );
+    return;
+  }
+  const load = unwrap(
+    await p.confirm({
+      message: `Load ${models.join(' and ')} in LM Studio now, so they stay loaded? (otherwise LM Studio swaps them on every question)`,
+      initialValue: true,
+    }),
+  );
+  if (!load) {
+    p.note(commands, 'Load them later with');
+    return;
+  }
+  for (const model of models) {
+    if (run('lms', ['load', model]).ok) p.log.success(`Loaded ${model}`);
+    else p.log.warn(`lms couldn't load ${model}. Check the id with \`lms ls\`, then run: lms load <id>`);
+  }
+}
+
 // ---- 4. video and audio ----
 
 /** Whether to run Whisper for MP4, MP3 and WAV uploads, and which model; returns the .env changes. */
@@ -422,6 +455,7 @@ if (Object.keys(changes).length) {
   writeFileSync(envPath, setEnv(readFileSync(envPath, 'utf8'), changes), { mode: 0o600 });
   p.log.success(`Updated .env: ${Object.keys(changes).join(', ')}`);
 }
+await loadLocalModels({ ...env, ...changes });
 await start(env);
 
 const url = (key: string, fallback: string) => env[key] || fallback;
