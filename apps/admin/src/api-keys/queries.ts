@@ -6,12 +6,16 @@ const keysKey = ['api-keys'];
 const path = (id?: string) => (id ? `/v1/api-keys/${encodeURIComponent(id)}` : '/v1/api-keys');
 const json = { 'content-type': 'application/json' };
 
-/** Every API key, newest first. Admin-only: the API answers 403 for anyone else. */
-export function useApiKeys() {
+/**
+ * Every API key, newest first. Admin-only, so the page passes `enabled: false` until it knows the
+ * caller is an admin, and nobody else asks for a 403.
+ */
+export function useApiKeys(enabled: boolean) {
   const { api } = useAuth();
   return useQuery({
     queryKey: keysKey,
     queryFn: async () => (await api<{ data: ApiKey[] }>(path())).data,
+    enabled,
   });
 }
 

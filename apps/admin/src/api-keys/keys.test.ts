@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   curlExample,
   expiresAtFor,
+  formatDay,
   formatExpiry,
   keyState,
   validateCreate,
@@ -132,6 +133,19 @@ describe('validateEdit', () => {
     expect(validateEdit(form(), key(), now)).toEqual({ ok: false, errors: { form: 'Nothing to change.' } });
   });
 
+  it('asks for a date when "Custom date" is picked with none, even on a key that never expires', () => {
+    expect(validateEdit(form({ expiry: 'custom', customDate: '' }), key(), now)).toEqual({
+      ok: false,
+      errors: { customDate: 'Pick a date.' },
+    });
+  });
+
+  it('lets an expired key be renamed without re-dating it', () => {
+    const expired = key({ expiresAt: '2026-11-01T23:59:59.999Z' });
+    const renamed = form({ name: 'Renamed', expiry: 'custom', customDate: '2026-11-01' });
+    expect(validateEdit(renamed, expired, now)).toEqual({ ok: true, body: { name: 'Renamed' } });
+  });
+
   it('still refuses an empty name and a new expiry in the past', () => {
     expect(validateEdit(form({ name: '' }), key(), now)).toEqual({
       ok: false,
@@ -149,6 +163,19 @@ describe('formatExpiry', () => {
     expect(formatExpiry(key(), now)).toBe('Never');
     expect(formatExpiry(key({ expiresAt: '2026-11-22T10:00:00.000Z' }), now)).toBe('Expired');
     expect(formatExpiry(key({ expiresAt: '2026-12-31T23:59:59.999Z' }), now)).toBe('31 Dec 2026');
+  });
+});
+
+describe('formatDay', () => {
+  it('is the day the API stored, whatever zone the browser is in', () => {
+    const original = process.env.TZ;
+    process.env.TZ = 'Europe/Nicosia';
+    try {
+      expect(formatDay('2026-12-31T23:59:59.999Z')).toBe('31 Dec 2026');
+      expect(formatExpiry(key({ expiresAt: '2026-12-31T23:59:59.999Z' }), now)).toBe('31 Dec 2026');
+    } finally {
+      process.env.TZ = original;
+    }
   });
 });
 

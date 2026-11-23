@@ -47,7 +47,9 @@ Swagger. Layout and copy follow the approved "API keys" mock.
      key already expires on counts as no change, so saving a new name doesn't move the expiry by a few
      hours. Nothing changed at all is reported as "Nothing to change." instead of an empty request.
    - `keyState()` and `formatExpiry()` give the row its "Revoked"/"Expired" pill and its "Never", "Expired"
-     or "31 Dec 2026" cell. `curlExample()` builds the example request.
+     or "31 Dec 2026" cell. `formatDay()` formats that date in UTC, because the API stores and the date
+     input picks a UTC day: the browser's own day would read one off for anyone east of UTC (a key dated
+     31 Dec would say 1 Jan). `curlExample()` builds the example request.
 5. **The page** (`src/routes/api-keys.tsx`). The table from the mock (Name, Key, Role, Workspaces, Last
    used, Expires, actions), with `Loading`, `ErrorState` and an empty state, and the mock's closing line
    about hashed secrets. Edit and Revoke only appear on keys that are not revoked — `PATCH` on a revoked
@@ -56,7 +58,10 @@ Swagger. Layout and copy follow the approved "API keys" mock.
    (name, workspace checkboxes from `useWorkspaces()`, expiry select plus date input); the role radios
    only render while creating, and the edit dialog shows the role as text with the reason it is fixed.
    After a successful create, the same dialog switches to the secret panel: the secret in a read-only
-   field with Copy (and a fallback line when the clipboard is refused), the `curl` example, and Done.
+   field with Copy, the `curl` example, and Done. Every way out of the dialog runs the same `close()`,
+   so the next "Create key" opens an empty form and never the secret of the key before it. Copy is
+   wrapped in `try`/`catch` as well as `.catch()`: served over plain HTTP on anything but `localhost`
+   there is no `navigator.clipboard` at all, and the "copy it by hand" line has to cover that too.
 7. **Shared pieces.** The labelled-field helper moved out of the create-workspace dialog to
    `src/components/field.tsx`, and the relative-date formatter from the documents module to
    `src/lib/dates.ts` as `formatRelative()`, since both screens now need them.
@@ -91,17 +96,20 @@ the old one. Anyone running `pnpm dev` keeps the Vite proxy fix automatically.
 
 ## Testing
 
-- `apps/admin/src/api-keys/keys.test.ts` (15 cases): the expiry choices (including a custom date's end of
+- `apps/admin/src/api-keys/keys.test.ts` (18 cases): the expiry choices (including a custom date's end of
   day); create validation (empty name, no workspace, missing date, a date in the past, a name over 100
   characters, a valid body); edit bodies carrying only the changed name, workspaces or expiry, clearing an
-  expiry, treating the key's own expiry date as no change, reporting "Nothing to change.", and still
-  refusing an empty name or a past date; `formatExpiry` for never/expired/dated; `keyState` for revoked,
-  expired and active (revoked wins); `curlExample`.
+  expiry, treating the key's own expiry date as no change, reporting "Nothing to change.", still refusing
+  an empty name or a past date, refusing "Custom date" with no date even on a key that never expires
+  (both mean `null`, so the diff alone would have dropped that choice silently), and letting an expired
+  key be renamed without re-dating it; `formatDay` under a non-UTC `TZ`; `formatExpiry` for
+  never/expired/dated; `keyState` for revoked, expired and active (revoked wins); `curlExample`.
 - `apps/admin/src/lib/dates.test.ts`: the relative-date wording, moved with the function.
 - `apps/admin/e2e/api-keys.spec.ts` (real stack): an admin opens the page from the nav, creates an editor
   key bound to a throwaway workspace with a 30-day expiry, sees the secret and the `curl` example carrying
   that secret and workspace, closes the panel, finds the row with its role, workspace, "Never used" and
-  the expiry date, renames the key and sets the expiry to Never (the role is read-only), cancels a revoke
+  the expiry date, reopens "Create key" to find an empty form rather than the secret just shown, renames
+  the key and sets the expiry to Never (the role is read-only), cancels a revoke
   and then confirms it, and sees the row revoked with no Edit button. A second test sees "Pick at least
   one workspace." and "Pick a date in the future." in the create dialog. Both revoke their keys and delete
   their workspace afterwards.

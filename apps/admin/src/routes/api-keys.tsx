@@ -16,12 +16,21 @@ const COLUMNS = ['Name', 'Key', 'Role', 'Workspaces', 'Last used', 'Expires'];
 /** `/api-keys`: every key, with create, rename and revoke. Admins only, as the API is. */
 export function ApiKeys() {
   const { me } = useAuth();
-  const keys = useApiKeys();
+  const keys = useApiKeys(me?.isAdmin === true);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<ApiKey | null>(null);
   const [revoking, setRevoking] = useState<ApiKey | null>(null);
 
-  if (me && !me.isAdmin) {
+  // `me` is still loading: say nothing rather than flash the admin page at someone who can't have it.
+  if (!me) {
+    return (
+      <>
+        <TopBar trail={['API keys']} />
+        <Loading what="your account" />
+      </>
+    );
+  }
+  if (!me.isAdmin) {
     return (
       <>
         <TopBar trail={['API keys']} />

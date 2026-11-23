@@ -63,7 +63,9 @@ export function validateCreate(form: KeyForm, now = new Date()): Checked<CreateA
 export function validateEdit(form: KeyForm, key: ApiKey, now = new Date()): Checked<UpdateApiKey> {
   const sameDay = form.expiry === 'custom' && form.customDate === key.expiresAt?.slice(0, 10);
   const expiresAt = sameDay ? key.expiresAt : expiresAtFor(form, now);
-  if (expiresAt !== key.expiresAt) {
+  // Checked unless the day is the key's own, so an expired key can still be renamed, and
+  // "Custom date" with no date is refused even when the key never expires (both mean `null`).
+  if (!sameDay) {
     const expiry = checkExpiry(form, now);
     if (expiry) return { ok: false, errors: expiry };
   }
@@ -102,12 +104,24 @@ function messages(
   return errors;
 }
 
+/**
+ * "31 Dec 2026", in UTC. The API stores and the dialog picks a day in UTC, so showing the browser's
+ * own day would read one off for anyone east of it (a key dated 31 Dec would say 1 Jan).
+ */
+export function formatDay(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 /** "Never", "Expired", or "31 Dec 2026". */
 export function formatExpiry(key: ApiKey, now = new Date()): string {
   if (!key.expiresAt) return 'Never';
-  const at = new Date(key.expiresAt);
-  if (at.getTime() <= now.getTime()) return 'Expired';
-  return at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  if (new Date(key.expiresAt).getTime() <= now.getTime()) return 'Expired';
+  return formatDay(key.expiresAt);
 }
 
 /** Whether the key still works. A revoked key stays listed, so usage history keeps its name. */

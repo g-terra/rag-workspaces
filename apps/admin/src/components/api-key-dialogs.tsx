@@ -3,6 +3,7 @@ import { Check, Copy } from 'lucide-react';
 import { useState, type Dispatch, type FormEvent, type SetStateAction } from 'react';
 import {
   curlExample,
+  formatDay,
   validateCreate,
   validateEdit,
   type Errors,
@@ -41,21 +42,24 @@ export function CreateApiKeyDialog({
 }) {
   const create = useCreateApiKey();
   const [created, setCreated] = useState<CreatedApiKey | null>(null);
+  // Every way out of the dialog goes through here, so the next "Create key" starts on an empty form
+  // and never shows the secret of the key before it.
+  const close = () => {
+    setCreated(null);
+    create.reset();
+    onOpenChange(false);
+  };
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next && create.isPending) return;
-        if (!next) {
-          setCreated(null);
-          create.reset();
-        }
-        onOpenChange(next);
+        if (next) return onOpenChange(true);
+        if (!create.isPending) close();
       }}
     >
       <DialogContent className="gap-5 sm:max-w-150">
         {created ? (
-          <SecretPanel created={created} onDone={() => onOpenChange(false)} />
+          <SecretPanel created={created} onDone={close} />
         ) : (
           <CreateForm pending={create.isPending} onSubmit={create.mutate} onCreated={setCreated} />
         )}
@@ -341,10 +345,8 @@ function SecretPanel({ created, onDone }: { created: CreatedApiKey; onDone(): vo
           <DialogTitle>{created.name} created</DialogTitle>
           <DialogDescription>
             {created.role} · {created.workspaces.join(', ')} ·{' '}
-            {created.expiresAt
-              ? `expires ${new Date(created.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
-              : 'never expires'}
-            . Copy the secret now; it won't be shown again.
+            {created.expiresAt ? `expires ${formatDay(created.expiresAt)}` : 'never expires'}. Copy the secret
+            now; it won't be shown again.
           </DialogDescription>
         </div>
       </div>
@@ -358,10 +360,16 @@ function SecretPanel({ created, onDone }: { created: CreatedApiKey; onDone(): vo
         <Button
           variant="outline"
           onClick={() => {
-            navigator.clipboard
-              .writeText(created.secret)
-              .then(() => setCopied(true))
-              .catch(() => setCopyFailed(true));
+            // Over plain HTTP on anything but localhost there is no clipboard at all, so the
+            // property access itself throws: the fallback line has to cover that too.
+            try {
+              navigator.clipboard
+                .writeText(created.secret)
+                .then(() => setCopied(true))
+                .catch(() => setCopyFailed(true));
+            } catch {
+              setCopyFailed(true);
+            }
           }}
         >
           <Copy /> {copied ? 'Copied' : 'Copy'}

@@ -65,6 +65,12 @@ test('an admin creates a key, sees its secret once, edits it and revokes it', as
   await page.getByRole('button', { name: 'Done' }).click();
   await expect(dialog).toBeHidden();
 
+  // Reopening starts an empty form: the secret just shown is not shown again.
+  await page.getByRole('button', { name: 'Create key' }).first().click();
+  await expect(dialog.getByLabel('Name')).toHaveValue('');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+
   // The row shows what the key may do and when it expires.
   const row = page.getByRole('row', { name: new RegExp(name) });
   await expect(row).toContainText('editor');
