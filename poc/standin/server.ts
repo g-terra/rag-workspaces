@@ -8,6 +8,8 @@
 //   word by word (SSE) when stream=true, with a delay so streaming is observable.
 // - POST /v1/messages: the same, in Anthropic's Messages API shape (incl. streaming).
 // - POST /asr: stands in for the Whisper ASR service; any file gets the same two timed segments.
+// - GET /site/docs/...: a tiny documentation website (robots.txt, sitemap, three pages and one robots.txt
+//   disallows) for the website import's smoke check.
 // - GET /_log: every request seen (path, model, stream flag), so the POC can
 //   prove which model name a Langflow tweak actually sent.
 //
@@ -79,10 +81,48 @@ function composeAnswer(model: string, messages: { role: string; content: unknown
   return `[stand-in ${model}] **Based on the provided context:** ${best || 'no context was given.'}${best && cite ? ` [${cite}]` : ''}`;
 }
 
+// The stub docs site. Each page has navigation and a footer around its text, so the check can see that
+// only the main content is kept.
+const ORIGIN = 'http://standin:1234';
+const DOCS_PAGES: Record<string, [string, string]> = {
+  '/site/docs/': ['Stub Docs', 'Welcome to the stub docs. Start with installation, then read about usage.'],
+  '/site/docs/install': ['Install', 'Install the gizmo with the flux capacitor package manager before first use.'],
+  '/site/docs/usage': ['Usage', 'Turn the gizmo clockwise three times to calibrate the widget sprocket.'],
+  '/site/docs/private': ['Private', 'This page is disallowed by robots.txt and must never be imported.'],
+};
+function docsSite(path: string, res: ServerResponse): boolean {
+  if (path === '/robots.txt') {
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end(`User-agent: *\nDisallow: /site/docs/private\nSitemap: ${ORIGIN}/site/docs/sitemap.xml\n`);
+    return true;
+  }
+  if (path === '/site/docs/sitemap.xml') {
+    const urls = ['/site/docs/', '/site/docs/install', '/site/docs/usage'];
+    res.writeHead(200, { 'content-type': 'application/xml' });
+    res.end(
+      '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
+        urls.map((u) => `<url><loc>${ORIGIN}${u}</loc></url>`).join('') +
+        '</urlset>',
+    );
+    return true;
+  }
+  const page = DOCS_PAGES[path];
+  if (!page) return false;
+  const nav = Object.keys(DOCS_PAGES).map((p) => `<a href="${p}">${DOCS_PAGES[p]![0]} link</a>`).join(' ');
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+  res.end(
+    `<!doctype html><html><head><title>${page[0]} - Stub Docs</title></head><body>` +
+      `<nav>Sidebar navigation ${nav}</nav><main><h1>${page[0]}</h1><p>${page[1]}</p></main>` +
+      `<footer>Footer copyright stub</footer></body></html>`,
+  );
+  return true;
+}
+
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url ?? '/', 'http://x');
     if (req.method === 'GET' && url.pathname === '/_log') return send(res, 200, log);
+    if (req.method === 'GET' && docsSite(url.pathname, res)) return;
     if (req.method === 'DELETE' && url.pathname === '/_log') { log.length = 0; return send(res, 200, { ok: true }); }
     if (req.method === 'POST' && url.pathname === '/asr') {
       let bytes = 0;

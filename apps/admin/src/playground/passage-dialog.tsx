@@ -1,4 +1,4 @@
-import { BookOpen, FileText } from 'lucide-react';
+import { BookOpen, ExternalLink, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { DocumentPreviewDialog, type PreviewTarget } from '@/components/document-preview-dialog';
@@ -85,6 +85,13 @@ export function PassageDialog({
                     }
                   >
                     <BookOpen /> View page {passage.data.passage.page}
+                  </Button>
+                )}
+                {passage.data.passage.sourceUrl && (
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={passage.data.passage.sourceUrl} target="_blank" rel="noreferrer">
+                      <ExternalLink /> Open the page
+                    </a>
                   </Button>
                 )}
                 {home && (
