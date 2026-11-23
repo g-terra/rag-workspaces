@@ -170,7 +170,6 @@ export async function buildApp({
   if (usageLog) await app.register(usageLogging, { usage: usageLog });
   await app.register(healthRoutes, { checks, timeoutMs: config.READY_TIMEOUT_MS });
   await app.register(meRoutes);
-  await app.register(styleRoutes);
   await app.register(systemRoutes, { checks, models, langflowKey, config });
   await app.register(userRoutes, { directory });
   if (db) {
@@ -179,6 +178,7 @@ export async function buildApp({
     await app.register(folderRoutes, { db, chroma, events });
     await app.register(siteRoutes, { db, chroma, storage, events, crawls });
     await app.register(apiKeyRoutes, { db });
+    await app.register(styleRoutes, { db });
     await app.register(providerRoutes, { db, config, fetchFn: providerFetch });
     await app.register(usageRoutes, { db });
     if (langflow) {

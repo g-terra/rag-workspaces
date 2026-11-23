@@ -2,7 +2,7 @@
 title: Choose a response style for answers and chat
 date: 2026-11-23
 pr: "#105"
-status: in review
+status: merged
 areas: [api, db, shared, docs]
 ---
 

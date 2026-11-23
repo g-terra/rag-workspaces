@@ -1,5 +1,5 @@
 {
-  "id": "690fdcbd-6b87-4ac5-a223-f5208054e83b",
+  "id": "a0828a30-6c0b-40e5-8931-43fc570ac664",
   "prevId": "5ba08f21-f2d6-4038-bf49-762ab86e087d",
   "version": "7",
   "dialect": "postgresql",
@@ -754,18 +754,6 @@
           "notNull": true,
           "default": "'{}'"
         },
-        "site_id": {
-          "name": "site_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "source_url": {
-          "name": "source_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -787,49 +775,6 @@
           "columns": [
             {
               "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "sha256",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"documents\".\"site_id\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "documents_site_url_key": {
-          "name": "documents_site_url_key",
-          "columns": [
-            {
-              "expression": "site_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "source_url",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "documents_site_sha256_key": {
-          "name": "documents_site_sha256_key",
-          "columns": [
-            {
-              "expression": "site_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -900,15 +845,6 @@
           "columnsFrom": ["folder_id"],
           "columnsTo": ["id"],
           "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "documents_site_id_sites_id_fk": {
-          "name": "documents_site_id_sites_id_fk",
-          "tableFrom": "documents",
-          "tableTo": "sites",
-          "columnsFrom": ["site_id"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -1219,127 +1155,40 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.sites": {
-      "name": "sites",
+    "public.response_styles": {
+      "name": "response_styles",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
+        "slug": {
+          "name": "slug",
           "type": "text",
           "primaryKey": true,
           "notNull": true
         },
-        "workspace_id": {
-          "name": "workspace_id",
+        "name": {
+          "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "folder_id": {
-          "name": "folder_id",
+        "description": {
+          "name": "description",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": "''"
         },
-        "start_url": {
-          "name": "start_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "scope": {
-          "name": "scope",
+        "instructions": {
+          "name": "instructions",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "exclude_paths": {
-          "name": "exclude_paths",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'"
-        },
-        "max_pages": {
-          "name": "max_pages",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "max_depth": {
-          "name": "max_depth",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "site_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'queued'"
-        },
-        "pages_found": {
-          "name": "pages_found",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "pages_fetched": {
-          "name": "pages_fetched",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "pages_new": {
-          "name": "pages_new",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "pages_changed": {
-          "name": "pages_changed",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "pages_unchanged": {
-          "name": "pages_unchanged",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "pages_removed": {
-          "name": "pages_removed",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "pages_failed": {
-          "name": "pages_failed",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "last_error": {
-          "name": "last_error",
+        "created_by": {
+          "name": "created_by",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
-        },
-        "crawled_at": {
-          "name": "crawled_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "created_at": {
           "name": "created_at",
@@ -1356,49 +1205,8 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "sites_workspace_start_url_key": {
-          "name": "sites_workspace_start_url_key",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "start_url",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "sites_workspace_id_workspaces_id_fk": {
-          "name": "sites_workspace_id_workspaces_id_fk",
-          "tableFrom": "sites",
-          "tableTo": "workspaces",
-          "columnsFrom": ["workspace_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "sites_folder_id_folders_id_fk": {
-          "name": "sites_folder_id_folders_id_fk",
-          "tableFrom": "sites",
-          "tableTo": "folders",
-          "columnsFrom": ["folder_id"],
-          "columnsTo": ["id"],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1590,7 +1398,7 @@
     "public.document_type": {
       "name": "document_type",
       "schema": "public",
-      "values": ["pdf", "docx", "txt", "md", "mp4", "mp3", "wav", "web"]
+      "values": ["pdf", "docx", "txt", "md", "mp4", "mp3", "wav"]
     },
     "public.feedback_rating": {
       "name": "feedback_rating",
@@ -1601,11 +1409,6 @@
       "name": "message_role",
       "schema": "public",
       "values": ["user", "assistant"]
-    },
-    "public.site_status": {
-      "name": "site_status",
-      "schema": "public",
-      "values": ["queued", "crawling", "ready", "failed"]
     },
     "public.workspace_role": {
       "name": "workspace_role",
