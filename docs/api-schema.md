@@ -94,13 +94,13 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 | POST, GET | `/v1/workspaces/{slug}/conversations` | Start or list conversations |
 | GET, DELETE | `/v1/workspaces/{slug}/conversations/{conversationId}` | A conversation with its messages; delete it with its messages |
 | POST | `/v1/workspaces/{slug}/conversations/{conversationId}/messages` | Send a message, get the reply with citations |
-| GET | `/v1/workspaces/{slug}/passages?query=…&limit=5&minScore=…` | Best matching passages with scores, no AI answer (`folderId` filter planned) |
+| GET | `/v1/workspaces/{slug}/passages?query=…&limit=5&minScore=…&folderId=…` | Best matching passages with scores, no AI answer; `folderId` searches one folder only |
 | GET | `/v1/workspaces/{slug}/passages/{passageId}` | One passage with its neighbours |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/passages` | A document's passages in order, paginated (used by the document detail screen) |
 
 ```json
 // POST /v1/workspaces/ouc/answers
-{ "question": "What is retrieval-augmented generation?", "maxPassages": 5 }
+{ "question": "What is retrieval-augmented generation?", "maxPassages": 5, "folderId": "fld_01J…" }
 // 201
 { "id": "ans_01J…", "workspace": "ouc", "question": "…", "text": "Retrieval-augmented generation combines …",
   "status": "complete", "grounded": true,
@@ -111,13 +111,15 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
   "latencyMs": 2310, "timeToFirstTokenMs": null, "error": null, "feedback": null, "createdAt": "…" }
 ```
 
-- Citations are the passages that were given to the model, in rank order; `rank` is the `[n]` the text may cite. `folderId` and `startSeconds` join them with folders and audio *(planned)*.
+`folderId` (optional) uses only passages from that folder's documents; a folder that isn't in the workspace is `404`, here and on passages and messages.
+
+- Citations are the passages that were given to the model, in rank order; `rank` is the `[n]` the text may cite. `startSeconds` will join them with audio *(planned)*; a citation's `documentId` leads to its folder.
 - Every answer is stored, failures too (`status: "failed"` with `error`), so usage counts them; the caller still gets the error status.
 - An answer, and a conversation, is visible only to the person or key that created it, and to admins; anyone else gets `404`.
 - When nothing in the workspace scores above `minScore`, the answer is still `201` with `"grounded": false`, a fixed "not found in this workspace" text and empty citations; the chat model is not called.
 - `usage` token counts can be `null` when the provider does not report them.
 - Streaming adds `timeToFirstTokenMs`. A stream that fails midway ends with an `error` event and the answer is stored as failed, so it still shows in usage.
-- The message body is `{ "content": "…" }` (`folderId` planned). A conversation's history sent to the model is capped (last 10 turns by default).
+- The message body is `{ "content": "…", "folderId": "fld_…" }`; `folderId` is optional and limits that message's search to one folder. A conversation's history sent to the model is capped (last 10 turns by default).
 
 Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv_…", "role": "assistant", "content": "…", "citations": [...], "usage": {...} }`.
 

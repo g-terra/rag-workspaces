@@ -25,7 +25,7 @@ as a stack of PRs), and each change has a spec in [docs/specs/](specs/) saying w
 | Built | Not built yet |
 |---|---|
 | Compose stack, `pnpm env:init`, API skeleton, readiness, `GET /v1/users`, `GET /v1/system`, rate limits | (all built) |
-| Keycloak auth, API keys, workspaces and workspace reindex, members, isolation, folders, document `PATCH` | Folder filter on search, answers and chat |
+| Keycloak auth, API keys, workspaces and workspace reindex, members, isolation, folders (with the folder filter on search, answers and chat), document `PATCH` | (all built) |
 | Upload, dedupe, pg-boss ingestion, SSE status | Whisper and the `video` profile, transcripts |
 | Passages, answers (+ streaming, feedback), conversations (`rw-chat`) | Workspace `stats`, per-key request counts |
 | Usage log and analytics, release versioning | `pnpm doctor`, `backup`/`restore`, `flows:export`/`flows:import`; admin UI screens (shell only) |
