@@ -1,7 +1,7 @@
 ---
 title: Video and audio in the admin UI
 date: 2026-11-23
-pr: pending
+pr: "#73"
 status: in review
 areas: [admin, docs]
 ---
