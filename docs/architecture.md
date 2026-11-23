@@ -24,11 +24,11 @@ as a stack of PRs), and each change has a spec in [docs/specs/](specs/) saying w
 
 | Built | Not built yet |
 |---|---|
-| Compose stack, `pnpm env:init`, API skeleton, readiness, `GET /v1/users`, `GET /v1/system` | Rate limits |
-| Keycloak auth, API keys, workspaces and workspace reindex, members, isolation | Folders, document `PATCH` |
+| Compose stack, `pnpm env:init`, API skeleton, readiness, `GET /v1/users`, `GET /v1/system`, rate limits | (all built) |
+| Keycloak auth, API keys, workspaces and workspace reindex, members, isolation, folders (with the folder filter on search, answers and chat), document `PATCH` | (all built) |
 | Upload, dedupe, pg-boss ingestion, SSE status | Whisper and the `video` profile, transcripts |
 | Passages, answers (+ streaming, feedback), conversations (`rw-chat`) | Workspace `stats`, per-key request counts |
-| Usage log and analytics, release versioning | `pnpm doctor`, `backup`/`restore`, `flows:export`/`flows:import`; admin UI screens (shell only) |
+| Usage log and analytics, release versioning, MCP server (`apps/mcp`) | `pnpm doctor`, `backup`/`restore`, `flows:export`/`flows:import`; admin UI screens (shell only) |
 
 ## System overview
 
@@ -94,7 +94,7 @@ The provider is a setting, not code. LM Studio is the default and needs no key.
 - **A hosted provider sends that workspace's passages and questions to the provider.** The workspace settings screen says so in plain words, and a workspace on LM Studio stays fully local.
 - How the flows switch provider was settled by the M0 spike (`poc/RESULTS.md` F7): one custom "Workspace Chat Model" node builds the right LangChain client for `lmstudio`, `openai`, `anthropic` or `gemini`. The API reads provider keys from `.env` and sends provider, model, key and base URL as tweaks on that node, so keys never sit in Langflow's environment (Langflow 1.13 refuses to send environment keys to non-OpenAI hosts, F3).
 
-Published ports: only `web` (8080), `api` (3000), `keycloak` (8081) and `langflow` (7860) are published, all bound to `127.0.0.1` by default. `postgres`, `chroma` and `whisper` are reachable only on the compose network. Every service has a healthcheck, and `api` waits for postgres, chroma, langflow and keycloak to be healthy before it starts.
+Published ports: only `proxy` (80), `web` (8080), `api` (3000), `keycloak` (8081) and `langflow` (7860) are published, all bound to `127.0.0.1` by default. `proxy` is Caddy giving the stack local names over plain HTTP: `rag.localhost` (admin UI), `api.rag.localhost`, `auth.rag.localhost` (Keycloak, and the token issuer by default) and `langflow.rag.localhost`. Browsers resolve `*.localhost` to the machine itself, so no hosts file or DNS is needed; the direct ports stay as a fallback, and the realm accepts sign-ins from `http://localhost:<WEB_PORT>` too. `postgres`, `chroma` and `whisper` are reachable only on the compose network. Every service has a healthcheck, and `api` waits for postgres, chroma, langflow and keycloak to be healthy before it starts.
 
 Footprint: Keycloak and Langflow each want roughly 1 to 2 GB of RAM on top of the models LM Studio loads. `docs/setup.md` states a minimum (16 GB recommended) and which services can be left out.
 
@@ -105,7 +105,7 @@ Easy start:
 pnpm env:init                          # writes .env with fresh secrets
 docker compose up -d --build           # core stack
 docker compose --profile video up -d   # plus video transcription (M5, not built yet)
-# Admin UI http://localhost:8080 · Swagger http://localhost:3000/docs · Langflow http://localhost:7860
+# Admin UI http://rag.localhost · Swagger http://api.rag.localhost/docs · Langflow http://langflow.rag.localhost
 ```
 
 ## Workspaces
@@ -122,7 +122,7 @@ A workspace is the unit of isolation. Creating one (in the admin UI or `POST /v1
 | Analytics | Usage is logged with the workspace and can be viewed per workspace |
 | Settings (optional) | Chat model, embedding model, system prompt, chunk size, top-k; empty means the global defaults |
 
-Folders (for example a course code inside `ouc`) are optional groupings inside a workspace, usable as a filter when asking. They do not isolate anything.
+Folders (for example a course code inside `ouc`) are optional, flat groupings inside a workspace, usable as a filter when asking. They do not isolate anything. Passages carry the folder's id in their Chroma metadata (`folder`), written at ingestion; renaming a folder changes nothing there, and moving a document (or deleting its folder, which moves its documents to the top level) updates the metadata of its passages in place, without reindexing.
 
 The embedding model is fixed per workspace once it holds documents, because vectors from different models can't be compared. Changing it means re-indexing the workspace, which the API offers as one action.
 
@@ -189,7 +189,7 @@ Rules that keep ingestion honest when things fail:
 - **The API** accepts `Authorization: Bearer <token or key>`. Anything starting with `rw_` is looked up as an API key; anything else must be a JWT verified against Keycloak's JWKS (issuer, audience, expiry).
 - **Issuer URL.** The browser reaches Keycloak at `localhost`, the API reaches it at `keycloak:8080`, and tokens carry the browser's URL as issuer. Keycloak gets a fixed public hostname, and the API fetches keys from the internal URL while checking the issuer against the public one. This is a common first-day failure, so the compose smoke test logs in for real.
 - **Streaming and auth.** The browser's `EventSource` cannot send an `Authorization` header, so the admin UI reads server-sent events with `fetch`.
-- **Rate limits.** Per key and per user, with `429` and `Retry-After`. Generous defaults; the point is that a looping agent cannot starve the one local model.
+- **Rate limits.** Per key and per person, in one-minute windows kept in the API's memory (`apps/api/src/rate-limit.ts`): 600 requests, of which 30 may run a model (search, answers, chat messages). Over a limit the API answers `429` with `Retry-After`. Generous defaults; the point is that a looping agent cannot starve the one local model.
 
 ## Trust boundaries
 
@@ -217,6 +217,7 @@ Small, but written down so the system can be trusted with real notes:
 apps/
   api/            Fastify + zod + Swagger; routes, auth, workspace isolation, ingestion queue, analytics
   admin/          Vite + React + Tailwind + shadcn/ui
+  mcp/            MCP server (stdio) for agents, a thin client of the REST API
 packages/
   shared/         zod schemas and types shared by api and admin (the API contract)
   db/             Drizzle schema + migrations
@@ -242,7 +243,7 @@ docker-compose.yml, turbo.json, pnpm-workspace.yaml, .env.example
 | AI flows | Langflow (ingest, retrieve, answer, chat), flow JSON versioned in `flows/` |
 | Vector DB | ChromaDB, one collection per workspace, reached from Langflow through our own components over Chroma's REST API |
 | Models | LM Studio on the host by default; OpenAI, Gemini, Anthropic (chat only) or any OpenAI-compatible endpoint as a setting, per workspace if wanted |
-| Auth | Keycloak (OIDC) for people, hashed API keys for agents, `@fastify/rate-limit` |
+| Auth | Keycloak (OIDC) for people, hashed API keys for agents, a small in-memory rate limiter |
 | Queue | pg-boss on Postgres (no Redis); live status from an in-process event emitter, since there is one API process |
 | App DB | Postgres + Drizzle ORM |
 | Transcription | faster-whisper ASR service + ffmpeg (optional profile) |

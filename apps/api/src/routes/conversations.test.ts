@@ -1,4 +1,4 @@
-import { documents, messages, newId, workspaces } from '@rag/db';
+import { documents, folders, messages, newId, workspaces } from '@rag/db';
 import { createTestDatabase } from '@rag/db/testing';
 import { LangflowClient } from '@rag/langflow-client';
 import { eq } from 'drizzle-orm';
@@ -167,6 +167,24 @@ describe.skipIf(!url)('conversations (against TEST_DATABASE_URL)', () => {
       title: 'How large should chunk overlap be?',
       messages: [{ role: 'user' }, { role: 'assistant', content: 'Overlap keeps context [1].' }],
     });
+  });
+
+  /** A folder in `ouc`, made straight in the database. */
+  async function oucFolder() {
+    const [ws] = await t.db.select().from(workspaces).where(eq(workspaces.slug, 'ouc'));
+    const id = newId('folder');
+    await t.db.insert(folders).values({ id, workspaceId: ws!.id, name: id });
+    return id;
+  }
+
+  it('a message can limit its search to a folder; a folder from elsewhere is 404', async () => {
+    const id = await start();
+    const folderId = await oucFolder();
+    const res = await call('POST', `/conversations/${id}/messages`, { content: 'In this folder?', folderId });
+    expect(res.statusCode).toBe(201);
+    expect(runs.map((r) => r.body.tweaks.Search!.folder)).toEqual([folderId, folderId]);
+    const bad = await call('POST', `/conversations/${id}/messages`, { content: 'x', folderId: 'fld_nope' });
+    expect(bad.statusCode).toBe(404);
   });
 
   it('follow-ups send the last turns as history and search with the previous question too', async () => {

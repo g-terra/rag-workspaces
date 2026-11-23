@@ -14,8 +14,8 @@ Milestones define the order; a workstream only starts a milestone item when its 
 | M4 | **Admin UI** | Keycloak login, workspace switcher and management, drag-and-drop upload, live status, document library, ask and chat playground, usage analytics, API keys, all against the real API |
 | M5 | **Video** | `video` compose profile: upload mp4/mp3/wav, transcript via Whisper, timestamped citations |
 | M6 | **Hardening** | Retrieval evaluation run and written up, backup and restore tested, `pnpm doctor`, rate limits and upload limits tested, docs complete (ingestion guide, operations) |
-| M7 | **Assignment deliverables** | Flow JSON in `flows/`, setup docs and the `pnpm setup` wizard, 3 to 5 page report, 3 to 5 minute demo video. Can start as soon as M2 is done; M4 only makes the video nicer |
-| Later | **MCP server for agents** | Optional. Agents can already use the REST API through its OpenAPI spec, so this is a convenience and not part of the core plan |
+| M7 | **Assignment deliverables** | Flow JSON in `flows/`, setup docs and the `pnpm run setup` wizard, 3 to 5 page report, 3 to 5 minute demo video. Can start as soon as M2 is done; M4 only makes the video nicer |
+| Later | **MCP server for agents** | Built 2026-11-23 (`apps/mcp`, decision 13): a stdio server over the REST API with search, read and ask tools |
 
 ```mermaid
 flowchart LR
@@ -70,7 +70,7 @@ Owns `apps/api`, `packages/*` (except test presets), `flows/`, `docker/`, `docke
 12. M5: Whisper profile (the ASR service takes video directly, so the API needs no ffmpeg), timestamped transcript stored and fed to the ingest flow in segments so citations carry start seconds.
 13. Docs: `docs/setup.md` (quick start, LM Studio, Keycloak first login, switching to OpenAI, Gemini, Anthropic or another endpoint, minimum hardware) and `docs/api.md` (auth, examples) by M2; `docs/ingestion.md` and `docs/operations.md` (backup, upgrade, Langflow version bumps, retention) by M6.
 
-14. Guided setup CLI, `pnpm setup` (by M7, so a marker can install it without reading every doc): an interactive wizard in `scripts/` that checks Node, pnpm and Docker; checks the ports are free and names the process holding one; writes `.env` with fresh secrets (it takes over from `pnpm env:init`); asks for the model provider, and for LM Studio checks the server is up and lets you pick the embedding and chat models from the ones it has loaded, or asks for an OpenAI, Gemini or Anthropic key; starts `docker compose`, waits for `/ready`, and ends by printing the admin UI, Swagger and Keycloak URLs with the admin login. Optionally it creates the first workspace. Safe to run again: it keeps existing secrets and only asks about what is missing or broken. A `--yes` flag takes the defaults for scripts and CI. Shares its checks with `pnpm doctor`.
+14. Guided setup CLI, `pnpm run setup` (built 2026-11-23; `pnpm setup` alone is pnpm's own command), so a marker can install it without reading every doc: an interactive wizard in `scripts/` that checks Node, pnpm and Docker; checks the ports are free and names the process holding one; writes `.env` with fresh secrets (it takes over from `pnpm env:init`); asks for the model provider, and for LM Studio checks the server is up and lets you pick the embedding and chat models from the ones it has loaded, or asks for an OpenAI, Gemini or Anthropic key; starts `docker compose`, waits for `/ready`, and ends by printing the admin UI, Swagger and Keycloak URLs with the admin login. Optionally it creates the first workspace. Safe to run again: it keeps existing secrets and only asks about what is missing or broken. A `--yes` flag takes the defaults for scripts and CI. Shares its checks with `pnpm doctor`. As built, it leaves out creating the first workspace (that needs an admin token, and it is one click in the admin UI), and `pnpm doctor` will reuse its checks when it is built.
 
 ## Workstream 2: Frontend
 
