@@ -1,7 +1,7 @@
 ---
 title: preview PDFs in the app, on the cited page
 date: 2026-11-23
-pr: pending
+pr: "#75"
 status: in review
 areas: [admin]
 ---
