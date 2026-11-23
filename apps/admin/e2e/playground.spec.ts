@@ -78,6 +78,9 @@ test('streams an answer with its sources, takes feedback, says when nothing matc
   await expect(page.getByTestId('answer')).not.toBeEmpty({ timeout: 60_000 });
   await expect(page.getByTestId('answer-meta')).toContainText(/\d+(\.\d+)? (ms|s)/, { timeout: 60_000 });
   await expect(page.getByText(/^ans_/)).toBeVisible();
+  // The answer is markdown: the stand-in's bold lead-in is bold, with no asterisks left.
+  await expect(page.getByTestId('answer').locator('strong')).toHaveText('Based on the provided context:');
+  await expect(page.getByTestId('answer')).not.toContainText('**');
   await expect(page.getByRole('button', { name: 'Ask' })).toBeVisible();
 
   // Rating the answer: thumbs down, then a comment, and the API has both afterwards.

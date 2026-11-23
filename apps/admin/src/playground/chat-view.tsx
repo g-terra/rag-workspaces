@@ -82,14 +82,14 @@ export function TurnView({
                 {NOT_GROUNDED} Ask in the words the material uses, or upload material that covers it.
               </p>
             ) : (
-              <p data-testid="reply" className="text-[15px] leading-relaxed whitespace-pre-wrap">
+              <div data-testid="reply">
                 <AnswerText
                   text={turn.text}
                   citations={citations}
                   streaming={turn.status === 'streaming'}
                   onOpen={onOpenPassage}
                 />
-              </p>
+              </div>
             )}
             {turn.status === 'stopped' && (
               <p className="text-muted-foreground border-t pt-3 text-[13px]">
