@@ -37,7 +37,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | API key | `/v1/api-keys` | admin |
 | Me | `/v1/me` | anyone authenticated |
 
-Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down.
+Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi.json`, `/docs`. `GET /v1/system` gives admins the detail behind `/ready`: the state of Postgres, Chroma, Langflow (key and flows), Keycloak, and every model provider with the models it offers now, including whether the default models are among them. It always answers `200`; `status` is `degraded` when something is down. The admin UI's workspace Settings screen reads it for its provider and model pickers.
 
 ```json
 // GET /v1/system → 200 (admin only)
@@ -61,7 +61,7 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 |---|---|---|
 | GET | `/v1/workspaces` | Workspaces the caller can see, each with `access`: `admin`, `editor` or `reader` |
 | POST | `/v1/workspaces` | Create: `{ "slug": "personal", "name": "Personal", "description": "…", "settings": { … } }` |
-| GET, PATCH, DELETE | `/v1/workspaces/{slug}` | Read, update name, description or settings; delete with all its data |
+| GET, PATCH, DELETE | `/v1/workspaces/{slug}` | Read, update name, description or settings; delete with all its data. The admin UI's workspace Settings screen reads and writes these |
 | POST | `/v1/workspaces/{slug}/reindex` | Admin. Empty the Chroma collection and re-run ingestion for every document, optionally with a new model: body `{ "embeddingProvider": "openai", "embeddingModel": "text-embedding-3-small" }`, or no body to keep the model (for example after changing chunking). Returns `202` with the workspace; it is `reindexing` until every document is `ready` or `failed`. `409` while a reindex runs, `422` for a provider whose key is not set, `400` for a provider without a model |
 | GET | `/v1/workspaces/{slug}/members` | People with access and their role |
 | PUT, DELETE | `/v1/workspaces/{slug}/members/{userId}` | Grant (`{ "role": "reader" | "editor" }`) or remove a person's access |

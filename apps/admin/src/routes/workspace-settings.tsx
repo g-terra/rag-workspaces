@@ -243,18 +243,19 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
               </p>
             )}
 
-            <div className="grid gap-3.5 sm:grid-cols-2">
-              <Field
+            <Field
+              id="ws-embedding"
+              label="Embedding model"
+              hint="Changing this rebuilds every vector, so it changes only through a reindex."
+            >
+              <Input
                 id="ws-embedding"
-                label="Embedding model"
-                hint="Changing this rebuilds every vector, so it changes only through a reindex."
-              >
-                <Input
-                  id="ws-embedding"
-                  value={`${workspace.settings.embeddingProvider} / ${workspace.settings.embeddingModel}`}
-                  disabled
-                />
-              </Field>
+                value={`${workspace.settings.embeddingProvider} / ${workspace.settings.embeddingModel}`}
+                disabled
+              />
+            </Field>
+
+            <div className="grid gap-3.5 sm:grid-cols-2">
               <Field
                 id="ws-chunk-size"
                 label="Chunk size"
