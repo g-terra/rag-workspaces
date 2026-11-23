@@ -142,6 +142,11 @@ test('streams an answer with its sources, takes feedback, says when nothing matc
   await expect(page.getByTestId('mode-help')).toContainText('One question, one answer');
   await expect(page.getByLabel('Question')).toBeVisible();
 
+  // A response style is chosen per question, and the answer says which one it was written in.
+  await page.getByLabel('Response style').selectOption({ label: 'Academic' });
+  await ask(page, QUESTION);
+  await expect(page.getByTestId('answer-meta')).toContainText('academic style', { timeout: 60_000 });
+
   // Stop aborts the request. The route is held open rather than answered, so there is always a
   // request in flight to abort: letting the real answer race the click makes the test flaky.
   const answers = '**/v1/workspaces/*/answers';

@@ -10,6 +10,7 @@ import { TopBar } from '@/components/top-bar';
 import { WorkspaceMembers } from '@/components/workspace-members';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useStyles } from '@/styles/queries';
 import { useSystem } from '@/system/queries';
 import { useCurrentWorkspace } from '@/workspaces/current';
 import { HOSTED, useWorkspaceProviders, withWorkspaceProviders } from '@/workspaces/providers';
@@ -72,6 +73,7 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
   const [reindexing, setReindexing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const systemStatus = useSystem();
+  const styles = useStyles();
   const providers = useWorkspaceProviders(workspace.slug);
   // The providers as this workspace sees them (with its own keys), so a key saved here unlocks its
   // models in the pickers at once. Everything else (defaults, health) is the system's.
@@ -273,6 +275,31 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
                 {REASONING_EFFORTS.map((effort) => (
                   <option key={effort} value={effort}>
                     {effort}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field
+              id="ws-style"
+              label="Default response style"
+              hint="The tone and length answers use when a question names no style. Citations and refusals apply in every style. Admins manage the styles under Response styles."
+            >
+              <select
+                id="ws-style"
+                aria-describedby="ws-style-note"
+                className={selectClass}
+                value={form.style}
+                onChange={(e) => set('style')(e.target.value)}
+              >
+                <option value="">No style</option>
+                {/* The saved default stays offered while the list loads, or if it has gone. */}
+                {form.style && !styles.data?.some((s) => s.slug === form.style) && (
+                  <option value={form.style}>{form.style}</option>
+                )}
+                {styles.data?.map((s) => (
+                  <option key={s.slug} value={s.slug}>
+                    {s.name}
                   </option>
                 ))}
               </select>

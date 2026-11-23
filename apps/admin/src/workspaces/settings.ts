@@ -26,6 +26,8 @@ export interface SettingsForm {
   topK: string;
   minScore: string;
   reasoningEffort: string;
+  /** A response style slug; empty is no default style. */
+  style: string;
 }
 export type SettingsField = keyof SettingsForm;
 
@@ -49,6 +51,7 @@ const FIELDS: SettingsField[] = [
   'topK',
   'minScore',
   'reasoningEffort',
+  'style',
 ];
 
 /** The workspace as the form shows it. A number is rendered the way the input will hand it back. */
@@ -65,6 +68,7 @@ export function formFor(w: Workspace): SettingsForm {
     topK: text(s.topK),
     minScore: text(s.minScore),
     reasoningEffort: s.reasoningEffort ?? '',
+    style: s.style ?? '',
   };
 }
 
@@ -154,6 +158,10 @@ export function validateSettings(form: SettingsForm, w: Workspace): Validated {
       case 'reasoningEffort':
         // A select, so the value is one of the options; '' is the default.
         settings.reasoningEffort = ReasoningEffort.safeParse(form.reasoningEffort).data ?? null;
+        break;
+      case 'style':
+        // A select of the styles the API listed; '' is no default style.
+        settings.style = form.style || null;
         break;
       default:
         settings[field] = numbers[field];
