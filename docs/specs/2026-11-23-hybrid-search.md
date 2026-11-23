@@ -2,7 +2,7 @@
 title: Search by words as well as meaning, fused with RRF
 date: 2026-11-23
 pr: "#84"
-status: in review
+status: merged
 areas: [flows, langflow, docs]
 ---
 

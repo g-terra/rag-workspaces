@@ -1,7 +1,7 @@
 ---
 title: Plan a guided setup CLI (pnpm setup)
 date: 2026-11-22
-pr: pending
+pr: "#32"
 status: merged
 areas: [docs]
 ---

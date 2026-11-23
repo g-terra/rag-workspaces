@@ -2,7 +2,7 @@
 title: Usage analytics in the admin UI
 date: 2026-11-23
 pr: "#60"
-status: in review
+status: merged
 areas: [admin, api]
 ---
 

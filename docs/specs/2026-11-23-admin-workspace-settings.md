@@ -2,7 +2,7 @@
 title: Workspace settings in the admin UI
 date: 2026-11-23
 pr: "#61"
-status: in review
+status: merged
 areas: [admin, shared]
 ---
 

@@ -2,7 +2,7 @@
 title: render answers as markdown in the admin UI
 date: 2026-11-23
 pr: "#67"
-status: in review
+status: merged
 areas: [admin]
 ---
 

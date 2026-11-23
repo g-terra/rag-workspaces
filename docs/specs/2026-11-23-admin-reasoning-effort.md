@@ -2,7 +2,7 @@
 title: Pick the reasoning effort on the workspace settings page
 date: 2026-11-23
 pr: "#87"
-status: in review
+status: merged
 areas: [admin, docs]
 ---
 

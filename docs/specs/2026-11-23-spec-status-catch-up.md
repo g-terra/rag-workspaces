@@ -2,7 +2,7 @@
 title: mark merged specs as merged
 date: 2026-11-23
 pr: "#40"
-status: in review
+status: merged
 areas: [docs]
 ---
 

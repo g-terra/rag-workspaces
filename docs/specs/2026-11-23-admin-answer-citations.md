@@ -2,7 +2,7 @@
 title: Citations and passage previews in the admin playground
 date: 2026-11-23
 pr: "#56"
-status: in review
+status: merged
 areas: [admin]
 ---
 

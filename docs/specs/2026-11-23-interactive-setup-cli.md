@@ -2,7 +2,7 @@
 title: Interactive setup CLI with arrow-key selection
 date: 2026-11-23
 pr: "#66"
-status: in review
+status: merged
 areas: [infra]
 ---
 

@@ -2,7 +2,7 @@
 title: rate limits per person and per API key
 date: 2026-11-23
 pr: "#48"
-status: in review
+status: merged
 areas: [api, infra, docs]
 ---
 

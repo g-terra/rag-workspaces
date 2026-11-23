@@ -2,7 +2,7 @@
 title: system status for admins, with the models each provider offers
 date: 2026-11-23
 pr: "#46"
-status: in review
+status: merged
 areas: [api, docs]
 ---
 

@@ -2,7 +2,7 @@
 title: reindex a workspace, optionally with a new embedding model
 date: 2026-11-23
 pr: "#45"
-status: in review
+status: merged
 areas: [api, docs]
 ---
 

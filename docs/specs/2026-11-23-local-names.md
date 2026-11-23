@@ -2,7 +2,7 @@
 title: local names for the stack (rag.localhost) through a Caddy proxy
 date: 2026-11-23
 pr: "#47"
-status: in review
+status: merged
 areas: [infra, docs]
 ---
 
