@@ -1,7 +1,7 @@
 ---
 title: count a refusal that cites passages as not grounded
 date: 2026-11-24
-pr: pending
+pr: "#130"
 status: in review
 areas: [api, docs]
 ---
