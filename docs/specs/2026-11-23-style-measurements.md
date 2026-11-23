@@ -1,7 +1,7 @@
 ---
 title: Record how the response styles answer the test questions
 date: 2026-11-23
-pr: pending
+pr: "#126"
 status: in review
 areas: [docs]
 ---
