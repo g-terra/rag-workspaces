@@ -79,6 +79,15 @@ actions". Runners 2 to 4 carry only `rw-light`; runner 1 carries `rw-light` and 
 This PR is its own test: its checks run on the self-hosted runner. Check that every job is green, and
 that `docker ps` on the runner's machine shows no leftover `rw-ci-pg-*` container afterwards.
 
+The first runs on the Mac showed two races that the hosted runners had hidden. Both are fixed in the
+tests:
+
+- `e2e/conversations.spec.ts` and `e2e/playground.spec.ts` read the stored conversation as soon as the
+  reply's text was on screen. The API stores the reply a moment later, so they now poll until all four
+  messages are stored.
+- `e2e/workspaces.spec.ts` pressed Escape as soon as the create dialog was visible. It now waits until
+  the dialog holds focus.
+
 ## Out of scope and follow-ups
 
 - Going back to hosted runners once billing is fixed: change `runs-on` back. The Postgres step works

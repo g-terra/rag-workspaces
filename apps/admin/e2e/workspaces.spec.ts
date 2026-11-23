@@ -96,6 +96,9 @@ test('an admin creates workspaces from the list and from the switcher', async ({
   await page.getByRole('button', { name: 'Switch workspace' }).click();
   await page.getByRole('button', { name: /Create workspace/ }).click();
   await expect(dialog).toBeVisible();
+  // Escape goes to whatever has focus: wait until the dialog has taken it from the switcher's menu, or a
+  // fast machine presses it while the menu still holds focus and only the menu closes.
+  await expect.poll(() => dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toBeFocused();
@@ -106,6 +109,9 @@ test('an admin creates workspaces from the list and from the switcher', async ({
   const newButton = page.getByRole('button', { name: 'New workspace' }).first();
   await newButton.click();
   await expect(dialog).toBeVisible();
+  // Escape goes to whatever has focus: wait until the dialog has taken it from the switcher's menu, or a
+  // fast machine presses it while the menu still holds focus and only the menu closes.
+  await expect.poll(() => dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true);
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(newButton).toBeFocused();
