@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
+import { requireFolder } from '../services/folders.js';
 import { assertSearchable } from '../services/reindex.js';
 import type { Principal } from '../auth/principal.js';
 import { HttpProblem } from '../errors.js';
@@ -26,6 +27,7 @@ export const answerRoutes: FastifyPluginAsyncZod<AnswerRoutesOptions> = async (a
   app.post(
     '/v1/workspaces/:slug/answers',
     {
+      config: { modelCall: true },
       schema: {
         ...common,
         summary: 'Ask a question',
@@ -49,6 +51,7 @@ export const answerRoutes: FastifyPluginAsyncZod<AnswerRoutesOptions> = async (a
         caller: req.principal!,
         question: req.body.question,
         maxPassages: req.body.maxPassages,
+        folderId: req.body.folderId && (await requireFolder(db, workspace.id, req.body.folderId)),
         requestId: req.id,
       };
 

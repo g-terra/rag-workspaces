@@ -3,6 +3,7 @@
 // ingest flow wrote into Chroma. Exits non-zero at the first failed check.
 //   node scripts/smoke/check.ts
 import { readFileSync } from 'node:fs';
+import { request } from 'node:http';
 import { basename } from 'node:path';
 import { compose, smokeEnv } from './stack.ts';
 
@@ -27,7 +28,7 @@ type Doc = {
   passageCount: number | null;
   error: string | null;
 };
-type Passage = { document_id: string; page: number | null };
+type Passage = { document_id: string; page: number | null; folder?: string };
 
 class CheckFailed extends Error {}
 
@@ -130,12 +131,66 @@ async function passagesOf(collection: string, documentId: string): Promise<Passa
   return metadatas;
 }
 
+/**
+ * GET through the local-names proxy. Node doesn't resolve *.localhost on every system, so this
+ * connects to 127.0.0.1 and sends the name as the Host header, as a browser on this machine would.
+ */
+function viaProxy(host: string, path: string): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = request(
+      {
+        host: '127.0.0.1',
+        port: Number(env.PROXY_PORT),
+        path,
+        headers: { host },
+        timeout: REQUEST_TIMEOUT_MS,
+      },
+      (res) => {
+        let body = '';
+        res.on('data', (chunk) => (body += chunk));
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, body }));
+      },
+    );
+    req.on('timeout', () => req.destroy(new Error(`${host}${path} timed out`)));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 async function main() {
+  await step('local names: the proxy reaches the admin UI, API, Keycloak and Langflow', async () => {
+    const routes = [
+      ['rag.localhost', '/', '<div id="root">'],
+      ['api.rag.localhost', '/health', '"ok"'],
+      ['auth.rag.localhost', '/realms/rag-workspaces/.well-known/openid-configuration', '"issuer"'],
+      ['langflow.rag.localhost', '/health_check', '"ok"'],
+    ] as const;
+    for (const [host, path, expected] of routes) {
+      // Keycloak reports healthy a moment before it stops answering 503 ("Bootstrap in progress").
+      let res = await viaProxy(host, path);
+      for (let i = 0; i < 30 && (res.status === 502 || res.status === 503); i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        res = await viaProxy(host, path);
+      }
+      expect(
+        res.status === 200 && res.body.includes(expected),
+        `${host}${path}: ${res.status} ${res.body.slice(0, 200)}`,
+      );
+    }
+  });
   await step('password login enabled for admin-ui (this stack only)', async () => allowPasswordLogin());
   const token = await step('signed in through Keycloak', login);
   await step('GET /v1/me says admin', async () => {
     const me = await call(token, 'GET', '/v1/me');
     expect(me.isAdmin === true, `expected isAdmin true, got ${JSON.stringify(me)}`);
+  });
+  await step('responses carry the rate limit headers', async () => {
+    const res = await fetch(`${API}/v1/me`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    const limit = res.headers.get('ratelimit-limit');
+    expect(limit === '600' && res.headers.get('ratelimit-remaining'), `RateLimit-Limit: ${limit}`);
   });
   await step('GET /v1/users lists the admin, read through the api-directory service account', async () => {
     const { data } = (await call(token, 'GET', `/v1/users?search=${env.RW_ADMIN_USERNAME}`)) as {
@@ -240,6 +295,45 @@ async function main() {
       );
     }
   });
+
+  await step(
+    'folders: a moved document takes its passages along, search can stay inside one, and deleting it moves them out',
+    async () => {
+      const doc = docs[0]!;
+      const folder = await call(token, 'POST', `/v1/workspaces/${slug}/folders`, { name: 'Week 1' });
+      await call(token, 'PATCH', `/v1/workspaces/${slug}/documents/${doc.id}`, { folderId: folder.id });
+      const inside = await passagesOf(collection, doc.id);
+      expect(
+        inside.length > 0 && inside.every((p) => p.folder === folder.id),
+        `after the move: ${JSON.stringify(inside.map((p) => p.folder))}`,
+      );
+      // Search through the real flow: only the moved document's passages, and nothing from an empty folder.
+      const hits = await call(
+        token,
+        'GET',
+        `/v1/workspaces/${slug}/passages?query=notes&minScore=0&limit=20&folderId=${folder.id}`,
+      );
+      expect(
+        hits.data.length > 0 && hits.data.every((h: { documentId: string }) => h.documentId === doc.id),
+        `search in the folder: ${JSON.stringify(hits.data.map((h: { documentId: string }) => h.documentId))}`,
+      );
+      const empty = await call(token, 'POST', `/v1/workspaces/${slug}/folders`, { name: 'Empty' });
+      const none = await call(
+        token,
+        'GET',
+        `/v1/workspaces/${slug}/passages?query=notes&minScore=0&folderId=${empty.id}`,
+      );
+      expect(none.data.length === 0, `search in an empty folder found ${none.data.length}`);
+      await call(token, 'DELETE', `/v1/workspaces/${slug}/folders/${folder.id}`);
+      const out = await passagesOf(collection, doc.id);
+      expect(
+        out.every((p) => p.folder === undefined),
+        `after deleting the folder: ${JSON.stringify(out.map((p) => p.folder))}`,
+      );
+      const again = await call(token, 'GET', `/v1/workspaces/${slug}/documents/${doc.id}`);
+      expect(again.folderId === null, `document still in folder ${again.folderId}`);
+    },
+  );
 
   await step('deleted the workspace, its Chroma collection is gone', async () => {
     await call(token, 'DELETE', `/v1/workspaces/${slug}`);

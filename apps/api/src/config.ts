@@ -74,6 +74,10 @@ const ConfigSchema = z.object({
   ANSWER_TIMEOUT_MS: z.coerce.number().int().positive().default(180_000),
   /** Earlier turns (a question and its reply) sent to the model with each chat message. */
   CHAT_HISTORY_TURNS: z.coerce.number().int().min(0).max(50).default(10),
+  /** Requests a person or API key may make per minute across `/v1`. 0 turns the limit off. */
+  RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(0).default(600),
+  /** Of those, the ones that run a model (search, answers, chat messages). 0 turns the limit off. */
+  RATE_LIMIT_MODEL_PER_MINUTE: z.coerce.number().int().min(0).default(30),
   /** Question text in the usage log is cleared after this many days; counts and latency stay. */
   USAGE_QUESTION_RETENTION_DAYS: z.coerce.number().int().min(1).default(90),
 

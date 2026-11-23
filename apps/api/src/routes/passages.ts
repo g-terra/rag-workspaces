@@ -13,6 +13,7 @@ import { and, eq } from 'drizzle-orm';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
+import { requireFolder } from '../services/folders.js';
 import { assertSearchable } from '../services/reindex.js';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
@@ -66,6 +67,7 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
   app.get(
     '/v1/workspaces/:slug/passages',
     {
+      config: { modelCall: true },
       schema: {
         ...common,
         summary: 'Search passages',
@@ -81,10 +83,11 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'reader');
       assertSearchable(workspace);
       const { query, limit, minScore } = req.query;
+      const folderId = req.query.folderId && (await requireFolder(db, workspace.id, req.query.folderId));
       req.usage = { question: query };
       let hits;
       try {
-        hits = await retrieve(langflow, workspace, query, config, { limit, minScore });
+        hits = await retrieve(langflow, workspace, query, config, { limit, minScore, folderId });
       } catch (err) {
         throw flowProblem(err, 'Search');
       }

@@ -17,7 +17,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Lists | `?limit=20&cursor=…` returns `{ "data": [...], "nextCursor": "…" | null }` |
 | Errors | RFC 9457 problem JSON: `{ "type", "title", "status", "detail", "requestId" }`; validation errors add `errors: [{ "path", "message" }]`. See [errors](#errors) |
 | Roles | One global role, `admin`. Inside a workspace, people and keys are `reader` or `editor` |
-| Rate limits *(planned)* | Per key and per user; `429` with `Retry-After` and `RateLimit-*` headers |
+| Rate limits | Per person and per API key, per minute: every `/v1` request counts against `RATE_LIMIT_PER_MINUTE` (600), and search, answers and chat messages also against `RATE_LIMIT_MODEL_PER_MINUTE` (30). Responses carry `RateLimit-Limit`, `RateLimit-Remaining` and `RateLimit-Reset` (seconds) for the tighter one; over it, `429` with `Retry-After` |
 | Streaming | `Accept: text/event-stream` on answers and messages streams `token`, `citations`, `done`, `error` events |
 | Tracing | Every response has `X-Request-Id`, also stored in the usage log |
 
@@ -26,7 +26,7 @@ Routes and fields marked *(planned)* are designed but not built yet; see the sta
 | Resource | Path | Who |
 |---|---|---|
 | Workspace | `/v1/workspaces` | admin creates; members and keys see their own |
-| Folder *(planned)* | `/v1/workspaces/{slug}/folders` | editor |
+| Folder | `/v1/workspaces/{slug}/folders` | reader to list, editor to change |
 | Document | `/v1/workspaces/{slug}/documents` | editor to change, reader to list |
 | Passage | `/v1/workspaces/{slug}/passages` | reader |
 | Answer (+ feedback) | `/v1/workspaces/{slug}/answers` | reader; an answer is visible only to whoever asked and to admins |
@@ -94,13 +94,13 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
 | POST, GET | `/v1/workspaces/{slug}/conversations` | Start or list conversations |
 | GET, DELETE | `/v1/workspaces/{slug}/conversations/{conversationId}` | A conversation with its messages; delete it with its messages |
 | POST | `/v1/workspaces/{slug}/conversations/{conversationId}/messages` | Send a message, get the reply with citations |
-| GET | `/v1/workspaces/{slug}/passages?query=…&limit=5&minScore=…` | Best matching passages with scores, no AI answer (`folderId` filter planned) |
+| GET | `/v1/workspaces/{slug}/passages?query=…&limit=5&minScore=…&folderId=…` | Best matching passages with scores, no AI answer; `folderId` searches one folder only |
 | GET | `/v1/workspaces/{slug}/passages/{passageId}` | One passage with its neighbours |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/passages` | A document's passages in order, paginated (used by the document detail screen) |
 
 ```json
 // POST /v1/workspaces/ouc/answers
-{ "question": "What is retrieval-augmented generation?", "maxPassages": 5 }
+{ "question": "What is retrieval-augmented generation?", "maxPassages": 5, "folderId": "fld_01J…" }
 // 201
 { "id": "ans_01J…", "workspace": "ouc", "question": "…", "text": "Retrieval-augmented generation combines …",
   "status": "complete", "grounded": true,
@@ -111,13 +111,15 @@ Outside `/v1`: `GET /health`, `GET /ready` (ok or not, no detail), `GET /openapi
   "latencyMs": 2310, "timeToFirstTokenMs": null, "error": null, "feedback": null, "createdAt": "…" }
 ```
 
-- Citations are the passages that were given to the model, in rank order; `rank` is the `[n]` the text may cite. `folderId` and `startSeconds` join them with folders and audio *(planned)*.
+`folderId` (optional) uses only passages from that folder's documents; a folder that isn't in the workspace is `404`, here and on passages and messages.
+
+- Citations are the passages that were given to the model, in rank order; `rank` is the `[n]` the text may cite. `startSeconds` will join them with audio *(planned)*; a citation's `documentId` leads to its folder.
 - Every answer is stored, failures too (`status: "failed"` with `error`), so usage counts them; the caller still gets the error status.
 - An answer, and a conversation, is visible only to the person or key that created it, and to admins; anyone else gets `404`.
 - When nothing in the workspace scores above `minScore`, the answer is still `201` with `"grounded": false`, a fixed "not found in this workspace" text and empty citations; the chat model is not called.
 - `usage` token counts can be `null` when the provider does not report them.
 - Streaming adds `timeToFirstTokenMs`. A stream that fails midway ends with an `error` event and the answer is stored as failed, so it still shows in usage.
-- The message body is `{ "content": "…" }` (`folderId` planned). A conversation's history sent to the model is capped (last 10 turns by default).
+- The message body is `{ "content": "…", "folderId": "fld_…" }`; `folderId` is optional and limits that message's search to one folder. A conversation's history sent to the model is capped (last 10 turns by default).
 
 Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv_…", "role": "assistant", "content": "…", "citations": [...], "usage": {...} }`.
 
@@ -125,24 +127,24 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
 
 | Method | Path | Does |
 |---|---|---|
-| GET, POST | `/v1/workspaces/{slug}/folders` *(planned)* | List or create folders |
-| PATCH, DELETE | `/v1/workspaces/{slug}/folders/{folderId}` *(planned)* | Rename or delete a folder (documents move to the root) |
-| POST | `/v1/workspaces/{slug}/documents` | Upload (multipart, one or more `files` parts; `folderId` and `tags` planned). Returns `{ "data": [{ "document": {…}, "duplicate": false }] }`, one entry per file; a file already in the workspace returns the existing document with `duplicate: true` |
-| GET | `/v1/workspaces/{slug}/documents?status=…&type=…` | List documents (`folderId` filter planned) |
-| GET, PATCH, DELETE | `/v1/workspaces/{slug}/documents/{documentId}` | Read; move or retag *(PATCH planned)*; delete with its vectors (`409` while it is processing) |
+| GET, POST | `/v1/workspaces/{slug}/folders` | List folders by name, each with its `documentCount`; create one (`{ "name" }`, unique in the workspace ignoring case, else `409`) |
+| PATCH, DELETE | `/v1/workspaces/{slug}/folders/{folderId}` | Rename (`{ "name" }`); delete, moving its documents and their passages to the top level (`409` while one of them is processing) |
+| POST | `/v1/workspaces/{slug}/documents?folderId=…` | Upload (multipart, one or more `files` parts) into the top level or the folder given. Returns `{ "data": [{ "document": {…}, "duplicate": false }] }`, one entry per file; a file already in the workspace returns the existing document with `duplicate: true` |
+| GET | `/v1/workspaces/{slug}/documents?status=…&type=…&folderId=…` | List documents; `folderId=none` gives the ones at the top level |
+| GET, PATCH, DELETE | `/v1/workspaces/{slug}/documents/{documentId}` | Read; move (`folderId`, `null` for the top level), rename (`title`) or retag (`tags`), where a move updates its passages too; delete with its vectors. PATCH and DELETE answer `409` while it is processing |
 | POST | `/v1/workspaces/{slug}/documents/{documentId}/reindex` | Delete its vectors and run the ingest flow again; `202`, or `409` while it is processing |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/file` | Download the original |
 | GET | `/v1/workspaces/{slug}/documents/{documentId}/transcript` *(planned)* | The timestamped transcript (video and audio only) |
 | GET | `/v1/workspaces/{slug}/documents/events` | Live status changes (server-sent events); see below |
 
 ```json
-{ "id": "doc_01J…", "workspace": "ouc", "title": "Week 3 slides",
+{ "id": "doc_01J…", "workspace": "ouc", "folderId": "fld_01J…", "title": "Week 3 slides",
   "fileName": "week3.pdf", "type": "pdf", "sizeBytes": 2483011, "sha256": "9f2c…",
   "status": "processing", "attempts": 1, "error": null, "passageCount": null,
   "tags": ["rag"], "createdAt": "…", "updatedAt": "…" }
 ```
 
-`status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit return `413`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. (`folderId` on documents is planned.)
+`status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit return `413`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. `folderId` is `null` for a document at the top level.
 
 The events stream (`text/event-stream`, read with `fetch` since `EventSource` can't send `Authorization`) sends:
 
@@ -203,7 +205,7 @@ Question text is kept for a configurable time (`USAGE_QUESTION_RETENTION_DAYS`, 
 | 404 | No such resource, or a workspace the caller has no access to |
 | 409 | Slug already taken; deleting or reindexing a document while it is processing; reindexing a workspace that is already reindexing; changing a revoked API key |
 | 413, 415 | File too large; file type not supported |
-| 429 | Rate limit |
+| 429 | Over a rate limit; `Retry-After` says how many seconds to wait |
 | 502, 504 | Langflow failed (or the model returned an empty answer) or timed out |
 | 503 | Langflow not ready yet (with `Retry-After`) or unreachable; a provider key missing; Keycloak unreachable; workspace reindexing |
 

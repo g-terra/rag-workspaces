@@ -22,6 +22,7 @@ type SendInput = {
   workspace: Workspace;
   conversation: ConversationRow;
   content: string;
+  folderId?: string;
   requestId?: string;
   onToken?: (text: string) => void;
   signal?: AbortSignal;
@@ -84,6 +85,7 @@ export class ConversationService {
       question: content,
       searchQuery: previousQuestion ? `${clip(previousQuestion, 500)}\n${content}` : content,
       history,
+      folderId: input.folderId,
       sessionId: conversation.id,
       onToken: input.onToken,
       signal: input.signal,

@@ -83,8 +83,9 @@ export class IngestProcessor {
     if (!row) return 'gone'; // deleted while queued
     const { document, workspace } = row;
     const attempt = document.attempts + 1;
-    if (!(await this.update(document.id, { status: 'processing', attempts: attempt, error: null })))
-      return 'gone';
+    // The claimed row, not the one read above: a move to another folder may have landed between.
+    const claimed = await this.update(document.id, { status: 'processing', attempts: attempt, error: null });
+    if (!claimed) return 'gone';
     seen.workspaceId = workspace.id;
     const claim = { attempts: attempt };
 
@@ -104,6 +105,8 @@ export class IngestProcessor {
               file_path: document.storagePath,
               document_id: document.id,
               filename: document.fileName,
+              // Passages carry the folder id, so searches can be limited to one folder.
+              folder: claimed.folderId ?? '',
             },
             Split: {
               chunk_size: settings.chunkSize ?? config.DEFAULT_CHUNK_SIZE,
