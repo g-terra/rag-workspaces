@@ -1,7 +1,7 @@
 ---
 title: guided setup with pnpm run setup
 date: 2026-11-23
-pr: pending
+pr: "#53"
 status: in review
 areas: [infra, ci, docs]
 ---
