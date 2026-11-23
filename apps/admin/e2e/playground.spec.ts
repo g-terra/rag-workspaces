@@ -143,7 +143,8 @@ test('streams an answer with its sources, takes feedback, says when nothing matc
   await expect(page.getByLabel('Question')).toBeVisible();
 
   // A response style is chosen per question, and the answer says which one it was written in.
-  await page.getByLabel('Response style').selectOption({ label: 'Academic' });
+  // By role: Chat mode's picker is mounted too, hidden, and a label lookup would find both.
+  await page.getByRole('combobox', { name: 'Response style' }).selectOption({ label: 'Academic' });
   await ask(page, QUESTION);
   await expect(page.getByTestId('answer-meta')).toContainText('academic style', { timeout: 60_000 });
 
