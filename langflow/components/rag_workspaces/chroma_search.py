@@ -21,7 +21,10 @@ formatted for a prompt, each tagged [n] so the model can cite them).
 
 import math
 import re
+import sys
+import threading
 import time
+import types
 from collections import Counter
 
 import httpx
@@ -137,9 +140,9 @@ def interleave(rankings: list[list[str]]) -> list[str]:
 class VectorIndex:
     """A collection's vectors, normalised, for exact cosine search."""
 
-    def __init__(self, ids: list[str], vectors: list[list[float]], metadatas: list[dict]) -> None:
+    def __init__(self, ids: list[str], vectors: list, metadatas: list[dict]) -> None:
         self.ids = ids
-        matrix = np.asarray(vectors, dtype=np.float32)
+        matrix = np.stack(vectors).astype(np.float32, copy=False) if len(vectors) else np.zeros((0, 0), np.float32)
         norms = np.linalg.norm(matrix, axis=1, keepdims=True)
         self.matrix = matrix / np.where(norms == 0, 1, norms)
         self.folders = np.asarray([(m or {}).get("folder") or "" for m in metadatas], dtype=object)
@@ -158,7 +161,15 @@ class VectorIndex:
 
 # Indexes by (Chroma URL, collection id), kept across runs in this Langflow worker: the passage count when built,
 # when it was built, the keyword index, and the vector index (None when the collection is too big for it).
-_INDEXES: dict[tuple[str, str], tuple[int, float, KeywordIndex, VectorIndex | None]] = {}
+# Langflow builds this component from its source on every run, in a fresh namespace, so a plain module-level
+# dict would start empty each time. The cache lives in a module registered in sys.modules instead, which every
+# run of the component in this worker shares. The lock keeps two searches (retrieve, then answer) from
+# building the same index at once.
+_SHARED = sys.modules.setdefault("rag_workspaces_search_cache", types.ModuleType("rag_workspaces_search_cache"))
+_INDEXES: dict[tuple[str, str], tuple[int, float, KeywordIndex, VectorIndex | None]] = _SHARED.__dict__.setdefault(
+    "indexes", {}
+)
+_LOCK: threading.Lock = _SHARED.__dict__.setdefault("lock", threading.Lock())
 
 
 def cosine(a: list[float], b: list[float]) -> float:
@@ -204,10 +215,14 @@ class ChromaWorkspaceSearch(Component):
         has not seen: reading all vectors takes several seconds. A passage id is its document and chunk number,
         and a document's chunks are not rewritten in place, so a vector already held is still right.
         """
-        key = (self._base(), cid)
         r = client.get(f"{self._base()}/collections/{cid}/count")
         r.raise_for_status()
         count = int(r.json())
+        with _LOCK:
+            return self._fresh_indexes(client, cid, count)
+
+    def _fresh_indexes(self, client: httpx.Client, cid: str, count: int) -> tuple[KeywordIndex, VectorIndex | None]:
+        key = (self._base(), cid)
         cached = _INDEXES.get(key)
         if cached and cached[0] == count and time.monotonic() - cached[1] < INDEX_TTL_SECONDS:
             return cached[2], cached[3]
@@ -231,15 +246,17 @@ class ChromaWorkspaceSearch(Component):
         """Vectors for `ids`, reusing the previous index's rows and reading only the new ones from Chroma."""
         known = {pid: row for row, pid in enumerate(previous.ids)} if previous is not None else {}
         missing = [pid for pid in ids if pid not in known]
-        fetched: dict[str, list[float]] = {}
+        fetched: dict[str, np.ndarray] = {}
         dimensions = previous.matrix.shape[1] if previous is not None else None
         for start in range(0, len(missing), PAGE):
             batch = missing[start : start + PAGE]
             r = client.post(f"{self._base()}/collections/{cid}/get", json={"ids": batch, "include": ["embeddings"]})
             r.raise_for_status()
             page = r.json()
-            fetched.update(zip(page["ids"], page["embeddings"], strict=True))
-            dimensions = dimensions or (len(page["embeddings"][0]) if page["embeddings"] else None)
+            # float32 at once: as Python floats, Chroma's JSON numbers take about eight times the memory.
+            vectors = np.asarray(page["embeddings"], dtype=np.float32)
+            fetched.update(zip(page["ids"], vectors, strict=True))
+            dimensions = dimensions or (vectors.shape[1] if len(vectors) else None)
             if dimensions and len(ids) * dimensions > EXACT_MAX_VALUES:
                 return None
         if not ids or not dimensions:
