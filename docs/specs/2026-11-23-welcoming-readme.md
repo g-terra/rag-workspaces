@@ -1,7 +1,7 @@
 ---
 title: rewrite the README as a welcoming front page
 date: 2026-11-23
-pr: pending
+pr: "#115"
 status: in review
 areas: [docs]
 ---
