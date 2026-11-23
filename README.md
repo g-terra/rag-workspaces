@@ -21,6 +21,7 @@ The assignment brief's example endpoints map to these routes (no aliases, decisi
 
 - [Setup](docs/setup.md): from a clone to a first answer, models, people, troubleshooting
 - [Using the API](docs/api.md): authentication and examples for scripts and agents
+- [Tuning answer quality](docs/tuning.md): how to measure answers, recommended settings for local models, lessons
 - [Architecture](docs/architecture.md): components, workspaces, data flow, repo layout
 - [API schema](docs/api-schema.md): resources, routes and shapes
 - [Work breakdown](docs/work-breakdown.md): milestones and the four workstreams
