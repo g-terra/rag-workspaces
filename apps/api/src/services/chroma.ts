@@ -1,6 +1,15 @@
 import type { Config } from '../config.js';
 
 /**
+ * HNSW settings for every workspace collection. Chroma's defaults (ef_search 100, max_neighbors 16,
+ * ef_construction 100) found about 88% of the true top 20 on a workspace-wide search in our test, so
+ * good passages went missing. These found all of them. They apply when a collection is created, so an
+ * existing workspace gets them on its next reindex. `chroma_upsert.py` holds the same values
+ * (chroma.test.ts checks).
+ */
+export const COLLECTION_HNSW = { space: 'cosine', ef_construction: 200, ef_search: 400, max_neighbors: 32 };
+
+/**
  * The few Chroma operations the API does itself (decision 18: the API manages collections,
  * deletes vectors and reads chunks back by id; writing vectors and similarity search happen
  * inside the Langflow flows, because they need the embedding model).
@@ -19,12 +28,12 @@ export class ChromaService {
     return `ws_${slug}`;
   }
 
-  /** Create the collection if missing, with the same settings the ingest flow uses (cosine). */
+  /** Create the collection if missing, with the same settings the ingest flow uses. */
   async ensureCollection(name: string): Promise<void> {
     const res = await this.fetchFn(`${this.base}/collections`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, get_or_create: true, configuration: { hnsw: { space: 'cosine' } } }),
+      body: JSON.stringify({ name, get_or_create: true, configuration: { hnsw: COLLECTION_HNSW } }),
     });
     if (!res.ok)
       throw new Error(`Chroma: create collection ${name} failed: HTTP ${res.status} ${await res.text()}`);
