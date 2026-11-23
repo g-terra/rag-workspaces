@@ -1,8 +1,8 @@
 ---
 title: Retire the handover notes and mark merged specs as merged
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#99"
+status: in review
 areas: [docs]
 ---
 
