@@ -2,7 +2,7 @@
 title: Manage custom response styles in the admin UI
 date: 2026-11-23
 pr: "#114"
-status: in review
+status: merged
 areas: [admin, docs]
 ---
 
