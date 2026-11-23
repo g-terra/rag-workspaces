@@ -1,7 +1,7 @@
 ---
 title: Choose a response style when asking through MCP
 date: 2026-11-23
-pr: pending
+pr: "#111"
 status: in review
 areas: [mcp, docs]
 ---
