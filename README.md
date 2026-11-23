@@ -66,7 +66,8 @@ browser or tool doesn't open them (some Safari versions, older curl), add this l
 ```
 
 If port 80 is taken, set `PROXY_PORT` in `.env` (for example `8088`) and add the port to `KEYCLOAK_PUBLIC_URL`,
-`ADMIN_UI_URL` and `PUBLIC_API_URL` (`http://rag.localhost:8088`), then `docker compose up -d --build`. The
+`ADMIN_UI_URL`, `PUBLIC_API_URL` and `LANGFLOW_PUBLIC_URL` (`http://rag.localhost:8088`,
+`http://langflow.rag.localhost:8088`), then `docker compose up -d --build`. The
 "Also at" ports keep working either way; Keycloak's pages always show at `KEYCLOAK_PUBLIC_URL`.
 
 After signing in, the admin UI opens the workspace you used last (or your first one); the workspace
@@ -83,7 +84,11 @@ workspace (editors and admins) or across all of them (admins). "Settings" (admin
 name, description, chat model, reasoning effort and retrieval settings, with the providers and models read from
 `GET /v1/system`; it is also where you grant and remove other people's access to the workspace, start a
 reindex (the only way to change the embedding model) and delete the workspace. The API docs are linked
-from the top bar of every page.
+from the top bar of every page. The sidebar shows the release the UI was built from. "System" (admins) shows
+whether the stack is healthy, refreshed every 30 seconds: Postgres, ChromaDB, Langflow and Keycloak with
+their latency or error, each model provider and how many models it offers, and whether the default chat and
+embedding models are available (from `GET /v1/system`). It also links to the Langflow editor, the Keycloak
+admin console (sign in there with `KEYCLOAK_ADMIN` from `.env`, not your app login) and the Swagger docs.
 
 `docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
 

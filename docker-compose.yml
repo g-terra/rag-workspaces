@@ -212,6 +212,7 @@ services:
       # Same value the API checks token issuers against, so the UI signs in at the same Keycloak.
       args:
         KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://auth.rag.localhost}
+        LANGFLOW_PUBLIC_URL: ${LANGFLOW_PUBLIC_URL:-http://langflow.rag.localhost}
     restart: unless-stopped
     depends_on:
       api: { condition: service_healthy }

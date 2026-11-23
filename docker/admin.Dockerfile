@@ -7,6 +7,9 @@ COPY . .
 # Keycloak as the browser sees it; Vite bakes it into the bundle (apps/admin/src/auth/oidc.ts).
 ARG KEYCLOAK_PUBLIC_URL=http://auth.rag.localhost
 ENV VITE_KEYCLOAK_URL=$KEYCLOAK_PUBLIC_URL
+# Langflow as the browser sees it, for the link on the System page (apps/admin/src/system/tools.ts).
+ARG LANGFLOW_PUBLIC_URL=http://langflow.rag.localhost
+ENV VITE_LANGFLOW_URL=$LANGFLOW_PUBLIC_URL
 RUN pnpm install --frozen-lockfile
 RUN pnpm turbo run build --filter=@rag/admin...
 

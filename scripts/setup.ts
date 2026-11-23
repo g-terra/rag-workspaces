@@ -463,7 +463,7 @@ p.note(
   [
     `Admin UI           ${url('ADMIN_UI_URL', 'http://rag.localhost')}`,
     `API and Swagger    ${url('PUBLIC_API_URL', 'http://api.rag.localhost')}/docs`,
-    `Langflow editor    http://langflow.rag.localhost`,
+    `Langflow editor    ${url('LANGFLOW_PUBLIC_URL', 'http://langflow.rag.localhost')}`,
     `Keycloak console   ${url('KEYCLOAK_PUBLIC_URL', 'http://auth.rag.localhost')}/admin`,
     '',
     `Admin sign-in      ${env.RW_ADMIN_USERNAME} (password: RW_ADMIN_PASSWORD in .env)`,
