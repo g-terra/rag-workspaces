@@ -1,7 +1,7 @@
 ---
 title: run CI on the self-hosted runner
 date: 2026-11-23
-pr: pending
+pr: "#69"
 status: in review
 areas: [ci, docs]
 ---
