@@ -1,0 +1,2 @@
+Embeddings turn a passage of text into a list of numbers. Passages about similar things end up close
+together, so the nearest vectors to a question's embedding are the passages most likely to answer it.

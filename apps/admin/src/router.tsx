@@ -7,6 +7,7 @@ import { RootRedirect } from '@/routes/root-redirect';
 import { SignIn } from '@/routes/sign-in';
 import { WorkspaceHome } from '@/routes/workspace-home';
 import { WorkspaceLayout } from '@/routes/workspace-layout';
+import { Upload } from '@/routes/upload';
 import { Workspaces } from '@/routes/workspaces';
 
 export const router = createBrowserRouter([
@@ -20,11 +21,13 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <RootRedirect /> },
           { path: 'workspaces', element: <Workspaces /> },
-          // The upload and documents screens join as children of /w/:slug.
           {
             path: 'w/:slug',
             element: <WorkspaceLayout />,
-            children: [{ index: true, element: <WorkspaceHome /> }],
+            children: [
+              { index: true, element: <WorkspaceHome /> },
+              { path: 'upload', element: <Upload /> },
+            ],
           },
           { path: '*', element: <NotFound /> },
         ],

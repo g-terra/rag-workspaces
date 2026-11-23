@@ -2,10 +2,12 @@ import type { Me } from '@rag/shared';
 import type { User } from 'oidc-client-ts';
 import { createContext, use } from 'react';
 import type { ApiFetch } from '@/api/client';
+import type { TokenSource } from './authorized';
 
 export type MeUser = Extract<Me, { kind: 'user' }>;
 
-export interface AuthContextValue {
+/** `getToken`, `renewToken` and `endSession` are for requests `api` can't make (uploads, streams). */
+export interface AuthContextValue extends TokenSource {
   /** Null when signed out; undefined while the stored session is still being read. */
   user: User | null | undefined;
   /** The caller as the API sees them (name, isAdmin); null until loaded. */

@@ -6,11 +6,11 @@ import { AuthContext, type AuthContextValue, type MeUser } from './auth-context'
 import { userManager, type SignInState } from './oidc';
 import { isSessionRefused } from './renew-error';
 
-const api = createApiClient({
-  getToken: async () => (await currentUser())?.access_token ?? null,
-  // The token was refused, so the session is over: drop it and RequireAuth sends them to sign in.
-  onUnauthorized: () => void userManager.removeUser(),
-});
+const getToken = async () => (await currentUser())?.access_token ?? null;
+const renewToken = async () => (await renew())?.access_token ?? null;
+// The token was refused, so the session is over: drop it and RequireAuth sends them to sign in.
+const endSession = () => void userManager.removeUser();
+const api = createApiClient({ getToken, onUnauthorized: endSession });
 
 /** Reads the stored session, keeps it current as tokens renew or expire, and loads `GET /v1/me`. */
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -66,6 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       me,
       meError,
       api,
+      getToken,
+      renewToken,
+      endSession,
       signIn: (returnTo) => userManager.signinRedirect({ state: { returnTo } satisfies SignInState }),
       signOut: () => userManager.signoutRedirect(),
     }),
@@ -78,10 +81,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
  * The stored session, renewed first if its access token has already expired (after a reload, or when
  * the computer wakes from sleep before the renewal timer fires). Concurrent callers share one renewal.
  */
-let renewing: Promise<User | null> | null = null;
 async function currentUser(): Promise<User | null> {
   const stored = await userManager.getUser();
   if (!stored || !stored.expired) return stored;
+  return renew();
+}
+
+/** Renews the session now with Keycloak; null when it can't. Concurrent callers share one renewal. */
+let renewing: Promise<User | null> | null = null;
+function renew(): Promise<User | null> {
   renewing ??= userManager
     .signinSilent()
     .catch(async (err: unknown) => {

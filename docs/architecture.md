@@ -245,6 +245,6 @@ docker-compose.yml, turbo.json, pnpm-workspace.yaml, .env.example
 | Queue | pg-boss on Postgres (no Redis); live status from an in-process event emitter, since there is one API process |
 | App DB | Postgres + Drizzle ORM |
 | Transcription | faster-whisper ASR service + ffmpeg (optional profile) |
-| Admin UI | Vite + React, React Router, Tailwind CSS, shadcn/ui, TanStack Query, react-dropzone, oidc-client-ts, fetch-based SSE |
+| Admin UI | Vite + React, React Router, Tailwind CSS, shadcn/ui, TanStack Query, oidc-client-ts, fetch-based SSE |
 | Tests | Vitest, Testcontainers, Playwright, MSW |
 | CI | GitHub Actions |
