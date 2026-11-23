@@ -14,6 +14,7 @@ import { auth } from './auth/plugin.js';
 import type { Authenticator } from './auth/principal.js';
 import type { Config } from './config.js';
 import { errorHandler, notFoundHandler } from './errors.js';
+import { rateLimits } from './rate-limit.js';
 import type { ReadinessCheck } from './readiness.js';
 import { answerRoutes } from './routes/answers.js';
 import { apiKeyRoutes } from './routes/api-keys.js';
@@ -148,6 +149,7 @@ export async function buildApp({
   app.get('/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 
   await app.register(auth, { authenticators });
+  await app.register(rateLimits, { config });
   const usageLog = usage ?? (db ? new UsageLog(db, app.log) : undefined);
   if (usageLog) await app.register(usageLogging, { usage: usageLog });
   await app.register(healthRoutes, { checks, timeoutMs: config.READY_TIMEOUT_MS });

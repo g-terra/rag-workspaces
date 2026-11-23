@@ -26,6 +26,7 @@ export const answerRoutes: FastifyPluginAsyncZod<AnswerRoutesOptions> = async (a
   app.post(
     '/v1/workspaces/:slug/answers',
     {
+      config: { modelCall: true },
       schema: {
         ...common,
         summary: 'Ask a question',

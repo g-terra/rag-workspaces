@@ -153,6 +153,9 @@ services:
       DEFAULT_CHAT_MODEL: ${DEFAULT_CHAT_MODEL:-qwen2.5-7b-instruct}
       # Earlier turns of a conversation sent to the model with each new message.
       CHAT_HISTORY_TURNS: ${CHAT_HISTORY_TURNS:-10}
+      # Per person or API key, per minute: all /v1 requests, and those that run a model. 0 is off.
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-600}
+      RATE_LIMIT_MODEL_PER_MINUTE: ${RATE_LIMIT_MODEL_PER_MINUTE:-30}
       USAGE_QUESTION_RETENTION_DAYS: ${USAGE_QUESTION_RETENTION_DAYS:-90}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}

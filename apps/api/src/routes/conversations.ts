@@ -157,6 +157,7 @@ export const conversationRoutes: FastifyPluginAsyncZod<ConversationRoutesOptions
   app.post(
     '/v1/workspaces/:slug/conversations/:conversationId/messages',
     {
+      config: { modelCall: true },
       schema: {
         ...common,
         summary: 'Send a message',
