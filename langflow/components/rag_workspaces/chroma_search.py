@@ -12,7 +12,9 @@ rank in the exact top 5 out of its top 200 entirely. Only a collection too big t
 
 A question with several parts ("What is X, and how does Y work?") is searched part by part instead: each
 part gets its own fused ranking, and the parts take turns filling the results (`question_parts`,
-`interleave`), so a part with few words still gets its share of passages.
+`interleave`), so a part with few words still gets its share of passages. The whole question takes a turn too, after
+the parts: a part that leans on the one before ("…, and how many are there?") names no subject of its own, and the
+passage that answers it is found by the whole question's words.
 
 Two outputs: `passages` (a JSON object with text, score, document_id, page,
 start_seconds, filename, chunk_index per hit) and `context` (the same passages
@@ -126,15 +128,22 @@ def fuse(*rankings: list[str], k: int = RRF_K) -> list[str]:
 
 
 def interleave(rankings: list[list[str]]) -> list[str]:
-    """Take turns: the first of each ranking, then the second of each, …, skipping ids already taken."""
+    """Take turns: each ranking in order adds its best id not taken yet, until every ranking is used up."""
     out: list[str] = []
     seen: set[str] = set()
-    for row in range(max((len(r) for r in rankings), default=0)):
-        for ranking in rankings:
-            if row < len(ranking) and ranking[row] not in seen:
-                seen.add(ranking[row])
-                out.append(ranking[row])
-    return out
+    positions = [0] * len(rankings)
+    while True:
+        added = False
+        for n, ranking in enumerate(rankings):
+            while positions[n] < len(ranking) and ranking[positions[n]] in seen:
+                positions[n] += 1
+            if positions[n] < len(ranking):
+                seen.add(ranking[positions[n]])
+                out.append(ranking[positions[n]])
+                positions[n] += 1
+                added = True
+        if not added:
+            return out
 
 
 class VectorIndex:
@@ -291,14 +300,16 @@ class ChromaWorkspaceSearch(Component):
                 return self._cached
             r.raise_for_status()
             cid = r.json()["id"]
-            # Each part of a multi-part question on its own, by meaning and by words. Not the whole question
-            # as well: it leans to whichever part has more words, which is what splitting corrects. Fusing all
-            # parts' rankings together would favour passages that are middling for every part, so each part
-            # is fused on its own and the parts take turns.
-            queries = question_parts(self.search_query) or [self.search_query]
+            # Each part of a multi-part question on its own, by meaning and by words, then the whole question.
+            # The whole question leans to whichever part has more words, which is what splitting corrects, so it
+            # takes its turn after the parts rather than being fused into them; it is there for a part with no
+            # subject of its own. Fusing all rankings together would favour passages that are middling for
+            # every part, so each query is fused on its own and they take turns.
+            parts = question_parts(self.search_query)
+            queries = [*parts, self.search_query] if parts else [self.search_query]
             embeddings = [self.embedding.embed_query(q) for q in queries]
             # Scores are always against the whole query, so they mean the same with or without parts.
-            query_embedding = embeddings[0] if len(queries) == 1 else self.embedding.embed_query(self.search_query)
+            query_embedding = embeddings[-1]
             by_meaning = self._vector_ranking(
                 client, cid, embeddings, max(CANDIDATES, self.top_k), self.folder or None
             )
