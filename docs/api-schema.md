@@ -144,7 +144,7 @@ Messages use the same citation shape: `{ "id": "msg_…", "conversationId": "cnv
   "tags": ["rag"], "createdAt": "…", "updatedAt": "…" }
 ```
 
-`status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit return `413`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. `folderId` is `null` for a document at the top level.
+`status`: `queued`, `transcribing` (video and audio only), `processing`, `ready`, `failed`. A failed document keeps its `error` text and can be retried with reindex. Uploads over the size limit (`MAX_UPLOAD_BYTES`, 2 GB by default) return `413` with the limit in `detail`, unsupported types `415`, empty files `400`; one bad file rejects the whole request. `folderId` is `null` for a document at the top level.
 
 The events stream (`text/event-stream`, read with `fetch` since `EventSource` can't send `Authorization`) sends:
 

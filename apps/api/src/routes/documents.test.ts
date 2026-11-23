@@ -167,6 +167,7 @@ describe.skipIf(!url)('documents (against TEST_DATABASE_URL)', () => {
   it('413 for a file over the limit', async () => {
     const res = await upload([{ name: 'big.txt', content: 'a'.repeat(250_000) }]);
     expect(res.statusCode).toBe(413);
+    expect(res.json().detail).toBe('"big.txt" is larger than the upload limit of 195 KB.');
   });
 
   it('readers can list and download but not upload or delete', async () => {

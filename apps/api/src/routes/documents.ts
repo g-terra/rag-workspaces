@@ -36,6 +36,17 @@ const DocParams = SlugParams.extend({ documentId: z.string() });
 const UploadQuery = z.object({ folderId: z.string().min(1).optional() });
 const BUSY = ['processing', 'transcribing'] as const;
 const common = { tags: ['documents'], security: [{ bearerAuth: [] }] };
+/** 2147483648 → "2 GB", 524288000 → "500 MB": the limit as people say it. */
+function formatBytes(n: number): string {
+  const units = ['bytes', 'KB', 'MB', 'GB'];
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${Number.isInteger(n) ? n : Math.round(n)} ${units[i]}`;
+}
+
 const MIME: Record<DocumentRow['type'], string> = {
   pdf: 'application/pdf',
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -120,13 +131,19 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
             file = await storage.stage(workspace.slug, part.file);
           } catch (err) {
             if (err instanceof FileTooLarge || part.file.truncated) {
-              throw new HttpProblem(413, `"${fileName}" is larger than ${config.MAX_UPLOAD_BYTES} bytes.`);
+              throw new HttpProblem(
+                413,
+                `"${fileName}" is larger than the upload limit of ${formatBytes(config.MAX_UPLOAD_BYTES)}.`,
+              );
             }
             throw err;
           }
           if (part.file.truncated) {
             await storage.discard(file);
-            throw new HttpProblem(413, `"${fileName}" is larger than ${config.MAX_UPLOAD_BYTES} bytes.`);
+            throw new HttpProblem(
+              413,
+              `"${fileName}" is larger than the upload limit of ${formatBytes(config.MAX_UPLOAD_BYTES)}.`,
+            );
           }
           if (file.sizeBytes === 0) {
             await storage.discard(file);
