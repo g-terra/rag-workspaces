@@ -1,7 +1,7 @@
 ---
 title: Start times on passages and citations
 date: 2026-11-23
-pr: pending
+pr: "#72"
 status: in review
 areas: [api, flows, langflow-client, mcp, docs]
 ---
