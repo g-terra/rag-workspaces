@@ -84,12 +84,6 @@ export const TOUR_STEPS: TourStep[] = [
       'you choose, as a reader or an editor.',
   },
   {
-    id: 'system',
-    target: 'system',
-    title: 'System',
-    body: 'The version, the health of each service and links to the tools behind the API.',
-  },
-  {
     id: 'help',
     target: 'help',
     title: 'Help is here',

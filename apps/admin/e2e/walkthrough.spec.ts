@@ -10,21 +10,40 @@ test.afterEach(async ({ page }) => {
   expect([204, 404]).toContain(res.status());
 });
 
+// What an admin sees inside a workspace, in order.
+const adminInWorkspace = [
+  'Welcome to rag-workspaces',
+  'Your workspaces',
+  'Upload material',
+  'Documents',
+  'Playground',
+  'Conversations',
+  'Usage',
+  'Workspace settings',
+  'All workspaces',
+  'API keys',
+  'Help is here',
+];
+
 test('opens on first sign-in, is remembered once skipped, and replays from Help', async ({ page }) => {
   await signIn(page, '/workspaces', { skipTour: false });
 
-  // First sign-in in this browser: the welcome opens by itself.
+  // First sign-in in this browser: the welcome opens by itself, with Next focused.
   const welcome = page.getByRole('dialog', { name: 'Welcome to rag-workspaces' });
   await expect(welcome).toBeVisible();
+  await expect(welcome.getByRole('button', { name: 'Next' })).toBeFocused();
   await welcome.getByRole('button', { name: 'Next' }).click();
 
-  // The next step points at the workspace switcher and outlines it.
-  await expect(page.getByRole('dialog', { name: 'Your workspaces' })).toBeVisible();
+  // The next step points at the workspace switcher and outlines it. A click elsewhere doesn't close it.
+  const switcherStep = page.getByRole('dialog', { name: 'Your workspaces' });
+  await expect(switcherStep).toBeVisible();
   await expect(page.getByRole('button', { name: 'Switch workspace' })).toHaveAttribute(
     'data-tour-active',
     '',
   );
-  await page.getByRole('button', { name: 'Skip tour' }).click();
+  await page.getByRole('main').click({ position: { x: 400, y: 400 } });
+  await expect(switcherStep).toBeVisible();
+  await switcherStep.getByRole('button', { name: 'Skip tour' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('[data-tour-active]')).toHaveCount(0);
 
@@ -42,23 +61,20 @@ test('opens on first sign-in, is remembered once skipped, and replays from Help'
   await page.goto(`/w/${slug}`);
   await page.getByRole('button', { name: 'Help' }).click();
   await page.getByRole('button', { name: 'Show the walkthrough' }).click();
-  await expect(page.getByRole('dialog', { name: 'Welcome to rag-workspaces' })).toBeVisible();
-  const titles: string[] = [];
-  for (;;) {
-    const step = page.getByRole('dialog');
-    const done = step.getByRole('button', { name: 'Done' });
-    if (await done.isVisible()) {
-      titles.push((await step.getByRole('heading').textContent()) ?? '');
-      await done.click();
-      break;
-    }
-    const heading = step.getByRole('heading');
-    titles.push((await heading.count()) ? ((await heading.textContent()) ?? '') : 'Welcome');
-    await step.getByRole('button', { name: 'Next' }).click();
+
+  for (const [i, title] of adminInWorkspace.entries()) {
+    const step = page.getByRole('dialog', { name: title });
+    await expect(step).toBeVisible();
+    await expect(step.getByTestId('tour-position')).toHaveText(`${i + 1} of ${adminInWorkspace.length}`);
+    const last = i === adminInWorkspace.length - 1;
+    await step.getByRole('button', { name: last ? 'Done' : 'Next' }).click();
   }
-  expect(titles).toEqual(
-    expect.arrayContaining(['Upload material', 'Playground', 'API keys', 'Help is here']),
-  );
-  expect(titles.at(-1)).toBe('Help is here');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+
+  // Escape also ends it.
+  await page.getByRole('button', { name: 'Help' }).click();
+  await page.getByRole('button', { name: 'Show the walkthrough' }).click();
+  await expect(page.getByRole('dialog', { name: 'Welcome to rag-workspaces' })).toBeVisible();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
