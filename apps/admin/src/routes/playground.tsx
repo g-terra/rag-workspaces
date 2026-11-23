@@ -95,7 +95,9 @@ function Ask() {
         {ask.error && ask.status === 'failed' && <Failure error={ask.error} onRetry={submit} />}
 
         {ask.answer?.grounded === false ? (
-          <NotFound slug={w.slug} question={ask.question} />
+          <NotFound slug={w.slug} question={ask.question}>
+            <AnswerFeedback answer={ask.answer} onRated={ask.rated} />
+          </NotFound>
         ) : (
           (streaming || ask.text !== '' || ask.status === 'stopped') && (
             <div className="flex flex-wrap items-start gap-4">
@@ -151,8 +153,8 @@ function AnswerFeedback({ answer, onRated }: { answer: Answer; onRated(answer: A
   const feedback = useAnswerFeedback(w.slug);
   const [comment, setComment] = useState('');
   const rating = answer.feedback?.rating ?? null;
-  const rate = (next: Rating, withComment = comment) =>
-    feedback.mutate({ answerId: answer.id, rating: next, comment: withComment }, { onSuccess: onRated });
+  const rate = (next: Rating) =>
+    feedback.mutate({ answerId: answer.id, rating: next, comment }, { onSuccess: onRated });
 
   return (
     <div className="flex flex-col gap-2.5 border-t pt-3.5">
@@ -229,8 +231,9 @@ function Thumb({
       disabled={busy}
       onClick={onClick}
       className={cn(
-        'hover:bg-accent inline-flex size-9 items-center justify-center rounded-lg border disabled:opacity-50',
-        pressed && tone,
+        'inline-flex size-9 items-center justify-center rounded-lg border disabled:opacity-50',
+        // Hovering the chosen thumb must not make it look unchosen.
+        pressed ? tone : 'hover:bg-accent',
       )}
     >
       {children}
@@ -301,25 +304,32 @@ function Failure({ error, onRetry }: { error: AnswerError; onRetry(): void }) {
   );
 }
 
-/** Nothing in the workspace was relevant enough, so no model was called (`grounded: false`). */
-function NotFound({ slug, question }: { slug: string; question: string }) {
+/**
+ * Nothing in the workspace was relevant enough, so no model was called (`grounded: false`). The API
+ * still stored the answer, so it can be rated: a question the workspace should have covered is exactly
+ * the one worth flagging.
+ */
+function NotFound({ slug, question, children }: { slug: string; question: string; children: ReactNode }) {
   return (
-    <div className="bg-card flex flex-wrap items-start gap-4 rounded-xl border p-7">
-      <span className="bg-accent inline-flex size-10 flex-none items-center justify-center rounded-lg">
-        <Search className="size-5" />
-      </span>
-      <div className="flex-[1_1_300px]">
-        <h2 className="mb-1.5 text-[15px] font-semibold">Not found in this workspace</h2>
-        <p className="text-muted-foreground mb-3.5 text-sm leading-relaxed">
-          No passage was close enough to “{question}”, so no answer was generated. Upload material that covers
-          it, or ask in the words the material uses.
-        </p>
-        <Button variant="outline" size="sm" asChild>
-          <Link to={`/w/${slug}/upload`}>
-            <Upload /> Upload material
-          </Link>
-        </Button>
+    <div className="bg-card flex flex-col gap-4 rounded-xl border p-7">
+      <div className="flex flex-wrap items-start gap-4">
+        <span className="bg-accent inline-flex size-10 flex-none items-center justify-center rounded-lg">
+          <Search className="size-5" />
+        </span>
+        <div className="flex-[1_1_300px]">
+          <h2 className="mb-1.5 text-[15px] font-semibold">Not found in this workspace</h2>
+          <p className="text-muted-foreground mb-3.5 text-sm leading-relaxed">
+            No passage was close enough to “{question}”, so no answer was generated. Upload material that
+            covers it, or ask in the words the material uses.
+          </p>
+          <Button variant="outline" size="sm" asChild>
+            <Link to={`/w/${slug}/upload`}>
+              <Upload /> Upload material
+            </Link>
+          </Button>
+        </div>
       </div>
+      {children}
     </div>
   );
 }

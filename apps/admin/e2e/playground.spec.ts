@@ -52,7 +52,9 @@ test.afterEach(async ({ page }) => {
   }
 });
 
-test('streams an answer with its sources, takes feedback, and stops on request', async ({ page }) => {
+test('streams an answer with its sources, takes feedback, says when nothing matches, and stops', async ({
+  page,
+}) => {
   // Signing in, ingesting two documents and three answers take longer than the default budget.
   test.setTimeout(240_000);
   await signIn(page, '/workspaces');
@@ -120,4 +122,7 @@ test('streams an answer with its sources, takes feedback, and stops on request',
     timeout: 60_000,
   });
   await expect(page.getByRole('link', { name: 'Upload material' })).toBeVisible();
+  // The API stored that answer too, so it can be rated like any other.
+  await page.getByRole('button', { name: 'Helpful', exact: true }).click();
+  await expect(page.getByText('Thanks, feedback saved')).toBeVisible();
 });
