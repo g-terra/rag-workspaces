@@ -5,6 +5,10 @@ passages' text and file names), and the two rankings are fused with reciprocal r
 rare exact terms (a name, a code, a symbol) that similarity ranks low; meaning alone finds paraphrases.
 `score` stays the cosine similarity, so `min_score` means what it always did.
 
+A question with several parts ("What is X, and how does Y work?") is searched part by part instead: each
+part gets its own fused ranking, and the parts take turns filling the results (`question_parts`,
+`interleave`), so a part with few words still gets its share of passages.
+
 Two outputs: `passages` (a JSON object with text, score, document_id, page,
 start_seconds, filename, chunk_index per hit) and `context` (the same passages
 formatted for a prompt, each tagged [n] so the model can cite them).
@@ -72,6 +76,34 @@ class KeywordIndex:
         return [self.ids[i] for i in best]
 
 
+# Words that start a new question after "and": "…, and how does …", "… and what is …".
+_STARTS = (
+    "what|how|why|when|where|which|who|whom|whose|is|are|was|were|does|do|did|can|could|should|would|will|"
+    "explain|describe|list|name|give|define|compare|outline|state"
+)
+_AND_NEW_QUESTION = re.compile(rf"\s*,?\s*\band\s+(?=(?:{_STARTS})\b)", re.IGNORECASE)
+_QUESTION = re.compile(r"[^?]*\?")
+MAX_PARTS = 4
+
+
+def question_parts(query: str) -> list[str]:
+    """The separate questions in the last line of a query, or [] when it asks one thing.
+
+    Only the last line: a chat search puts the previous question on the line before it, as context.
+    Splits on question marks ("What is X? How does Y work?") and on "and" before a question word or an
+    instruction ("What is X and how does Y work", "Define X and explain Y"); each part needs two words.
+    """
+    line = (query or "").strip().splitlines()[-1].strip() if (query or "").strip() else ""
+    asked = [q.strip() for q in _QUESTION.findall(line)]
+    rest = line[sum(len(q) for q in _QUESTION.findall(line)):].strip() if asked else line
+    pieces = (asked + ([rest] if rest else [])) if len(asked) > 1 or (asked and rest) else [line]
+    parts = []
+    for piece in pieces:
+        parts += [p.strip(" ,;") for p in _AND_NEW_QUESTION.split(piece)]
+    parts = [p for p in parts if len(words(p)) >= 2]
+    return parts[:MAX_PARTS] if len(parts) > 1 else []
+
+
 def fuse(*rankings: list[str], k: int = RRF_K) -> list[str]:
     """Reciprocal rank fusion: each list gives 1 / (k + rank) to its ids; best total first, ties by first seen."""
     totals: dict[str, float] = {}
@@ -79,6 +111,18 @@ def fuse(*rankings: list[str], k: int = RRF_K) -> list[str]:
         for rank, pid in enumerate(ranking, start=1):
             totals[pid] = totals.get(pid, 0.0) + 1.0 / (k + rank)
     return sorted(totals, key=lambda pid: totals[pid], reverse=True)
+
+
+def interleave(rankings: list[list[str]]) -> list[str]:
+    """Take turns: the first of each ranking, then the second of each, …, skipping ids already taken."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for row in range(max((len(r) for r in rankings), default=0)):
+        for ranking in rankings:
+            if row < len(ranking) and ranking[row] not in seen:
+                seen.add(ranking[row])
+                out.append(ranking[row])
+    return out
 
 
 # Keyword indexes by (Chroma URL, collection id), kept across runs in this Langflow worker.
@@ -152,9 +196,16 @@ class ChromaWorkspaceSearch(Component):
                 return self._cached
             r.raise_for_status()
             cid = r.json()["id"]
-            query_embedding = self.embedding.embed_query(self.search_query)
+            # Each part of a multi-part question on its own, by meaning and by words. Not the whole question
+            # as well: it leans to whichever part has more words, which is what splitting corrects. Fusing all
+            # parts' rankings together would favour passages that are middling for every part, so each part
+            # is fused on its own and the parts take turns.
+            queries = question_parts(self.search_query) or [self.search_query]
+            embeddings = [self.embedding.embed_query(q) for q in queries]
+            # Scores are always against the whole query, so they mean the same with or without parts.
+            query_embedding = embeddings[0] if len(queries) == 1 else self.embedding.embed_query(self.search_query)
             body = {
-                "query_embeddings": [query_embedding],
+                "query_embeddings": embeddings,
                 "n_results": max(CANDIDATES, self.top_k),
                 "include": ["distances"],
             }
@@ -162,11 +213,13 @@ class ChromaWorkspaceSearch(Component):
                 body["where"] = {"folder": self.folder}
             r = client.post(f"{self._base()}/collections/{cid}/query", json=body)
             r.raise_for_status()
-            by_meaning = r.json()["ids"][0]
-            by_words = self._keyword_index(client, cid).search(
-                self.search_query, max(CANDIDATES, self.top_k), self.folder or None
-            )
-            best = fuse(by_meaning, by_words)[: self.top_k]
+            by_meaning = r.json()["ids"]
+            index = self._keyword_index(client, cid)
+            per_query = [
+                fuse(meaning, index.search(q, max(CANDIDATES, self.top_k), self.folder or None))
+                for q, meaning in zip(queries, by_meaning, strict=True)
+            ]
+            best = interleave(per_query)[: self.top_k]
             if not best:
                 self._cached = []
                 return self._cached

@@ -517,6 +517,46 @@ async function main() {
     },
   );
 
+  await step('a question about two topics searches each part, so both topics are found', async () => {
+    // Ten notes match the first part's many words; one note answers the second part. Searched as one
+    // query, the second topic's few words are outweighed and its note misses the top 5.
+    const form = new FormData();
+    for (let i = 0; i < 10; i++) {
+      form.append(
+        'files',
+        new Blob([
+          `Schedules ${i}: gradient descent learning rate momentum warmup decay schedules in practice.`,
+        ]),
+        `schedules-${i}.md`,
+      );
+    }
+    form.append(
+      'files',
+      new Blob(['The perceptron rule adds the misclassified input to its weights.']),
+      'perceptron.md',
+    );
+    const { data } = (await call(token, 'POST', `/v1/workspaces/${slug}/documents`, form)) as {
+      data: { document: Doc }[];
+    };
+    await waitUntilReady(
+      token,
+      slug,
+      data.map((d) => d.document.id),
+    );
+    const perceptron = data.find((d) => d.document.fileName === 'perceptron.md')!.document.id;
+    const question =
+      'Which gradient descent learning rate momentum warmup decay schedules work, and how does the perceptron update its weights?';
+    const found = await call(
+      token,
+      'GET',
+      `/v1/workspaces/${slug}/passages?query=${encodeURIComponent(question)}&limit=5&minScore=0`,
+    );
+    expect(
+      found.data.some((p: { documentId: string }) => p.documentId === perceptron),
+      `the second topic's passage is not in the top 5: ${JSON.stringify(found.data.map((p: { text: string }) => p.text))}`,
+    );
+  });
+
   await step('deleted the workspace, its Chroma collection is gone', async () => {
     await call(token, 'DELETE', `/v1/workspaces/${slug}`);
     const res = await chroma(`/collections/${collection}`);
