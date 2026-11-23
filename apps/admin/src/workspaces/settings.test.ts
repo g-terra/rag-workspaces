@@ -16,6 +16,7 @@ import {
   reindexErrorMessage,
   saveErrorMessage,
   validateSettings,
+  reasoningDefaultNote,
 } from './settings';
 
 const workspace = (over: Partial<Workspace> = {}): Workspace => ({
@@ -176,6 +177,17 @@ describe('validateSettings', () => {
   it('refuses a model with no provider, for the same reason', () => {
     expect(errors({ ...formFor(workspace()), chatModel: 'hosted-a' })).toEqual({
       chatProvider: 'Pick the provider this model belongs to.',
+    });
+  });
+
+  it('sends a picked reasoning effort, and null when it goes back to the default', () => {
+    expect(ok({ ...formFor(workspace()), reasoningEffort: 'none' })).toEqual({
+      settings: { reasoningEffort: 'none' },
+    });
+    const set = workspace({ settings: { ...workspace().settings, reasoningEffort: 'low' } });
+    expect(formFor(set).reasoningEffort).toBe('low');
+    expect(ok({ ...formFor(set), reasoningEffort: '' }, set)).toEqual({
+      settings: { reasoningEffort: null },
     });
   });
 
@@ -401,5 +413,17 @@ describe('reindexErrorMessage', () => {
 
   it('falls back to the cause', () => {
     expect(reindexErrorMessage(new Error('offline'))).toBe("Couldn't start the reindex: offline");
+  });
+});
+
+describe('reasoningDefaultNote', () => {
+  it('names the default, or says nothing is sent when there is none', () => {
+    const none = system();
+    expect(reasoningDefaultNote(none)).toBe('Default: not sent, so the model decides.');
+    const set = system({
+      defaults: { ...none.defaults, workspace: { ...none.defaults.workspace, reasoningEffort: 'none' } },
+    });
+    expect(reasoningDefaultNote(set)).toBe('Default: none.');
+    expect(reasoningDefaultNote(undefined)).toBe('Default: from the API’s environment.');
   });
 });

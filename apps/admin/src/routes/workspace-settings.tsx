@@ -25,6 +25,8 @@ import {
   validateSettings,
   type SettingsField,
   type SettingsForm,
+  REASONING_EFFORTS,
+  reasoningDefaultNote,
 } from '@/workspaces/settings';
 
 const selectClass =
@@ -245,6 +247,27 @@ function SettingsPage({ workspace }: { workspace: Workspace }) {
                 )}
               </Field>
             </div>
+
+            <Field
+              id="ws-reasoning"
+              label="Reasoning effort"
+              hint={`How long a thinking model (such as Qwen 3) reasons before it answers; "none" answers at once. Sent to LM Studio and OpenAI only. ${reasoningDefaultNote(system.data)}`}
+            >
+              <select
+                id="ws-reasoning"
+                aria-describedby="ws-reasoning-note"
+                className={selectClass}
+                value={form.reasoningEffort}
+                onChange={(e) => set('reasoningEffort')(e.target.value)}
+              >
+                <option value="">Default</option>
+                {REASONING_EFFORTS.map((effort) => (
+                  <option key={effort} value={effort}>
+                    {effort}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
             {warning && (
               <p

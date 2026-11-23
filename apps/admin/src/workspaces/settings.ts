@@ -2,6 +2,7 @@ import {
   ChatProvider,
   CreateWorkspace,
   EmbeddingProvider,
+  ReasoningEffort,
   WorkspaceSettings,
   type ProviderStatus,
   type SystemStatus,
@@ -24,6 +25,7 @@ export interface SettingsForm {
   chunkOverlap: string;
   topK: string;
   minScore: string;
+  reasoningEffort: string;
 }
 export type SettingsField = keyof SettingsForm;
 
@@ -46,6 +48,7 @@ const FIELDS: SettingsField[] = [
   'chunkOverlap',
   'topK',
   'minScore',
+  'reasoningEffort',
 ];
 
 /** The workspace as the form shows it. A number is rendered the way the input will hand it back. */
@@ -61,6 +64,7 @@ export function formFor(w: Workspace): SettingsForm {
     chunkOverlap: text(s.chunkOverlap),
     topK: text(s.topK),
     minScore: text(s.minScore),
+    reasoningEffort: s.reasoningEffort ?? '',
   };
 }
 
@@ -146,6 +150,10 @@ export function validateSettings(form: SettingsForm, w: Workspace): Validated {
         break;
       case 'chatModel':
         settings.chatModel = chatModel;
+        break;
+      case 'reasoningEffort':
+        // A select, so the value is one of the options; '' is the default.
+        settings.reasoningEffort = ReasoningEffort.safeParse(form.reasoningEffort).data ?? null;
         break;
       default:
         settings[field] = numbers[field];
@@ -273,6 +281,16 @@ type Defaulted = keyof SystemStatus['defaults']['workspace'];
 /** The placeholder of an empty field: the value it falls back to, or just "Default" when unknown. */
 export function defaultPlaceholder(system: SystemStatus | undefined, field: Defaulted): string {
   return system ? `Default: ${system.defaults.workspace[field]}` : 'Default';
+}
+
+/** The reasoning efforts a workspace can pick, in order. */
+export const REASONING_EFFORTS = ReasoningEffort.options;
+
+/** What an empty reasoning effort means: the `.env` default, or nothing sent at all. */
+export function reasoningDefaultNote(system: SystemStatus | undefined): string {
+  if (!system) return 'Default: from the API’s environment.';
+  const effort = system.defaults.workspace.reasoningEffort;
+  return effort ? `Default: ${effort}.` : 'Default: not sent, so the model decides.';
 }
 
 /** The chat model an empty provider uses, for the model field's placeholder; null once a provider is picked. */
