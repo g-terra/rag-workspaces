@@ -2,7 +2,7 @@
 title: Chat mode in the admin playground
 date: 2026-11-23
 pr: "#59"
-status: in review
+status: merged
 areas: [admin]
 ---
 

@@ -2,7 +2,7 @@
 title: keep the search cache across Langflow runs
 date: 2026-11-23
 pr: "#90"
-status: in review
+status: merged
 areas: [flows, langflow, docs]
 ---
 

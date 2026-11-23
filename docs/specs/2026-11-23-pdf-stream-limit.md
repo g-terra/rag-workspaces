@@ -2,7 +2,7 @@
 title: Read PDF pages with very long content streams
 date: 2026-11-23
 pr: "#79"
-status: in review
+status: merged
 areas: [flows, langflow]
 ---
 

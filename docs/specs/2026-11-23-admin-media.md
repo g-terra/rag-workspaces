@@ -2,7 +2,7 @@
 title: Video and audio in the admin UI
 date: 2026-11-23
 pr: "#73"
-status: in review
+status: merged
 areas: [admin, docs]
 ---
 

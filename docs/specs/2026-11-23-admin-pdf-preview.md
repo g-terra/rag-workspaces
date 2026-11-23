@@ -2,7 +2,7 @@
 title: preview PDFs in the app, on the cited page
 date: 2026-11-23
 pr: "#75"
-status: in review
+status: merged
 areas: [admin]
 ---
 

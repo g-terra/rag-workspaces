@@ -2,7 +2,7 @@
 title: read fullwidth 【n】 citations as citation chips
 date: 2026-11-23
 pr: "#77"
-status: in review
+status: merged
 areas: [admin]
 ---
 

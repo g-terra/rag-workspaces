@@ -2,7 +2,7 @@
 title: limit search, answers and chat to one folder
 date: 2026-11-23
 pr: "#50"
-status: in review
+status: merged
 areas: [api, docs]
 ---
 

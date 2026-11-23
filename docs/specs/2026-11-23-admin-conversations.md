@@ -2,7 +2,7 @@
 title: The conversations screen in the admin UI
 date: 2026-11-23
 pr: "#64"
-status: in review
+status: merged
 areas: [admin]
 ---
 

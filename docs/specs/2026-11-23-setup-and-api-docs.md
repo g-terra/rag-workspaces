@@ -2,7 +2,7 @@
 title: setup guide and API usage guide
 date: 2026-11-23
 pr: "#52"
-status: in review
+status: merged
 areas: [docs]
 ---
 

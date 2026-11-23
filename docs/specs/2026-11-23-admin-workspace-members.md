@@ -2,7 +2,7 @@
 title: Workspace members and deletion in the admin UI
 date: 2026-11-23
 pr: "#62"
-status: in review
+status: merged
 areas: [admin]
 ---
 

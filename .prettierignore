@@ -6,3 +6,4 @@ spike/
 docs/
 *.md
 flows/
+.release-please-manifest.json

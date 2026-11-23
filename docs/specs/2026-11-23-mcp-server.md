@@ -2,7 +2,7 @@
 title: MCP server for agents
 date: 2026-11-23
 pr: "#51"
-status: in review
+status: merged
 areas: [mcp, docs]
 ---
 
