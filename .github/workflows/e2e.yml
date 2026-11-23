@@ -32,14 +32,11 @@ concurrency:
 jobs:
   e2e:
     name: Admin UI Playwright
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          # Per runner: the default (~/setup-pnpm) is shared by every runner on the machine.
-          dest: ${{ runner.temp }}/setup-pnpm
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc

@@ -95,11 +95,7 @@ pnpm e2e              # admin UI Playwright tests on that same stack (Docker + C
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same six checks on every pull request. Run them before you
-push. Workflows run on the owner's self-hosted runners (one Mac, four runners): light jobs on
-`runs-on: rw-light` (any runner, in parallel), smoke and e2e on `runs-on: self-hosted` (one runner, so
-only one smoke stack runs at a time). Jobs must not assume a Linux VM (no job `services:`), must not
-share per-user paths between runners (pnpm goes to `runner.temp`), and must not touch a dev stack on the
-same machine: their compose projects are `rw-ci` (image build) and `rag-workspaces-smoke` (smoke and e2e). The smoke test (`.github/workflows/smoke.yml`) runs on pull requests that touch the stack
+push. The smoke test (`.github/workflows/smoke.yml`) runs on pull requests that touch the stack
 (`apps/api`, `packages`, `flows`, `langflow`, `docker`, the compose files) and nightly on `main`; run
 it locally before pushing such a change. `pnpm smoke --keep` leaves its stack running on ports 13000
 (API), 18080 (admin UI) and 18081 (Keycloak); the login is in `.env.smoke`.

@@ -8,7 +8,6 @@ import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { planUp } from './plan.ts';
 
 const root = new URL('../../', import.meta.url);
 const envFile = new URL('.env.smoke', root);
@@ -94,36 +93,18 @@ export function compose(args: string[], opts: { allowFail?: boolean; capture?: b
   return { status: res.status ?? 1, stdout: res.stdout ?? '' };
 }
 
-/**
- * True when the smoke project has containers or volumes, found by compose's project label rather than
- * through `compose`, which can't run without `.env.smoke`.
- */
-function leftovers() {
-  const label = `label=com.docker.compose.project=${PROJECT}`;
-  const ids = (kind: 'ps' | 'volume') =>
-    spawnSync(
-      'docker',
-      kind === 'ps'
-        ? ['ps', '--all', '--quiet', '--filter', label]
-        : ['volume', 'ls', '--quiet', '--filter', label],
-      {
-        encoding: 'utf8',
-      },
-    ).stdout?.trim() ?? '';
-  return ids('ps') !== '' || ids('volume') !== '';
+/** True when the smoke project has containers (running or not). */
+function stackExists() {
+  return (
+    existsSync(envFile) &&
+    compose(['ps', '--all', '--quiet'], { capture: true, allowFail: true }).stdout.trim() !== ''
+  );
 }
 
 export function up() {
   // A fresh file for every new stack, so it always matches the current .env.example. A running stack
   // keeps its file: its databases were created with those passwords.
-  const plan = planUp({ envFile: existsSync(envFile), leftovers: leftovers() });
-  if (plan === 'reset') {
-    console.log(
-      'Removing a smoke stack left without its .env.smoke (its databases need the lost passwords).',
-    );
-    down();
-  }
-  if (plan !== 'reuse') {
+  if (!stackExists()) {
     writeEnvFile();
     console.log('Wrote .env.smoke (admin login: RW_ADMIN_USERNAME / RW_ADMIN_PASSWORD in it).');
   }
