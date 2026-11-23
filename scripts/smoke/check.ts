@@ -166,7 +166,12 @@ async function main() {
       ['langflow.rag.localhost', '/health_check', '"ok"'],
     ] as const;
     for (const [host, path, expected] of routes) {
-      const res = await viaProxy(host, path);
+      // Keycloak reports healthy a moment before it stops answering 503 ("Bootstrap in progress").
+      let res = await viaProxy(host, path);
+      for (let i = 0; i < 30 && (res.status === 502 || res.status === 503); i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        res = await viaProxy(host, path);
+      }
       expect(
         res.status === 200 && res.body.includes(expected),
         `${host}${path}: ${res.status} ${res.body.slice(0, 200)}`,
