@@ -1,7 +1,21 @@
-import type { Answer, PassageWithNeighbours } from '@rag/shared';
+import type { Answer, PassageSearchResult, PassageWithNeighbours } from '@rag/shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/auth/auth-context';
 import { feedbackBody, type Rating } from './feedback';
+import { searchPath } from './search';
+
+/**
+ * The passages that best match a query, with their scores and no model call. Idle until a search has
+ * been submitted, so typing in the box costs nothing.
+ */
+export function usePassageSearch(slug: string, query: string | null, limit: number) {
+  const { api } = useAuth();
+  return useQuery({
+    queryKey: ['workspaces', slug, 'passage-search', query, limit],
+    queryFn: async () => (await api<PassageSearchResult>(searchPath(slug, query!, limit))).data,
+    enabled: query !== null,
+  });
+}
 
 /** One passage with the passages around it, for a citation preview. Idle until a citation is opened. */
 export function usePassage(slug: string, passageId: string | null) {

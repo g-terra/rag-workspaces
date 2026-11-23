@@ -105,6 +105,31 @@ test('streams an answer with its sources, takes feedback, says when nothing matc
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'Playground' })).toBeVisible();
 
+  // Search mode: the same passages, scored, with no model call, and one opens.
+  await page.getByRole('tab', { name: 'Search' }).click();
+  await expect(page).toHaveURL(/mode=search/);
+  await page.getByLabel('Search passages').fill('retrieval');
+  await page.getByRole('button', { name: 'Search' }).click();
+  await expect(page.getByTestId('hit')).toHaveCount(1, { timeout: 30_000 });
+  await expect(page.getByText(/no model call$/)).toBeVisible();
+  await expect(page.getByTestId('hit')).toContainText('retrieval-notes');
+  await page.getByRole('button', { name: /^retrieval-notes · passage/ }).click();
+  await expect(page.getByRole('dialog').getByTestId('passage-text')).toContainText(
+    'Retrieval-augmented generation',
+  );
+  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+
+  // A query nothing is close to says so, rather than showing an empty list.
+  await page.getByLabel('Search passages').fill('Mongolian basketball referee');
+  await page.getByRole('button', { name: 'Search' }).click();
+  await expect(page.getByRole('heading', { name: 'Nothing matched' })).toBeVisible({ timeout: 30_000 });
+
+  // Asking again is a tab away, and the mode survives a reload.
+  await page.reload();
+  await expect(page.getByRole('tab', { name: 'Search' })).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('tab', { name: 'Ask' }).click();
+  await expect(page.getByLabel('Question')).toBeVisible();
+
   // Stop aborts the request. The route is held open rather than answered, so there is always a
   // request in flight to abort: letting the real answer race the click makes the test flaky.
   const answers = '**/v1/workspaces/*/answers';
