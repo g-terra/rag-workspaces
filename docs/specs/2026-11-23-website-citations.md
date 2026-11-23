@@ -1,8 +1,8 @@
 ---
 title: Link passages and citations to their web page
 date: 2026-11-23
-pr: pending
-status: proposed
+pr: "#120"
+status: merged
 areas: [api, mcp, docs]
 ---
 

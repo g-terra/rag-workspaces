@@ -1,11 +1,12 @@
 import type { Document } from '@rag/shared';
-import { Search, Upload } from 'lucide-react';
+import { ExternalLink, Globe, Search, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { DocumentPreviewDialog, type PreviewTarget } from '@/components/document-preview-dialog';
 import { ErrorState, Loading, Notice } from '@/components/states';
 import { StatusBadge } from '@/components/status-badge';
 import { TopBar } from '@/components/top-bar';
+import { AddWebsiteDialog, Websites } from '@/components/websites';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ import {
 } from '@/documents/queries';
 import { TranscriptView } from '@/documents/transcript-view';
 import { formatRelative } from '@/lib/dates';
+import { displayUrl } from '@/sites/sites';
 import { cn } from '@/lib/utils';
 import { useCurrentWorkspace } from '@/workspaces/current';
 
@@ -56,18 +58,25 @@ function Library() {
   const heading = useRef<HTMLHeadingElement>(null);
   // After a delete the panel's buttons are gone; keep focus in the list (or on the heading once empty).
   const focusList = () => (table.current ?? heading.current)?.focus();
+  const [adding, setAdding] = useState(false);
 
   return (
     <>
       <TopBar trail={[w.name, 'Documents']}>
         {canEdit && (
-          <Button size="sm" asChild>
-            <Link to={`/w/${w.slug}/upload`}>
-              <Upload /> Upload
-            </Link>
-          </Button>
+          <>
+            <Button size="sm" variant="outline" onClick={() => setAdding(true)}>
+              <Globe /> Add website
+            </Button>
+            <Button size="sm" asChild>
+              <Link to={`/w/${w.slug}/upload`}>
+                <Upload /> Upload
+              </Link>
+            </Button>
+          </>
         )}
       </TopBar>
+      {canEdit && <AddWebsiteDialog slug={w.slug} open={adding} onOpenChange={setAdding} />}
       <div className="flex w-full max-w-290 flex-col gap-6 px-6 pt-7 pb-12">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -110,6 +119,8 @@ function Library() {
           </div>
         </div>
 
+        <Websites slug={w.slug} canEdit={canEdit} />
+
         {documents.isPending && <Loading what="documents" />}
         {documents.isError && (
           <ErrorState
@@ -122,8 +133,11 @@ function Library() {
           (canEdit ? (
             <Notice
               title="No documents yet"
-              body="Upload PDF, DOCX, TXT or MD files, or video and audio, to fill this workspace."
+              body="Upload PDF, DOCX, TXT or MD files, or video and audio, or import a documentation website, to fill this workspace."
             >
+              <Button variant="outline" onClick={() => setAdding(true)}>
+                <Globe /> Add website
+              </Button>
               <Button asChild>
                 <Link to={`/w/${w.slug}/upload`}>
                   <Upload /> Upload files
@@ -161,8 +175,14 @@ function Library() {
                         <button
                           type="button"
                           aria-current={d.id === selectedId ? 'true' : undefined}
-                          className="text-left font-medium"
+                          className="inline-flex items-center gap-1.5 text-left font-medium"
                         >
+                          {d.type === 'web' && (
+                            <Globe
+                              className="text-muted-foreground size-3.5 shrink-0"
+                              aria-label="Web page"
+                            />
+                          )}
                           {d.title}
                         </button>
                       </td>
@@ -246,6 +266,17 @@ function DocumentDetail({
       <div>
         <p className="text-muted-foreground mb-1 text-xs">Selected document</p>
         <h2 className="text-base leading-snug font-semibold">{doc.title}</h2>
+        {doc.sourceUrl && (
+          <a
+            href={doc.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-muted-foreground mt-1 inline-flex max-w-full items-center gap-1 text-xs hover:underline"
+          >
+            <span className="truncate">{displayUrl(doc.sourceUrl)}</span>
+            <ExternalLink className="size-3 shrink-0" aria-hidden />
+          </a>
+        )}
       </div>
       <StatusBadge tone={doc.status} label={statusLabel(doc.status)} className="self-start" />
       {doc.status === 'failed' && doc.error && (
