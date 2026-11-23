@@ -18,6 +18,7 @@ import { contextText, searchSources, type SourceHit } from './composite-search.j
 import { normalise, resolveHits, retrieve, searchTweaks } from './passages.js';
 import { chatEndpoint, ProviderNotConfigured, type ChatEndpoint } from './providers.js';
 import { withWorkspaceKeys } from './provider-keys.js';
+import { isRefusal } from './refusal.js';
 import { composeSystemPrompt } from './styles.js';
 
 /** The reply when nothing in the workspace is relevant enough. The model is not asked. */
@@ -136,8 +137,9 @@ type Generation = {
  * 2. Otherwise run `rw-answer` (or `rw-chat` with history), which searches again with the
  *    same settings, builds the prompt and calls the workspace's chat model. Its citations
  *    output is exactly the passages the model saw.
- * 3. The reply is grounded only if it cites one of those passages (`citesAny`): passages can
- *    score well and still not hold the answer, and then the model says so without citing.
+ * 3. The reply is grounded only if it cites one of those passages (`citesAny`) and is not a refusal
+ *    (`isRefusal`): passages can score well and still not hold the answer, and then the model says so,
+ *    sometimes citing them anyway.
  *
  * Never throws for a failed run: the failure comes back in the result, so callers can store it.
  */
@@ -240,10 +242,13 @@ export class Generator {
       return {
         status: 'complete',
         text,
-        grounded: citesAny(
-          text,
-          cited.map((p) => p.rank),
-        ),
+        // A refusal that cites its passages anyway still rests on nothing (isRefusal).
+        grounded:
+          !isRefusal(text) &&
+          citesAny(
+            text,
+            cited.map((p) => p.rank),
+          ),
         citations: cited.map((p) => ({
           rank: p.rank,
           workspace: p.workspace,
