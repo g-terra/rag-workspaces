@@ -1,15 +1,28 @@
 /** What the playground is doing, kept in the URL as `?mode=` so a tab can be linked to. */
 export type Mode = 'ask' | 'search' | 'chat';
 
-export const MODES: [Mode, string][] = [
-  ['ask', 'Ask'],
-  ['search', 'Search'],
-  ['chat', 'Chat'],
+/** The playground's tabs, each with the sentence shown under them so you know what it does. */
+export const MODES: { key: Mode; label: string; help: string }[] = [
+  {
+    key: 'ask',
+    label: 'Ask',
+    help: 'One question, one answer written from this workspace’s material, with the passages it cites. Nothing is remembered between questions.',
+  },
+  {
+    key: 'search',
+    label: 'Search',
+    help: 'Finds the passages closest to your words and scores them. No model is called, so it is fast and shows what an answer would be given.',
+  },
+  {
+    key: 'chat',
+    label: 'Chat',
+    help: 'A conversation: each reply sees the earlier turns, so follow-up questions like “why?” work. Kept under Conversations.',
+  },
 ];
 
 /** The mode a `?mode=` value asks for; anything else is the default. */
 export function parseMode(value: string | null): Mode {
-  return MODES.some(([mode]) => mode === value) ? (value as Mode) : 'ask';
+  return MODES.some((m) => m.key === value) ? (value as Mode) : 'ask';
 }
 
 /** How many passages a search asks for. The API accepts 1 to 50. */

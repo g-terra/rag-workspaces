@@ -37,13 +37,15 @@ export function ChatPanel() {
       <ChatBox first={chat.turns.length === 0} streaming={streaming} onSend={chat.send} onStop={chat.stop}>
         {chat.conversationId !== null && (
           <>
-            {/* The conversation outlives this page, so its id links to where it is kept. */}
+            {/* The conversation outlives this page, so this links to where it is kept. Its id is for
+                the API, not for people, so it is only in an attribute the tests read. */}
             <Link
               to={`/w/${w.slug}/conversations?c=${encodeURIComponent(chat.conversationId)}`}
-              data-testid="conversation-id"
-              className="truncate font-mono hover:underline"
+              data-testid="conversation-link"
+              data-conversation-id={chat.conversationId}
+              className="text-muted-foreground truncate hover:underline"
             >
-              {chat.conversationId}
+              Saved in Conversations
             </Link>
             <Button variant="ghost" size="sm" onClick={chat.reset} disabled={streaming}>
               <MessageSquarePlus /> New conversation

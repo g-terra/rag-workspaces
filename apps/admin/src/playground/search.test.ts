@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatScore, parseMode, searchPath, SEARCH_LIMITS } from './search';
+import { formatScore, MODES, parseMode, searchPath, SEARCH_LIMITS } from './search';
 
 describe('searchPath', () => {
   it('encodes the query and the workspace into the passage search path', () => {
@@ -30,5 +30,14 @@ describe('parseMode', () => {
     expect(parseMode('ask')).toBe('ask');
     expect(parseMode(null)).toBe('ask');
     expect(parseMode('nonsense')).toBe('ask');
+  });
+});
+
+describe('MODES', () => {
+  it('explains each mode in a sentence, and says Search calls no model', () => {
+    expect(MODES.map((m) => m.key)).toEqual(['ask', 'search', 'chat']);
+    for (const m of MODES) expect(m.help).toMatch(/^[A-Z].+\.$/);
+    expect(MODES.find((m) => m.key === 'search')!.help).toMatch(/no model/i);
+    expect(MODES.find((m) => m.key === 'chat')!.help).toMatch(/follow-up/i);
   });
 });

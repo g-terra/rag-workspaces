@@ -15,6 +15,7 @@ export function Playground() {
   const w = useCurrentWorkspace();
   const [params, setParams] = useSearchParams();
   const mode = parseMode(params.get('mode'));
+  const current = MODES.find((m) => m.key === mode)!;
 
   return (
     <>
@@ -27,13 +28,19 @@ export function Playground() {
               Try the same calls agents make. Everything here is logged like an API request.
             </p>
           </div>
-          <div role="tablist" aria-label="Mode" className="bg-muted flex rounded-lg p-0.5">
-            {MODES.map(([key, label]) => (
+          <div
+            role="tablist"
+            aria-label="Mode"
+            aria-describedby="mode-help"
+            className="bg-muted flex rounded-lg p-0.5"
+          >
+            {MODES.map(({ key, label, help }) => (
               <button
                 key={key}
                 type="button"
                 role="tab"
                 aria-selected={mode === key}
+                title={help}
                 onClick={() =>
                   setParams(
                     (prev) => {
@@ -53,6 +60,13 @@ export function Playground() {
             ))}
           </div>
         </div>
+        <p
+          id="mode-help"
+          data-testid="mode-help"
+          className="bg-muted/60 -mt-1 rounded-lg px-3.5 py-2.5 text-sm"
+        >
+          <span className="font-medium">{current.label}:</span> {current.help}
+        </p>
         {/* Both panels stay mounted, with the one you are not on hidden: looking at the passages
             while an answer streams must not abort it, and coming back shows it still there. Keyed by
             workspace, so switching workspace never shows one workspace's answer under another's
