@@ -164,8 +164,17 @@ const chat = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e05', 'rw-chat', 'rw-chat',
    edge(cSearch, 'context', cPrompt, 'context'), edge(cPrompt, 'prompt', cLlm, 'input_value'),
    edge(cLlm, 'text_output', cOut, 'input_value'), edge(cSearch, 'passages', cCites, 'input_value')]);
 
+// ---- fetch: one web page as clean Markdown (or a site's sitemap), for the API's crawler ----
+// The chat input is not wired: Langflow needs no input node to run a flow, and the API sends
+// everything as tweaks on Fetch.
+const fetchPage = node('Fetch', ext('WorkspaceWebPage'), 0, 0);
+const fOut = chatOutput('ChatOutput-result', 350, 0);
+const fetchFlow = flow('5d3c6a0e-7f4b-4c55-9a51-0a1b2c3d4e06', 'rw-fetch', 'rw-fetch',
+  'Fetch one web page as clean Markdown with its links, or list a site\'s pages from its sitemap. Tweak Fetch.',
+  [fetchPage, fOut], [edge(fetchPage, 'result', fOut, 'input_value')]);
+
 const outDir = process.env.OUT_DIR ? `${process.env.OUT_DIR.replace(/\/$/, '')}/` : new URL('../../flows/', import.meta.url).pathname;
-for (const f of [ingest, retrieve, answer, deleteFlow, chat]) {
+for (const f of [ingest, retrieve, answer, deleteFlow, chat, fetchFlow]) {
   const path = `${outDir}${f.name.replace('rw-', '')}.json`;
   await writeFile(path, JSON.stringify(f, null, 2) + '\n');
   console.log('wrote', path);

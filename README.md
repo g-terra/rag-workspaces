@@ -36,6 +36,9 @@ answer came from.
   documents, vector index, settings, members and API, and nothing leaks between them.
 - **Drop in files, or whole folders.** PDF, DOCX, TXT and Markdown, plus MP4, MP3 and WAV transcribed by
   Whisper. Each file is followed live through ingestion, and duplicates are skipped.
+- **Import a documentation website.** Give a start URL and the site is crawled politely (robots.txt, sitemap,
+  page and depth limits), each page becomes a document, and citations link back to the page. Crawl again to
+  pick up what changed.
 - **Answers that cite their sources.** Ask, search passages with their scores, or chat with follow-ups.
   Every answer streams in with numbered citations that point to the page, or the moment in a recording,
   in a response style you pick: academic, talkative, concise or tutor.

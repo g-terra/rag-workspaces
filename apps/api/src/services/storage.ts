@@ -24,6 +24,14 @@ export type StagedFile = {
   sizeBytes: number;
 };
 
+export type PageFile = { storagePath: string; sha256: string; sizeBytes: number };
+
+/** Hex SHA-256, the checksum documents are deduplicated by. */
+export const sha256 = (data: Buffer | string) => createHash('sha256').update(data).digest('hex');
+
+/** Where an imported web page's Markdown lives on the uploads volume. */
+export const pagePath = (slug: string, documentId: string) => `${slug}/${documentId}.md`;
+
 /** Thrown when a file is larger than the limit; becomes 413. */
 export class FileTooLarge extends Error {}
 
@@ -84,6 +92,20 @@ export class UploadStorage {
   async remove(relative: string): Promise<void> {
     await rm(this.absolute(relative), { force: true });
     await rm(this.absolute(transcriptPath(relative)), { force: true });
+  }
+
+  /**
+   * Write a website page's Markdown as `<slug>/<document id>.md`, replacing any earlier version in one
+   * step (written to a temp file, then renamed), so a reader never sees half a page.
+   */
+  async writePage(slug: string, documentId: string, markdown: string): Promise<PageFile> {
+    const storagePath = pagePath(slug, documentId);
+    const body = Buffer.from(markdown, 'utf8');
+    await mkdir(path.join(this.root, slug), { recursive: true });
+    const tmp = path.join(this.root, slug, `.${documentId}.${randomUUID()}.tmp`);
+    await writeFile(tmp, body);
+    await rename(tmp, this.absolute(storagePath));
+    return { storagePath, sha256: sha256(body), sizeBytes: body.length };
   }
 
   /** Write a document's transcript next to its file, where the ingest flow reads it. */

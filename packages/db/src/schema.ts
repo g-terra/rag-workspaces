@@ -130,7 +130,8 @@ export const workspaceMembers = pgTable(
 
 export type WorkspaceMember = typeof workspaceMembers.$inferSelect;
 
-export const documentType = pgEnum('document_type', ['pdf', 'docx', 'txt', 'md', 'mp4', 'mp3', 'wav']);
+/** `web`: a page of an imported website, stored as Markdown (`<slug>/<document id>.md`). */
+export const documentType = pgEnum('document_type', ['pdf', 'docx', 'txt', 'md', 'mp4', 'mp3', 'wav', 'web']);
 
 /** Ingestion status. `transcribing` is used by video and audio (M5). */
 export const documentStatus = pgEnum('document_status', [
@@ -200,6 +201,46 @@ export const folders = pgTable(
 
 export type Folder = typeof folders.$inferSelect;
 
+export const siteStatus = pgEnum('site_status', ['queued', 'crawling', 'ready', 'failed']);
+
+/**
+ * A documentation website imported into a workspace. The API crawls it (apps/api services/crawl.ts)
+ * and each page becomes a document of type `web` with `siteId` and `sourceUrl` set. The counters
+ * describe the last (or the running) crawl.
+ */
+export const sites = pgTable(
+  'sites',
+  {
+    id: text().primaryKey(),
+    workspaceId: text()
+      .notNull()
+      .references(() => workspaces.id, { onDelete: 'cascade' }),
+    /** New pages go here; null is the workspace's top level. */
+    folderId: text().references(() => folders.id, { onDelete: 'set null' }),
+    startUrl: text().notNull(),
+    /** Pages must start with this URL: the start URL's directory, e.g. `https://auth0.com/docs/`. */
+    scope: text().notNull(),
+    /** Path prefixes left out of the scope, such as translations (`/docs/fr-ca/`). */
+    excludePaths: text().array().notNull().default([]),
+    maxPages: integer().notNull(),
+    maxDepth: integer().notNull(),
+    status: siteStatus().notNull().default('queued'),
+    pagesFound: integer().notNull().default(0),
+    pagesFetched: integer().notNull().default(0),
+    pagesNew: integer().notNull().default(0),
+    pagesChanged: integer().notNull().default(0),
+    pagesUnchanged: integer().notNull().default(0),
+    pagesRemoved: integer().notNull().default(0),
+    pagesFailed: integer().notNull().default(0),
+    lastError: text(),
+    crawledAt: timestamp({ withTimezone: true }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex('sites_workspace_start_url_key').on(t.workspaceId, t.startUrl)],
+);
+
+export type Site = typeof sites.$inferSelect;
+
 /**
  * One uploaded file. Postgres is the source of truth: a document is searchable only when
  * its row is `ready`. The file lives on the uploads volume at `storagePath`.
@@ -227,10 +268,20 @@ export const documents = pgTable(
     error: text(),
     passageCount: integer(),
     tags: text().array().notNull().default([]),
+    /** The site a web page came from; the API deletes a site's documents itself (vectors, files). */
+    siteId: text().references(() => sites.id),
+    /** The page's URL, for a document of type `web`. */
+    sourceUrl: text(),
     ...timestamps,
   },
   (t) => [
-    uniqueIndex('documents_workspace_sha256_key').on(t.workspaceId, t.sha256),
+    // Uploads are deduplicated across the workspace; pages only within their site, so a page that
+    // matches an uploaded file is still imported and cited by its URL.
+    uniqueIndex('documents_workspace_sha256_key')
+      .on(t.workspaceId, t.sha256)
+      .where(sql`${t.siteId} is null`),
+    uniqueIndex('documents_site_url_key').on(t.siteId, t.sourceUrl),
+    uniqueIndex('documents_site_sha256_key').on(t.siteId, t.sha256),
     index('documents_workspace_status_idx').on(t.workspaceId, t.status),
     index('documents_folder_idx').on(t.folderId),
   ],
