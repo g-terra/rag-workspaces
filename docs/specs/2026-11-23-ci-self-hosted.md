@@ -44,6 +44,13 @@ actions". Runners 2 to 4 carry only `rw-light`; runner 1 carries `rw-light` and 
 - `ci.yml`, `docker` job: `docker compose --project-name rw-ci config/build`. The compose file names
   itself `rag-workspaces`, and building under that name would retag the dev stack's `api` and `web`
   images.
+- `scripts/smoke/stack.ts` and `plan.ts` (new): a hosted runner starts clean every time, but a
+  self-hosted one keeps Docker state between jobs. When a smoke or e2e job is cancelled before its
+  `down`, its stack and volumes stay behind, and the next checkout deletes the ignored `.env.smoke`
+  that held their passwords. The next `up` then wrote new passwords over the old volumes, and Langflow
+  failed with "password authentication failed". `up` now finds leftovers by the compose project label.
+  If they exist without their `.env.smoke`, it removes them (`down --volumes`) before writing a fresh
+  file. `planUp` holds that decision.
 - Smoke and e2e already run as their own project `rag-workspaces-smoke`, on ports 13000, 18080 and
   18081 (`scripts/smoke/stack.ts`), so the dev stack's containers, volumes and ports aren't touched.
 
@@ -78,6 +85,8 @@ actions". Runners 2 to 4 carry only `rw-light`; runner 1 carries `rw-light` and 
 
 This PR is its own test: its checks run on the self-hosted runner. Check that every job is green, and
 that `docker ps` on the runner's machine shows no leftover `rw-ci-pg-*` container afterwards.
+
+`scripts/smoke/plan.test.ts` covers `planUp`: fresh, reuse, a stale file only, and the reset case.
 
 The first runs on the Mac showed two races that the hosted runners had hidden. Both are fixed in the
 tests:
