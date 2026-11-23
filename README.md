@@ -57,6 +57,16 @@ editors and admins. The API docs are linked from the top bar of every page.
 
 `docker compose down` stops everything and keeps your data; `docker compose down -v` also deletes it.
 
+### Updating an existing install
+
+Run `pnpm env:init` after pulling: it adds any new secret to your `.env` and leaves the rest alone. Keycloak
+imports `docker/keycloak/realm.json` only into an empty database, so a realm created before a change to that
+file keeps its old settings. The simplest fix on a test install is `docker compose down -v` (this deletes
+the stack's data) and `docker compose up -d --build`. To keep your data instead, make the change by hand in
+the Keycloak admin console; for the people list (`GET /v1/users`, added 2026-11-23) that means creating the
+`api-directory` client as `realm.json` describes it, with `KEYCLOAK_DIRECTORY_SECRET` from `.env` as its
+secret.
+
 ## Development
 
 Requirements: Node 22.18+ and pnpm 10 (`corepack enable` gives you the pinned version).
