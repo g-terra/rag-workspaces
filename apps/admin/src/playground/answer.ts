@@ -5,11 +5,15 @@ export type AnswerPart = { text: string } | { rank: number };
 
 // `[1]`, `[12]` or `[1, 2]`: how the system prompt asks the model to cite its passages.
 const MARKER = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
+// A citation follows a space, punctuation or another citation. Anything else to its left makes it part
+// of that word, such as the subscript in `items[1]`, which is code the model wrote, not a citation.
+const ATTACHED = /[\p{L}\p{N}_$\]]/u;
 
 /**
  * Splits an answer into text and the citation markers in it. A marker only becomes one when every rank
- * it names has a citation (`ranks`); anything else, such as a reference to a passage that is not in the
- * answer's citations, stays the text the model wrote.
+ * it names has a citation (`ranks`) and nothing is attached to its left; anything else — a reference to
+ * a passage the answer does not carry, or an index like `items[1]` in a code snippet — stays the text
+ * the model wrote.
  */
 export function answerParts(text: string, ranks: number[]): AnswerPart[] {
   const parts: AnswerPart[] = [];
@@ -20,6 +24,8 @@ export function answerParts(text: string, ranks: number[]): AnswerPart[] {
   for (const match of text.matchAll(MARKER)) {
     const cited = match[1]!.split(',').map((n) => Number(n.trim()));
     if (!cited.every((rank) => ranks.includes(rank))) continue;
+    // A marker directly after another is the second half of a list like `[1][2]`, not an index.
+    if (match.index !== at && ATTACHED.test(text[match.index - 1] ?? '')) continue;
     keep(match.index);
     for (const rank of cited) parts.push({ rank });
     at = match.index + match[0].length;

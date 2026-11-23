@@ -30,8 +30,9 @@ mock's answer card and its Sources column.
 1. **Markers in the text** (`src/playground/answer.ts`). `answerParts(text, ranks)` splits the answer
    into text and markers. A marker is only taken as one when every rank it names has a citation, so a
    model that writes `[9]` for a passage it was not given leaves that text alone rather than offering a
-   button that opens nothing. `[1, 2]` becomes two markers, because models write citation lists that
-   way. The page renders each marker as a `<button aria-label="Source n">`, which opens that citation's
+   button that opens nothing, and when nothing is attached to its left, so the subscript in a code
+   snippet (`items[1]`) stays code. `[1, 2]` becomes two markers and `[1][2]` two as well, because
+   models write citation lists both ways. The page renders each marker as a `<button aria-label="Source n">`, which opens that citation's
    passage.
 2. **The Sources list** (`src/routes/playground.tsx`). Beside the answer, one button per citation: the
    rank, the document title, the score to two decimals, the page when the document has pages, and the
@@ -42,9 +43,10 @@ mock's answer card and its Sources column.
    dialog shows the passage highlighted between them, its id, and a link to its document.
    `passageWhere()` writes the subtitle: "Week 3 slides · page 12", or the passage's position when the
    document has no pages (a text or Markdown file).
-4. **The document link** (`src/routes/documents.tsx`). The library already selects a row in page state;
-   it now starts from `?doc=<id>` when the URL names one, so the link from a passage opens the document
-   with its detail panel open. Nothing else about the library changes.
+4. **The document link** (`src/routes/documents.tsx`). The library's selected document moves from page
+   state into the URL as `?doc=<id>` (replacing the entry, so it does not fill the Back history), which
+   is both how the link from a passage opens a document with its detail panel open and what keeps a
+   reloaded or shared library link on the same document. Nothing else about the library changes.
 
 ## Decisions and trade-offs
 
@@ -53,8 +55,10 @@ mock's answer card and its Sources column.
 | Only render a marker whose rank has a citation | Render every `[n]` as a button | A button that opens nothing is worse than the text the model wrote |
 | Accept `[1, 2]` as two markers | Only accept `[n]` | Models write citation lists that way, and the alternative shows raw brackets |
 | Sources count "given to the model" | "3 cited of 5 retrieved", as the mock says | The API sends the passages the model was given; which of them the text cites is a property of the prose, not data |
-| `?doc=<id>` read once into page state | Keep the selection in the URL as it changes | The library's selection is not a place you navigate to; one-way deep linking is all the link needs |
+| The selected document lives in the URL | Read `?doc=` once into page state | State read once drifts from the URL: click another row, reload, and the first document comes back |
+| A marker must have a space or punctuation to its left | Accept `[n]` anywhere | `items[1]` in a code snippet would otherwise lose its subscript to a button that opens an unrelated passage |
 | A dialog for the passage | A third column, or a page per passage | It is a quick look at the words behind a claim, and the mock keeps the answer in view |
+| The dialog keeps the last passage it was given | Clear it as soon as it closes | The content stays mounted while the dialog fades out, so clearing it collapses the passage to "Loading…" on the way out |
 | `usePassage` idle until opened | Prefetch every citation with the answer | Most citations are never opened; each is a Chroma read |
 
 ## Interfaces and contracts
@@ -69,13 +73,14 @@ mock's answer card and its Sources column.
 ## Operations
 
 Existing installs: `docker compose up -d --build web`. `/w/<slug>/documents?doc=<id>` is a new link
-shape; an unknown or deleted id simply leaves no row selected.
+shape, and the library now writes it as you select documents; an unknown or deleted id simply leaves no
+row selected.
 
 ## Testing
 
 - `apps/admin/src/playground/answer.test.ts`: `answerParts()` with no markers, a marker between words,
-  a comma list, a two-digit rank, a rank with no citation (left as text, alone and inside a list),
-  markers back to back, and an empty answer; `passageWhere()` with and without a page.
+  a comma list, a two-digit rank, a rank with no citation (left as text, alone and inside a list), a
+  subscript in code whose number is a live rank, markers back to back, and an empty answer; `passageWhere()` with and without a page.
 - `apps/admin/e2e/playground.spec.ts` (real stack): after the streamed answer, the Sources list holds the
   ingested document, opening it shows the passage text and its id, and "Open the document" lands on the
   library with that document selected.

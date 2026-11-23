@@ -36,6 +36,14 @@ describe('answerParts', () => {
     expect(answerParts('Both [1, 9].', [1])).toEqual([{ text: 'Both [1, 9].' }]);
   });
 
+  it('leaves a subscript in code alone, even when its number is a rank', () => {
+    expect(answerParts('Read items[1] to get the second element [1].', [1])).toEqual([
+      { text: 'Read items[1] to get the second element ' },
+      { rank: 1 },
+      { text: '.' },
+    ]);
+  });
+
   it('keeps markers that follow each other', () => {
     expect(answerParts('Sources [1][2]', [1, 2])).toEqual([{ text: 'Sources ' }, { rank: 1 }, { rank: 2 }]);
   });

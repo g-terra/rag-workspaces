@@ -1,4 +1,5 @@
 import { FileText } from 'lucide-react';
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { ErrorState, Loading } from '@/components/states';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,12 @@ export function PassageDialog({
   passageId: string | null;
   onClose(): void;
 }) {
-  const passage = usePassage(slug, passageId);
+  // Radix keeps the content mounted while the dialog fades out, by which time `passageId` is already
+  // null. Reading the last one asked for keeps the passage on screen until it is gone, instead of
+  // collapsing to "Loading the passage…" on the way out.
+  const [shown, setShown] = useState<string | null>(passageId);
+  if (passageId !== null && passageId !== shown) setShown(passageId);
+  const passage = usePassage(slug, shown);
   const found = passage.data?.passage;
 
   return (

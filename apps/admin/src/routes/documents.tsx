@@ -40,7 +40,11 @@ function Library() {
   const documents = useLiveDocuments(w.slug);
   const [tab, setTab] = useState<StatusTab>('all');
   const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(useSearchParams()[0].get('doc'));
+  // The selected document lives in the URL (`?doc=<id>`), so a citation in the playground can link
+  // straight to one and a reloaded or shared link still shows the same document.
+  const [params, setParams] = useSearchParams();
+  const selectedId = params.get('doc');
+  const setSelectedId = (id: string) => setParams({ doc: id }, { replace: true });
   const list = documents.data ?? [];
   const shown = filterDocuments(list, tab, search);
   const selected = list.find((d) => d.id === selectedId) ?? null;
