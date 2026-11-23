@@ -71,7 +71,7 @@ test('an admin changes a workspace’s name and retrieval settings, and they sti
   await expect(page.getByText('Settings saved.')).toBeVisible();
   await page.reload();
   await expect(page.getByLabel('Top-k passages')).toHaveValue('');
-  await expect(page.getByLabel('Top-k passages')).toHaveAttribute('placeholder', 'Default');
+  await expect(page.getByLabel('Top-k passages')).toHaveAttribute('placeholder', /^Default: \d+$/);
 });
 
 test('the form refuses what the API would resolve wrongly', async ({ page }) => {
