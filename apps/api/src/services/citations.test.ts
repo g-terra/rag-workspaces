@@ -8,8 +8,11 @@ describe('dropUnknownCitations', () => {
     ['fullwidth', 'One pass 【7†L3-L5】.', 'One pass.'],
     ['after the full stop', 'One pass. [4]\n\nNext [1].', 'One pass.\n\nNext [1].'],
     ['at the end of a list item', '- **Goal**: safe [4]\n- Sensors [1]', '- **Goal**: safe\n- Sensors [1]'],
-    ['on a last line of its own', 'One pass [1].\n\n[4][5]', 'One pass [1].'],
-    ['on a last line with real ones', 'One pass [1].\n\n[1][4]', 'One pass [1].\n\n[1]'],
+    [
+      'in text around math',
+      'Let $x$ be one pass [4]. Then `f` is called again [5].',
+      'Let $x$ be one pass. Then `f` is called again.',
+    ],
     ['two in a row', 'One pass [4][5].', 'One pass.'],
   ])('removes a citation to a passage with no citation: %s', (_, text, expected) => {
     expect(dropUnknownCitations(text, [1, 2, 3])).toBe(expected);
@@ -31,6 +34,20 @@ describe('dropUnknownCitations', () => {
     ['line breaks', '# Title\n\n[7] A para.  \n[4] Next'],
     ['brackets around it', 'It is so ([7]) and **[7]**.'],
     ['a table cell', '| a | [7] |'],
+    ['text before math or code', 'Scale factor [5] $x$ by two. Cite [7] \\(x\\) here.'],
+    ['a last line of its own', 'Output here:\n\n[5]'],
+    ['comma-separated citations', 'A pass [1], [7]. A pass [7], [8].'],
+    [
+      'operators, labels and numbers',
+      'compute 2 * [7].\n10 % [7].\nAnswer: [5]\n1. [7]\n2. [8]\nAs in eq. [5].\nO(n) [7].',
+    ],
+    ['indented code and loose tables', '    x = foo [7]\n\nname | word [7]'],
+    [
+      'nested and unclosed code or math',
+      '````\n```\nword [7]\n```\nword [7]\n````\n\nRun `word [7].\n\n$$\nword [7].',
+    ],
+    ['an unclosed fence', 'Code:\n```\nword [7]\n[7]'],
+    ['an unclosed display formula', 'Math: \\[\nword [7]'],
     ['a reply that is only citations', '[4][5]'],
   ])('keeps %s', (_, text) => {
     expect(dropUnknownCitations(text, [1, 2, 3])).toBe(text);

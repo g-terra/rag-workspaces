@@ -29,17 +29,18 @@ Builds on [2026-11-24-refusal-grounded.md](2026-11-24-refusal-grounded.md).
   `chat.json` and `retrieve.json`) and `contextText` in `apps/api/src/services/composite-search.ts` start
   the context with "The passages are numbered 1 to n. Cite only these numbers." and rewrite `[m:ss]` and
   `[h:mm:ss]` with round brackets.
-- `apps/api/src/services/citations.ts`: `dropUnknownCitations(text, ranks)` removes a single `[n]` or `【n】`
-  with no citation in `ranks`, where a statement ends (before punctuation or the end of a line) or on a last line of
-  only citations. `generate.ts` applies it before computing `grounded`, for answers and chat, plain and composite.
+- `apps/api/src/services/citations.ts`: `dropUnknownCitations(text, ranks)` removes `[n]` or `【n】` with no
+  citation in `ranks`, only where a statement ends: after a word and before punctuation or the end of the line, or
+  after a full stop at the end of the line. Code, math and table rows are skipped. `generate.ts` applies it before computing
+  `grounded`, for answers and chat, plain and composite.
 
 ## Decisions and trade-offs
 
 | Decision | Alternatives considered | Why this one |
 | -------- | ----------------------- | ------------ |
 | Remove the number | Guess the passage it meant | A wrong guess looks like evidence. A sentence may end up with no citation. |
-| Remove only at the end of a statement; in doubt keep the text | Remove every unknown number | Course material is full of intervals, years, indexes, math and references. Losing a fact is worse than a leftover number. An invented number mid-sentence, without a space before it, or in a list stays. |
-| Skip code and math; keep "is [5]" and "see [4]" | Parse the Markdown | A short list of patterns covers what replies contain. A value such as "gives [5]." can still be taken for a citation. |
+| Remove only where a statement ends; in doubt keep the text | Remove every unknown number (the first version) | Two reviews found text the wider rules cut: formulas, values, code, list numbers, reference lists. Losing a fact is worse than a leftover number. So an invented number stays mid-sentence, after a digit, sign, bracket, label, comma or code, alone on a line, without a space before it, or in a list. |
+| Skip "see [4]", "returns [5]" and similar | Parse the Markdown | A short word list covers the usual cases. A value or a reference after any other word, at the end of a sentence, can still be taken for a citation. |
 | Rewrite times only in the prompt | Change stored transcripts | No reindex, and passages still show the original text. |
 
 ## Interfaces and contracts

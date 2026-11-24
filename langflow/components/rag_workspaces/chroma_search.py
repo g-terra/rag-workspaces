@@ -39,7 +39,7 @@ from lfx.schema.message import Message
 
 
 # A time in a transcript, `[4:00]`. In square brackets it reads like a citation, and models copy it as one.
-TIME = re.compile(r"(?<![\w\])])\[(\d{1,3}:\d{2}(?::\d{2})?)\]")
+TIME = re.compile(r"(?<![\w\])])\[(\d{1,3}:\d{2}(?::\d{2})?)\]", re.ASCII)
 
 # How many candidates each ranking contributes before fusion, and RRF's k (the usual 60).
 CANDIDATES = 200
