@@ -167,7 +167,7 @@ const server = createServer(async (req, res) => {
       const body = await readJson(req);
       const model: string = body.model;
       const stream = Boolean(body.stream);
-      const prompt = (body.messages ?? []).map((m: any) => messageText(m.content)).join('\n').slice(0, 200);
+      const prompt = (body.messages ?? []).map((m: any) => messageText(m.content)).join('\n');
       log.push({ at: new Date().toISOString(), path: url.pathname, model, stream, prompt, reasoning_effort: body.reasoning_effort });
       const answer = composeAnswer(model, body.messages ?? []);
       const id = `chatcmpl-${Date.now()}`;
@@ -198,7 +198,7 @@ const server = createServer(async (req, res) => {
       const model: string = body.model;
       const stream = Boolean(body.stream);
       const msgs = [...(body.system ? [{ role: 'system', content: body.system }] : []), ...(body.messages ?? [])];
-      const prompt = msgs.map((m: any) => messageText(m.content)).join('\n').slice(0, 200);
+      const prompt = msgs.map((m: any) => messageText(m.content)).join('\n');
       log.push({ at: new Date().toISOString(), path: url.pathname, model, stream, prompt });
       const answer = composeAnswer(model, msgs);
       const id = `msg_${Date.now()}`;

@@ -194,7 +194,8 @@ describe.skipIf(!url)('composite workspaces answer from their sources (against T
     expect(generate.body.tweaks.LLM).toMatchObject({ model_name: 'big-model' });
     expect(String(generate.body.tweaks.LLM!.system_message)).toContain('Composite prompt.');
     expect(generate.body.tweaks.Prompt!.context).toBe(
-      '[1] (Personal: personal notes, page 1)\npersonal passage 1\n\n' +
+      'The passages are numbered 1 to 3. Cite only these numbers.\n\n' +
+        '[1] (Personal: personal notes, page 1)\npersonal passage 1\n\n' +
         '[2] (OUC: ouc notes, page 1)\nouc passage 1\n\n' +
         '[3] (OUC: ouc notes, page 2)\nouc passage 2',
     );

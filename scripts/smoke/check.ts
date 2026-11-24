@@ -644,6 +644,38 @@ async function main() {
     );
   });
 
+  await step(
+    'the prompt says which citation numbers are valid, and times do not look like citations',
+    async () => {
+      const form = new FormData();
+      form.append(
+        'files',
+        new Blob(['[4:00] The blorptastic epoch is one full pass.']),
+        'talk.transcript.md',
+      );
+      const { data } = (await call(token, 'POST', `/v1/workspaces/${slug}/documents`, form)) as {
+        data: { document: Doc }[];
+      };
+      await waitUntilReady(
+        token,
+        slug,
+        data.map((d) => d.document.id),
+      );
+      await fetch(`${STANDIN}/_log`, { method: 'DELETE' });
+      await call(token, 'POST', `/v1/workspaces/${slug}/answers`, {
+        question: 'What is the blorptastic epoch?',
+        maxPassages: 2,
+      });
+      const log = (await (await fetch(`${STANDIN}/_log`)).json()) as { path: string; prompt?: string }[];
+      const prompt = log.find((e) => e.path === '/v1/chat/completions')?.prompt ?? '';
+      expect(
+        prompt.includes('The passages are numbered 1 to 2. Cite only these numbers.'),
+        `no citation numbers in: ${prompt}`,
+      );
+      expect(prompt.includes('(4:00)') && !prompt.includes('[4:00]'), `time not rewritten in: ${prompt}`);
+    },
+  );
+
   await step('a composite workspace answers from both of its sources through rw-generate', async () => {
     const other = `${slug}-b`;
     const study = `${slug}-c`;

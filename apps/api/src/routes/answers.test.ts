@@ -476,6 +476,18 @@ describe.skipIf(!url)('answers (against TEST_DATABASE_URL)', () => {
     expect((await ask({ question: 'What is RAG?' })).json()).toMatchObject({ grounded: false });
   });
 
+  it('a citation to a passage the model was not given is removed from the stored text', async () => {
+    answerReply = () =>
+      Response.json(
+        outputBody({
+          'ChatOutput-answer': 'RAG retrieves first [1]. Then it answers [7].',
+          'ChatOutput-citations': fenced({ passages: hits }),
+        }),
+      );
+    const res = await ask({ question: 'What is RAG?' });
+    expect(res.json()).toMatchObject({ grounded: true, text: 'RAG retrieves first [1]. Then it answers.' });
+  });
+
   /** A folder in `ouc`, made straight in the database. */
   async function oucFolder() {
     const [ws] = await t.db.select().from(workspaces).where(eq(workspaces.slug, 'ouc'));
