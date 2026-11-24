@@ -10,8 +10,8 @@ areas: [api, flows, docs]
 
 ## Summary
 
-A reply no longer cites passage numbers that don't exist. The prompt says which numbers are valid and
-writes transcript times as `(4:00)` instead of `[4:00]`. If the model still invents a number, the API
+The prompt now says which passage numbers are valid and writes times as `(4:00)` instead of `[4:00]`, so the
+model rarely invents a citation. If it still ends a statement with a number that has no citation, the API
 removes it before storing and returning the reply.
 
 ## Why
@@ -29,16 +29,17 @@ Builds on [2026-11-24-refusal-grounded.md](2026-11-24-refusal-grounded.md).
   `chat.json` and `retrieve.json`) and `contextText` in `apps/api/src/services/composite-search.ts` start
   the context with "The passages are numbered 1 to n. Cite only these numbers." and rewrite `[m:ss]` and
   `[h:mm:ss]` with round brackets.
-- `apps/api/src/services/citations.ts`: `dropUnknownCitations(text, ranks)` removes a single `[n]` or
-  `【n】` whose number is not in `ranks`, with the space before it. `generate.ts` applies it before
-  computing `grounded`, for answers and chat, plain and composite.
+- `apps/api/src/services/citations.ts`: `dropUnknownCitations(text, ranks)` removes a single `[n]` or `【n】`
+  with no citation in `ranks`, where a statement ends (before punctuation or the end of a line) or on a last line of
+  only citations. `generate.ts` applies it before computing `grounded`, for answers and chat, plain and composite.
 
 ## Decisions and trade-offs
 
 | Decision | Alternatives considered | Why this one |
 | -------- | ----------------------- | ------------ |
 | Remove the number | Guess the passage it meant | A wrong guess looks like evidence. A sentence may end up with no citation. |
-| Leave lists (`[0, 1]`), numbers of three digits or more, code, indexes and links alone | Remove every unknown number | Course material is full of intervals, years and array indexes. An invented number in a list stays as plain text. |
+| Remove only at the end of a statement; in doubt keep the text | Remove every unknown number | Course material is full of intervals, years, indexes, math and references. Losing a fact is worse than a leftover number. An invented number mid-sentence, without a space before it, or in a list stays. |
+| Skip code and math; keep "is [5]" and "see [4]" | Parse the Markdown | A short list of patterns covers what replies contain. A value such as "gives [5]." can still be taken for a citation. |
 | Rewrite times only in the prompt | Change stored transcripts | No reindex, and passages still show the original text. |
 
 ## Interfaces and contracts
@@ -62,6 +63,8 @@ prompt the model receives; the stand-in (`poc/standin/server.ts`) now logs the w
 
 ## Out of scope and follow-ups
 
+- Old numbers in a conversation's earlier replies, which the model sees as history.
+- A passage whose document stops being ready mid-answer has no citation, so its number is removed too.
 - A citation to a real passage that doesn't support the sentence.
 - Removing an invalid number from streamed tokens before the reply ends.
 

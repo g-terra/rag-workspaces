@@ -65,9 +65,9 @@ describe('contextText', () => {
 
   it('writes times in a transcript in round brackets, so they do not look like citations', () => {
     const text = contextText([
-      hit('ouc', 1, 0.5, { text: '[4:00] One epoch. [1:02:03] See items[3] and [2].' }),
+      hit('ouc', 1, 0.5, { text: '[4:00] One epoch. [1:02:03] See items[3], x[1:10] and [2].' }),
     ]);
-    expect(text).toContain('\n(4:00) One epoch. (1:02:03) See items[3] and [2].');
+    expect(text).toContain('\n(4:00) One epoch. (1:02:03) See items[3], x[1:10] and [2].');
     expect(text).toContain('The passages are numbered 1 to 1. Cite only these numbers.');
   });
 

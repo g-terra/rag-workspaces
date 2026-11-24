@@ -39,7 +39,7 @@ function clock(seconds: number): string {
 }
 
 /** A time in a transcript, `[4:00]`. In square brackets it reads like a citation, and models copy it as one. */
-const TIME = /\[(\d{1,3}:\d{2}(?::\d{2})?)\]/g;
+const TIME = /(?<![\w\])])\[(\d{1,3}:\d{2}(?::\d{2})?)\]/g;
 
 /**
  * The passages as the prompt's `{context}`, in the layout of the Search component's context output
