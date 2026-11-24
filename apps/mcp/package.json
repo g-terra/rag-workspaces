@@ -2,6 +2,7 @@
   "name": "@rag/mcp",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "MCP server that lets agents search and ask a rag-workspaces workspace through the REST API.",
   "type": "module",
   "bin": {
