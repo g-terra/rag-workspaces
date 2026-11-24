@@ -1,8 +1,8 @@
 ---
 title: Add the MIT license
 date: 2026-11-24
-pr: pending
-status: proposed
+pr: "#131"
+status: in review
 areas: [docs]
 ---
 
