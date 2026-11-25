@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.3.1](https://github.com/g-terra/rag-workspaces/compare/v0.3.0...v0.3.1) (2026-11-25)
+
+
+### Bug fixes
+
+* **ci:** run the component tests on uv's own Python 3.14 ([7c553a7](https://github.com/g-terra/rag-workspaces/commit/7c553a72edf858a2d3705040d0463e08a7ed44ab))
+* **flows:** carry the loader's empty-DOCX fix in the ingest flow ([d893b03](https://github.com/g-terra/rag-workspaces/commit/d893b0364cf6ba232b9dd58f1663111e960052a1))
+* **langflow:** refuse a DOCX with no text in the document loader ([9f0ff7b](https://github.com/g-terra/rag-workspaces/commit/9f0ff7be89d9568b9b08221b261355b57dd333c8))
+
+
+### Documentation
+
+* add MIT license ([d21a93b](https://github.com/g-terra/rag-workspaces/commit/d21a93b549ee8ca77a2ac13a780daf73abde17ce))
+* add MIT license ([acb9411](https://github.com/g-terra/rag-workspaces/commit/acb9411ba17d65c27ea967fe3dfb349c51ee008f))
+* **poc:** check each custom component's reason against the Langflow source ([e8667b2](https://github.com/g-terra/rag-workspaces/commit/e8667b2cde8f0997ea19a1863d38310b67dee700))
+* **poc:** check each custom component's reason against the Langflow source ([df2c02f](https://github.com/g-terra/rag-workspaces/commit/df2c02f45c1b9396eb85c9114c100219ea24a5c2))
+* **poc:** compare the tool and Codex on 20 known questions ([9c144c9](https://github.com/g-terra/rag-workspaces/commit/9c144c9358ae98ead220c40385fded1a1bd61d8d))
+* **poc:** compare the tool and Codex on 20 known questions ([c3225cb](https://github.com/g-terra/rag-workspaces/commit/c3225cbf48097425006211c597e03860fccf3c98))
+* **poc:** drop an unproven splitter reason and point the architecture doc at the check ([7b26f98](https://github.com/g-terra/rag-workspaces/commit/7b26f9878c47f3e7db0721e713cabb40b8f8015a))
+* **poc:** link the PR from its spec ([774022a](https://github.com/g-terra/rag-workspaces/commit/774022ad4cec006ce86a518fe524d29552967d15))
+* **poc:** link the PR from its spec ([5fb1733](https://github.com/g-terra/rag-workspaces/commit/5fb1733f17533a850565ba68363db0520044a09b))
+* **poc:** record the knowledge base trial ([4730c25](https://github.com/g-terra/rag-workspaces/commit/4730c2513bfdf34c68b9c56c0a475a58d12ae0cf))
+* **poc:** record the knowledge base trial ([ab63b05](https://github.com/g-terra/rag-workspaces/commit/ab63b05611c65ed605b9df8fc64fb9cb3b021fb7))
+* **search:** record the nomic prefix measurement ([d0580eb](https://github.com/g-terra/rag-workspaces/commit/d0580eb1f3b62d45ef143b47309d605b649ee630))
+* **search:** record the nomic prefix measurement ([884f1c4](https://github.com/g-terra/rag-workspaces/commit/884f1c4bf3c9c4bbda881466dcd3b118b8d44188))
+* **specs:** link the MIT license spec to [#131](https://github.com/g-terra/rag-workspaces/issues/131) ([30e720d](https://github.com/g-terra/rag-workspaces/commit/30e720ddae95f8ff14c48c0f7ceeec2442fdbb96))
+* **specs:** link the pull request ([5a4adb1](https://github.com/g-terra/rag-workspaces/commit/5a4adb100d41128c2129db1ee86b56cc0b7fd986))
+* **specs:** link the stock components check to its PR ([80ba64e](https://github.com/g-terra/rag-workspaces/commit/80ba64ecf921861118d217d674c19d90396389ca))
+
 ## [0.3.0](https://github.com/g-terra/rag-workspaces/compare/v0.2.0...v0.3.0) (2026-11-24)
 
 
