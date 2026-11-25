@@ -235,6 +235,7 @@ packages/
   config/         shared tsconfig, eslint, prettier, vitest presets
 flows/            ingest.json, retrieve.json, answer.json, chat.json, README.md (the flow contract)
 langflow/components/  custom Langflow components (Python, run inside Langflow)
+langflow/tests/   pytest unit tests for those components (`pnpm test:langflow`; requirements pinned to Langflow's lock)
 scripts/          flows export/import, backup/restore, doctor
 docker/           Dockerfiles, nginx config, keycloak/realm.json, postgres init script
 poc/              the Langflow spike, kept as reference until M1 replaces it
