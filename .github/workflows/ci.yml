@@ -51,7 +51,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: langflow/requirements-test.txt
       # The same command as `pnpm test:langflow`, without installing Node for it.
-      - run: uv run --no-project --python 3.12 --with-requirements requirements-test.txt pytest
+      - run: uv run --no-project --python 3.14 --with-requirements requirements-test.txt pytest
         working-directory: langflow
 
   docker:
