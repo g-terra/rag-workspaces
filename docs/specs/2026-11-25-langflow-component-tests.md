@@ -89,9 +89,10 @@ otherwise have to list the components as untested.
     list their test hosts in `CRAWL_ALLOWED_HOSTS`, the component's own way past the SSRF guard. Other
     tests check the guard still refuses a private address, a host in `LANGFLOW_SSRF_ALLOWED_HOSTS`, and a
     redirect from an allowed site to a private address (each hop is checked again).
-- `package.json`: `test:langflow` runs `cd langflow && uv run --no-project --python 3.14
-  --with-requirements requirements-test.txt pytest`. uv downloads Python 3.14 if needed and builds and
-  caches the environment, so there is no virtualenv to manage.
+- `package.json`: `test:langflow` runs `cd langflow && uv run --managed-python --no-project --python 3.14
+  --with-requirements requirements-test.txt pytest`. uv downloads its own Python 3.14 (a system Python
+  can bring its distribution's packages and their pytest plugins along) and builds and caches the
+  environment, so there is no virtualenv to manage.
 - `.github/workflows/ci.yml`: a `langflow` job ("Langflow components": `astral-sh/setup-uv` with its
   cache keyed on `requirements-test.txt`, then the same `uv run ... pytest` as `pnpm test:langflow`,
   without installing Node) next to the existing `check` job, on every pull request and push to `main`.
