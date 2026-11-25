@@ -35,6 +35,11 @@ both the answer and its passages.
 
 ## Findings
 
+The reasons below for each custom component were later checked line by line against the Langflow
+1.13.3 source, with permalinks, in [STOCK-COMPONENTS.md](STOCK-COMPONENTS.md). Two of them proved only
+partly right (F2: a newer stock Embedding Model node turns the length check off; F7: an OpenAI-compatible
+base URL exists, but only as a server-wide setting).
+
 ### F1. Langflow 1.13 retired Chroma (biggest change)
 
 From 1.13.0 (2026-10-22) the Chroma DB component is a stub that raises
