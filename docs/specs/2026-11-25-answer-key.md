@@ -1,7 +1,7 @@
 ---
 title: compare the tool and Codex on 20 questions with known answers
 date: 2026-11-25
-pr: pending
+pr: "#137"
 status: in review
 areas: [docs]
 ---
