@@ -1,7 +1,7 @@
 ---
 title: record the knowledge base experiment
 date: 2026-11-25
-pr: pending
+pr: "#136"
 status: in review
 areas: [docs]
 ---
