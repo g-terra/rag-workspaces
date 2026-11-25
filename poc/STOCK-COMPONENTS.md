@@ -16,7 +16,7 @@ matters.
 | #   | Claim                                                                                         | Verdict   | Component                                            |
 | --- | --------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------- |
 | 1   | Langflow 1.13 retired its Chroma component                                                    | Confirmed | `chroma_upsert.py`, `chroma_search.py`, `chroma_delete.py` |
-| 2   | Split Text cuts at one separator only, and doesn't carry metadata per row                     | Partly    | `text_splitter.py`                                   |
+| 2   | Split Text cuts at one separator only                                                         | Partly    | `text_splitter.py`                                   |
 | 3   | The stock File loader loses PDF page numbers and transcript timestamps                        | Confirmed | `document_loader.py`                                 |
 | 4   | OpenAI Embeddings can't talk to LM Studio, and nothing adds task prefixes                     | Partly    | `lmstudio_embeddings.py`                             |
 | 5   | Language Model switches provider per request, but has no OpenAI-compatible base URL and no LM Studio | Partly    | `chat_model.py`                                      |
@@ -40,8 +40,8 @@ installing chromadb does not bring it back."
   `separator` field, and its own help text says a piece longer than the chunk size is not divided further.
   [`processing/split_text.py` L33-50](https://github.com/langflow-ai/langflow/blob/55c4398326671f35c3a8d48a24e8243ab2b92f5b/src/lfx/src/lfx/components/processing/split_text.py#L33-L50),
   [L152-158](https://github.com/langflow-ai/langflow/blob/55c4398326671f35c3a8d48a24e8243ab2b92f5b/src/lfx/src/lfx/components/processing/split_text.py#L152-L158)
-- **No metadata per row: wrong.** Split Text keeps each input row's metadata on its chunks unless "Clean
-  Output" is on.
+- **Also found: metadata is not a reason.** Split Text keeps each input row's metadata on its chunks
+  unless "Clean Output" is on, so carrying page numbers did not need our own splitter.
   [L79-85](https://github.com/langflow-ai/langflow/blob/55c4398326671f35c3a8d48a24e8243ab2b92f5b/src/lfx/src/lfx/components/processing/split_text.py#L79-L85)
 - **A stock recursive splitter exists.** Langflow ships a Recursive Character Text Splitter (the same
   LangChain class ours uses). Its input is declared as Document, Data or JSON, not the Table/DataFrame the
@@ -73,10 +73,12 @@ per-segment times."
   `transformers`) but no setting for LangChain's `check_embedding_ctx_length`, and builds
   `OpenAIEmbeddings` without it. The token-array and tokenizer-download behaviour itself was observed in
   the POC run (RESULTS.md, F2).
-  [`lfx_openai/components/openai/openai.py` L56-67, L96-115](https://github.com/langflow-ai/langflow/blob/55c4398326671f35c3a8d48a24e8243ab2b92f5b/src/bundles/openai/src/lfx_openai/components/openai/openai.py#L56-L115)
+  [`lfx_openai/components/openai/openai.py` L56-115](https://github.com/langflow-ai/langflow/blob/55c4398326671f35c3a8d48a24e8243ab2b92f5b/src/bundles/openai/src/lfx_openai/components/openai/openai.py#L56-L115)
 - **But the newer Embedding Model node handles it.** Langflow 1.13.3's unified Embedding Model node sets
   `check_embedding_ctx_length=False` for its "OpenAI Compatible" provider, with a comment naming the same
-  token-array problem, and it has an API Base URL field. We have not tried it.
+  token-array problem, and it has an API Base URL field
+  ([`embedding_model.py` L79-84](https://github.com/langflow-ai/langflow/blob/55c4398326671f35c3a8d48a24e8243ab2b92f5b/src/lfx/src/lfx/components/models_and_agents/embedding_model.py#L79-L84)).
+  We have not tried it.
   [`unified_models/instantiation.py` L725-728](https://github.com/langflow-ai/langflow/blob/55c4398326671f35c3a8d48a24e8243ab2b92f5b/src/lfx/src/lfx/base/models/unified_models/instantiation.py#L725-L728)
 - **No task prefixes: confirmed.** Neither node has an input that puts text before documents or queries.
   This is the reason that still stands on its own.
@@ -115,7 +117,7 @@ node id; the server applies them before building the graph.
 - [`api/v1/endpoints.py` L510](https://github.com/langflow-ai/langflow/blob/55c4398326671f35c3a8d48a24e8243ab2b92f5b/src/backend/base/langflow/api/v1/endpoints.py#L510)
 
 Two conditions this repo relies on: the default `LANGFLOW_TWEAKS_POLICY` is `permissive` (this repo does
-not set it; `declared` would refuse tweaks to fields not marked for the API), and only the flow's owner may
+not set it; `declared` would refuse tweaks to fields not marked for the API, once a flow marks any), and only the flow's owner may
 send tweaks
 ([`endpoints.py` L151-157](https://github.com/langflow-ai/langflow/blob/55c4398326671f35c3a8d48a24e8243ab2b92f5b/src/backend/base/langflow/api/v1/endpoints.py#L151-L157)),
 which holds because the API's Langflow key belongs to the user that imports the flows.

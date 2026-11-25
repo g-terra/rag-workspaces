@@ -4,9 +4,9 @@ Langflow's Split Text cuts at one separator only. Set to a space, it cut chunks 
 numbered list or a definition was split across two chunks in the middle of an item. This splitter tries
 paragraph breaks first, then line breaks, then sentence ends, then spaces, and only cuts inside a word
 when nothing else fits, so a list that fits in a chunk stays in one chunk with the sentence before it.
-Langflow also ships a Recursive Character Text Splitter, but its input takes documents, Data or JSON, not
-the table of rows the loader returns, and it would replace the `Split` node's fields and output the API
-tweaks (poc/STOCK-COMPONENTS.md, claim 2).
+Langflow also ships a Recursive Character Text Splitter (the same LangChain class), but its input is
+declared as documents, Data or JSON, not the table of rows the loader returns; wiring it in was not tried
+(poc/STOCK-COMPONENTS.md, claim 2).
 
 Each input row (a PDF page, a transcript segment, a whole text file) is split on its own, and every chunk
 keeps its row's metadata (page, start_seconds and the rest).

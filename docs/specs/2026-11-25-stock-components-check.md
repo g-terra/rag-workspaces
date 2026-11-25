@@ -10,7 +10,8 @@ areas: [docs, flows]
 
 ## Summary
 
-`poc/STOCK-COMPONENTS.md` records, for each custom component in `langflow/components/rag_workspaces/`,
+`poc/STOCK-COMPONENTS.md` records, for each custom component that stands in for a stock Langflow one
+(all in `langflow/components/rag_workspaces/` except `web_page.py`, which has no stock counterpart),
 whether the reason we gave for not using a stock Langflow component holds in the Langflow 1.13.3 source,
 with permalinks pinned to the release commit. Three reasons are confirmed and three only partly, so the
 docstrings of `text_splitter.py` and `lmstudio_embeddings.py` are corrected, and the flows that embed
@@ -21,8 +22,8 @@ those components carry the new code. Nothing changes at run time.
 The COS512 report has to justify the custom components with sources. The reasons so far lived in
 `poc/RESULTS.md` (F1, F2, F7), `docs/decisions.md` decision 20 and the component docstrings, from what the
 spike observed, not from reading Langflow's code. Reading the code showed two of them overstated: a stock
-Recursive Character Text Splitter exists, Split Text does keep row metadata, and the newer Embedding Model
-node already turns off the length check that broke LM Studio. Rule 6 (keep docs true) asks for the
+Recursive Character Text Splitter exists, and the newer Embedding Model node already turns off the length
+check that broke LM Studio. Rule 6 (keep docs true) asks for the
 correction.
 
 ## Design
@@ -36,12 +37,13 @@ correction.
 4. `flows/ingest.json`, `flows/retrieve.json`, `flows/answer.json`, `flows/chat.json`: the embedded
    `template.code.value` of the `Split` and `Embeddings` nodes replaced with the new file contents, as the
    drift test in `apps/api/src/flows.test.ts` requires.
+5. `docs/architecture.md`: the Custom components bullet names the task prefixes and links the check.
 
 ## Decisions and trade-offs
 
 | Decision | Alternatives considered | Why this one |
 | -------- | ----------------------- | ------------ |
-| Keep both components, correct the docstrings | Switch to the stock Recursive Character Text Splitter or the Embedding Model node | The prefixes and the loader's table input still need our code, and the API's tweaks depend on these nodes' fields. Switching is untested and not what was asked. |
+| Keep both components, correct the docstrings | Switch to the stock Recursive Character Text Splitter or the Embedding Model node | Task prefixes need our code, the stock splitter isn't declared to take the loader's table, and switching is untested and not what was asked. |
 | Cite the docs' source files in the Langflow repo | Cite docs.langflow.org pages | The site couldn't be fetched to check; the source at the release commit is the same text and the link can't drift. |
 | A separate file in `poc/` | Rewrite F1, F2 and F7 in `RESULTS.md` | `RESULTS.md` records what the spike saw on 2026-11-20; the check is later evidence, so it is added beside it and linked. |
 
@@ -73,5 +75,6 @@ Docling mode, was not done. Neither would remove the need for task prefixes or p
 
 ## Docs updated
 
-`poc/RESULTS.md` and `poc/README.md` link to the new file. `docs/decisions.md` decision 20 (Chroma) is
+`poc/RESULTS.md` and `poc/README.md` link to the new file. `docs/architecture.md` (Custom components)
+now names the prefixes and points to it. `docs/decisions.md` decision 20 (Chroma) is
 confirmed as written and needs no change.
