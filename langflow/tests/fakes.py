@@ -34,6 +34,7 @@ class FakeChroma:
     def __init__(self) -> None:
         self.collections: dict[str, dict] = {}  # name -> {"id", "configuration", "rows": {id: (doc, meta, emb)}}
         self.calls: list[tuple[str, str]] = []  # (method, path after BASE), in order
+        self.bodies: list[dict] = []  # each request's JSON body, in the same order
 
     def add(self, name: str, rows: dict[str, tuple[str, dict, list[float]]]) -> str:
         """Create a collection holding `rows` (id -> (text, metadata, vector)); returns its id."""
@@ -55,6 +56,7 @@ class FakeChroma:
         path = request.url.path.removeprefix(httpx.URL(BASE).path)
         self.calls.append((request.method, path))
         body = json.loads(request.content) if request.content else {}
+        self.bodies.append(body)
         if request.method == "POST" and path == "/collections":
             c = self.collections.setdefault(body["name"], {"id": f"cid-{body['name']}", "rows": {}})
             c.setdefault("configuration", body.get("configuration"))
