@@ -1,7 +1,7 @@
 ---
 title: record the nomic prefix measurement
 date: 2026-11-25
-pr: pending
+pr: "#134"
 status: in review
 areas: [docs]
 ---
