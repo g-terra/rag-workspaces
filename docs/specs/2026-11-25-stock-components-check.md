@@ -1,8 +1,8 @@
 ---
 title: Check why each custom Langflow component is needed against the 1.13.3 source
 date: 2026-11-25
-pr: pending
-status: proposed
+pr: "#135"
+status: in review
 areas: [docs, flows]
 ---
 
