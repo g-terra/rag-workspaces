@@ -81,7 +81,8 @@ class WorkspaceDocumentLoader(Component):
 
             doc = docx.Document(str(path))
             text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-            rows.append(Data(data={**meta, "text": text}))
+            if text:
+                rows.append(Data(data={**meta, "text": text}))
         elif path.name.endswith(".transcript.json"):
             rows = transcript_rows(json.loads(path.read_text(encoding="utf-8")), meta)
         elif ext in {".md", ".markdown", ".txt"}:

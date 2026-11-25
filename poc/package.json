@@ -1,6 +1,7 @@
 {
   "name": "rag-workspaces-langflow-poc",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "Proof of concept for the Langflow assumptions in the rag-workspaces plan. No dependencies.",
   "engines": { "node": ">=22.18" },

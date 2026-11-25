@@ -9,3 +9,5 @@ coverage/
 poc/results/
 playwright-report/
 test-results/
+__pycache__/
+.pytest_cache/

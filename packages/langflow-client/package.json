@@ -2,6 +2,7 @@
   "name": "@rag/langflow-client",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "description": "Typed client for the parts of Langflow's HTTP API the API uses: login, API keys, flows, run and stream.",
   "type": "module",
   "files": [

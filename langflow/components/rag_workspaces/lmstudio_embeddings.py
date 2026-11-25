@@ -4,11 +4,13 @@ The built-in OpenAI Embeddings component cannot be used against LM Studio in
 Langflow 1.13: with tiktoken on, LangChain sends token-id arrays (LM Studio wants
 strings), and with tiktoken off it downloads a Hugging Face tokenizer to check
 context length. This component turns that check off, so plain strings are sent
-and nothing is downloaded.
+and nothing is downloaded. (Langflow 1.13.3's newer Embedding Model node turns the
+check off too for its "OpenAI Compatible" provider; we have not tried it.)
 
-It also puts the model's task prefixes before each text: some models (nomic-embed-text, Qwen3-Embedding)
-were trained with one for documents and another for queries, and search is weaker without them. The API
-sends the prefixes pinned on the workspace.
+The main reason it exists: it puts the model's task prefixes before each text. Some models
+(nomic-embed-text, Qwen3-Embedding) were trained with one for documents and another for queries, and
+search is weaker without them. No stock Langflow embedding node can add them. The API sends the prefixes
+pinned on the workspace. Sources: poc/STOCK-COMPONENTS.md, claim 4.
 """
 
 from langchain_core.embeddings import Embeddings

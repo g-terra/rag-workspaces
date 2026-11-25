@@ -12,6 +12,7 @@ answer came from.
 [![Smoke test](https://github.com/g-terra/rag-workspaces/actions/workflows/smoke.yml/badge.svg)](https://github.com/g-terra/rag-workspaces/actions/workflows/smoke.yml)
 [![Release](https://img.shields.io/github/v/release/g-terra/rag-workspaces?sort=semver)](https://github.com/g-terra/rag-workspaces/releases)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-fe5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 <br>
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Langflow 1.13.3](https://img.shields.io/badge/Langflow-1.13.3-7528FC)
@@ -146,3 +147,7 @@ endpoints map to these routes (no aliases, [decision 6](docs/decisions.md)):
 
 Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the dev setup, the
 workflow every change follows, commit and release rules, the test suites and what a pull request needs.
+
+## License
+
+[MIT](LICENSE) © 2026 Guilherme Terra.

@@ -11,7 +11,7 @@ on:
       - 'apps/api/**'
       - 'packages/**'
       - 'flows/**'
-      - 'langflow/**'
+      - 'langflow/components/**'
       - 'docker/**'
       - 'docker-compose*.yml'
       - 'poc/standin/**'
