@@ -4,6 +4,7 @@ A throwaway stack that checks the Langflow assumptions the plan depends on befor
 we build on them. Results and what they mean for the plan are in
 [RESULTS.md](RESULTS.md). Whether each custom component was really needed, checked against the
 Langflow 1.13.3 source, is in [STOCK-COMPONENTS.md](STOCK-COMPONENTS.md).
+Twenty questions with known answers, asked of the tool and of Codex, are in [answer-key/](answer-key/README.md).
 
 **Pinned versions tested:** Langflow `1.13.3` (`langflowai/langflow:1.13.3`),
 ChromaDB `1.5.9` (`chromadb/chroma:1.5.9`), Node 22.23.
