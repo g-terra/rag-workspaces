@@ -116,7 +116,7 @@ edits a version or `CHANGELOG.md` by hand.
 
 ## Tests and checks
 
-Run these before you push. CI (`.github/workflows/ci.yml`) runs the same six on every pull request.
+Run these before you push. CI (`.github/workflows/ci.yml`) runs the same seven on every pull request.
 
 ```bash
 pnpm format:check     # Prettier (pnpm format fixes it)
@@ -124,17 +124,20 @@ pnpm lint             # ESLint
 pnpm typecheck        # tsc --noEmit
 pnpm test             # Vitest in every package
 pnpm test:scripts     # node:test for scripts/
+pnpm test:langflow    # pytest for the custom Langflow components
 pnpm build
 ```
 
 Database tests in `packages/db` and `apps/api` run only when `TEST_DATABASE_URL` points at a Postgres you
-don't mind being written to; CI starts a throwaway one.
+don't mind being written to; CI starts a throwaway one. `pnpm test:langflow` needs
+[uv](https://docs.astral.sh/uv/); it builds a Python environment with Langflow's component framework (`lfx`) at
+the version the stack runs and mocks every HTTP call, so it needs no Docker or model.
 
 Two slower suites run a whole throwaway stack in Docker, with a small stand-in model instead of a real one:
 
 | Command | What it checks | Runs in CI |
 |---|---|---|
-| `pnpm smoke` | The compose stack end to end: sign-in, the local names, a workspace, uploads through ingestion into Chroma, search, answers and chat settings (about 5 minutes) | On PRs touching `apps/api`, `packages`, `flows`, `langflow`, `docker` or the compose files, and nightly on `main` |
+| `pnpm smoke` | The compose stack end to end: sign-in, the local names, a workspace, uploads through ingestion into Chroma, search, answers and chat settings (about 5 minutes) | On PRs touching `apps/api`, `packages`, `flows`, `langflow/components`, `docker` or the compose files, and nightly on `main` |
 | `pnpm e2e` | The admin UI's Playwright tests on that same stack | On PRs touching `apps/admin` or the stack, and nightly on `main` |
 
 Run the one that matches your change locally before you push. `pnpm smoke --keep` leaves the stack up on

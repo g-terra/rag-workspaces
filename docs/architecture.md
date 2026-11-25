@@ -235,6 +235,7 @@ packages/
   config/         shared tsconfig, eslint, prettier, vitest presets
 flows/            ingest.json, retrieve.json, answer.json, chat.json, README.md (the flow contract)
 langflow/components/  custom Langflow components (Python, run inside Langflow)
+langflow/tests/   pytest unit tests for those components (`pnpm test:langflow`; requirements pinned to Langflow's lock)
 scripts/          flows export/import, backup/restore, doctor
 docker/           Dockerfiles, nginx config, keycloak/realm.json, postgres init script
 poc/              the Langflow spike, kept as reference until M1 replaces it
@@ -258,5 +259,5 @@ docker-compose.yml, turbo.json, pnpm-workspace.yaml, .env.example
 | App DB | Postgres + Drizzle ORM |
 | Transcription | faster-whisper ASR service + ffmpeg (optional profile) |
 | Admin UI | Vite + React, React Router, Tailwind CSS, shadcn/ui, TanStack Query, oidc-client-ts, fetch-based SSE |
-| Tests | Vitest, Testcontainers, Playwright, MSW |
+| Tests | Vitest, Testcontainers, Playwright, MSW; pytest and respx for the custom Langflow components |
 | CI | GitHub Actions |

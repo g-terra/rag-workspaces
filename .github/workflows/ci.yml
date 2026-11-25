@@ -40,6 +40,21 @@ jobs:
       - run: pnpm test:scripts
       - run: pnpm build
 
+  langflow:
+    name: Langflow components
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: langflow/requirements-test.txt
+      # The same command as `pnpm test:langflow`, without installing Node for it. uv's own Python, not the
+      # runner's: the system one also sees Ubuntu's dist-packages, whose pytest plugins break the run.
+      - run: uv run --managed-python --no-project --python 3.14 --with-requirements requirements-test.txt pytest
+        working-directory: langflow
+
   docker:
     name: Compose config and images
     runs-on: ubuntu-latest

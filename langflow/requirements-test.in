@@ -1,0 +1,20 @@
+# What the component tests import directly. `requirements-test.txt` pins these and everything they pull in
+# to the versions in Langflow's uv.lock, for the Python the langflowai/langflow image runs: regenerate it
+# with `uv run --no-project --with packaging python pin-test-requirements.py <langflow tag>` when Langflow
+# is upgraded.
+lfx
+beautifulsoup4
+httpx
+langchain-anthropic
+langchain-core
+langchain-google-genai
+langchain-openai
+langchain-text-splitters
+lxml
+markitdown
+numpy
+pandas
+pypdf
+python-docx
+pytest
+respx
