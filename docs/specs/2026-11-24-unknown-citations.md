@@ -1,7 +1,7 @@
 ---
 title: remove citations to passages the model was not given
 date: 2026-11-24
-pr: pending
+pr: 138
 status: proposed
 areas: [api, flows, docs]
 ---
