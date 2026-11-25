@@ -1,8 +1,8 @@
 ---
 title: Unit tests for the custom Langflow components
 date: 2026-11-25
-pr: pending
-status: proposed
+pr: "#133"
+status: in review
 areas: [langflow-client, flows, ci]
 ---
 
@@ -79,6 +79,8 @@ otherwise have to list the components as untested.
 - `langflow/components/rag_workspaces/document_loader.py`: one fix the tests found. A DOCX with no text
   gave a row with empty text, which passed the loader's "No text could be extracted" check and failed
   later in the splitter with "No text to split". It now fails in the loader, like an empty PDF.
+  `flows/ingest.json` carries the component's code, so its Loader node gets the same change (the flow
+  contract test in `apps/api/src/flows.test.ts` checks they match).
 - `.gitignore`: `__pycache__/` and `.pytest_cache/`.
 
 ## Decisions and trade-offs
@@ -96,7 +98,8 @@ otherwise have to list the components as untested.
 - **HTTP API**: None.
 - **Configuration**: None. Running the tests needs [uv](https://docs.astral.sh/uv/) on the machine.
 - **Data**: None.
-- **Langflow**: None. The components' inputs, outputs and node ids are unchanged.
+- **Langflow**: `flows/ingest.json`'s Loader node carries the fixed `document_loader.py`. Inputs, outputs
+  and node ids are unchanged. An existing install picks it up when Langflow restarts (it imports `flows/*.json` on every start).
 - **Events and logs**: None.
 
 ## Operations
