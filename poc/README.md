@@ -2,7 +2,8 @@
 
 A throwaway stack that checks the Langflow assumptions the plan depends on before
 we build on them. Results and what they mean for the plan are in
-[RESULTS.md](RESULTS.md).
+[RESULTS.md](RESULTS.md). A later trial of Langflow's knowledge bases in place of
+Chroma is in [KNOWLEDGE-BASES.md](KNOWLEDGE-BASES.md).
 
 **Pinned versions tested:** Langflow `1.13.3` (`langflowai/langflow:1.13.3`),
 ChromaDB `1.5.9` (`chromadb/chroma:1.5.9`), Node 22.23.
