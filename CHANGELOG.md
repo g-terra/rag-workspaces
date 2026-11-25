@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/g-terra/rag-workspaces/compare/v0.3.1...v0.3.2) (2026-11-25)
+
+
+### Bug fixes
+
+* **api:** remove citations to passages the model was not given ([7afd66c](https://github.com/g-terra/rag-workspaces/commit/7afd66c8f8338deb95404791912be046a80e0630))
+
 ## [0.3.1](https://github.com/g-terra/rag-workspaces/compare/v0.3.0...v0.3.1) (2026-11-25)
 
 
