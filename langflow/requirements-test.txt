@@ -1,0 +1,20 @@
+# What the component tests need. lfx is the component framework inside langflowai/langflow:1.13.3; the
+# libraries the components import are pinned to the versions in Langflow 1.13.3's uv.lock, so the tests run
+# what the container runs. Used by `pnpm test:langflow` (uv) and the CI job.
+lfx==1.13.3
+beautifulsoup4==4.15.0
+httpx==0.28.1
+langchain-anthropic==1.4.8
+langchain-core==1.5.1
+langchain-google-genai==4.1.3
+langchain-openai==1.4.1
+langchain-text-splitters==1.1.2
+lxml==6.1.1
+markitdown==0.1.6
+numpy==2.2.6
+pandas==2.2.3
+pypdf==6.21.4
+python-docx==1.2.0
+# Test tools.
+pytest==8.4.2
+respx==0.22.0
