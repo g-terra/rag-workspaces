@@ -3,6 +3,8 @@ from pathlib import Path
 
 import docx
 import pytest
+from pypdf import PageObject
+from pypdf.errors import LimitReachedError
 
 from rag_workspaces.document_loader import WorkspaceDocumentLoader, transcript_rows
 
@@ -132,3 +134,35 @@ def test_pdf_without_text_is_refused(tmp_path):
 
     with pytest.raises(ValueError, match="No text could be extracted from scan.pdf"):
         load(tmp_path, "scan.pdf")
+
+
+def too_complex_on(*pages: str):
+    """extract_text that gives up, as pypdf does past its parsing budget, on pages with this text."""
+    real = PageObject.extract_text
+
+    def extract_text(self, *args, **kwargs):
+        text = real(self, *args, **kwargs)
+        if text.strip() in pages:
+            raise LimitReachedError("Reached maximum number of tokens per stream")
+        return text
+
+    return extract_text
+
+
+def test_a_pdf_page_too_complex_to_read_is_skipped_and_reported(tmp_path, monkeypatch):
+    monkeypatch.setattr(PageObject, "extract_text", too_complex_on("Diagram page"))
+    (tmp_path / "slides.pdf").write_bytes(pdf_with_pages("Intro", "Diagram page", "Outro"))
+    loader = WorkspaceDocumentLoader(file_path="slides.pdf", document_id="d", base_dir=str(tmp_path))
+
+    rows = loader.load_pages().to_dict(orient="records")
+
+    assert [r["page"] for r in rows] == [1, 3]
+    assert loader.status == "2 page row(s) from slides.pdf; skipped pages too complex to read: 2"
+
+
+def test_a_pdf_with_every_page_too_complex_names_them(tmp_path, monkeypatch):
+    monkeypatch.setattr(PageObject, "extract_text", too_complex_on("A", "B"))
+    (tmp_path / "slides.pdf").write_bytes(pdf_with_pages("A", "B"))
+
+    with pytest.raises(ValueError, match=r"pages too complex to read: 1, 2\)"):
+        load(tmp_path, "slides.pdf")

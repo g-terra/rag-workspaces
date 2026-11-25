@@ -31,6 +31,7 @@ PAGE = """<html><head><title>Tab title</title><link rel="canonical" href="/guide
     <p>Install the CLI, then <a href="install#linux">read this</a>.</p>
     <script>track()</script>
     <div id="on-this-page">On this page</div>
+    <div role="search">Search the docs</div>
   </main>
   <footer><a href="mailto:help@docs.test">Mail</a><a href="#top">Top</a></footer>
 </body></html>"""
@@ -86,7 +87,7 @@ def test_main_markdown_keeps_the_content_and_drops_the_sites_chrome():
 
     assert markdown.startswith("# Getting started")
     assert "Install the CLI, then [read this](install#linux)." in markdown
-    for chrome in ("Home", "Next", "Other page", "track()", "On this page", "Mail"):
+    for chrome in ("Home", "Next", "Other page", "track()", "On this page", "Search the docs", "Mail"):
         assert chrome not in markdown
 
 
@@ -102,8 +103,8 @@ def test_gunzip_stops_at_the_body_cap(monkeypatch):
         gunzip(gzip.compress(b"x" * 1000))
 
 
+@respx.mock(assert_all_called=False)
 def test_the_ssrf_guard_refuses_private_addresses_and_langflows_own_hosts(monkeypatch):
-    monkeypatch.delenv("CRAWL_ALLOWED_HOSTS", raising=False)
     monkeypatch.setenv("LANGFLOW_SSRF_ALLOWED_HOSTS", "host.docker.internal")
 
     with pytest.raises(Blocked, match="SSRF guard"):
@@ -176,6 +177,16 @@ def test_the_markdown_twin_is_used_when_preferred(site):
     assert f"{SITE}/guide/next" in with_links["links"]
 
 
+def test_the_twin_drops_the_query_and_needs_a_markdown_type(site):
+    twin = site.get(f"{SITE}/guide/start.md").respond(200, html="<h1>Soft 404</h1>")
+    site.get(f"{SITE}/guide/start").respond(200, html=PAGE)
+
+    out = fetch(url=f"{SITE}/guide/start?lang=en#intro", prefer_markdown=True)
+
+    assert twin.calls.last.request.url == f"{SITE}/guide/start.md"
+    assert out["markdown"].startswith("# Getting started")  # the HTML twin answer was not used
+
+
 def test_a_missing_twin_falls_back_to_the_html(site):
     site.get(f"{SITE}/guide/start.md").respond(404)
     site.get(f"{SITE}/guide/start").respond(200, html=PAGE)
@@ -205,12 +216,36 @@ def test_a_body_over_the_cap_is_an_error(site, monkeypatch):
     assert "is larger than" in fetch(url=f"{SITE}/huge")["error"]
 
 
-def test_a_blocked_host_is_reported_as_an_error(monkeypatch):
-    monkeypatch.delenv("CRAWL_ALLOWED_HOSTS", raising=False)
-
+@respx.mock(assert_all_called=False)
+def test_a_blocked_host_is_reported_as_an_error():
     out = fetch(url="http://127.0.0.1/docs")
 
     assert "SSRF guard" in out["error"]
+
+
+def test_every_redirect_hop_is_checked_by_the_guard_again(site):
+    site.get(f"{SITE}/out").respond(302, headers={"Location": "http://10.0.0.5/admin"})
+    internal = site.get("http://10.0.0.5/admin").respond(200, html="<h1>internal</h1>")
+
+    out = fetch(url=f"{SITE}/out")
+
+    assert "SSRF guard" in out["error"]
+    assert not internal.called
+
+
+def test_robots_txt_is_read_once_per_site_until_it_expires(site, monkeypatch):
+    robots = site.get(f"{SITE}/robots.txt").respond(200, text="User-agent: *\nDisallow:\n")
+    site.get(url__startswith=f"{SITE}/guide/").respond(200, html=PAGE)
+    now = [1000.0]
+    monkeypatch.setattr(web_page.time, "monotonic", lambda: now[0])
+
+    fetch(url=f"{SITE}/guide/a")
+    fetch(url=f"{SITE}/guide/b")
+    assert robots.call_count == 1
+
+    now[0] += web_page.ROBOTS_TTL_SECONDS + 1
+    fetch(url=f"{SITE}/guide/c")
+    assert robots.call_count == 2
 
 
 # --- sitemap mode -----------------------------------------------------------------------------------

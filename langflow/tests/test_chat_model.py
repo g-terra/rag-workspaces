@@ -19,6 +19,7 @@ def test_lmstudio_is_the_default_and_talks_to_the_host():
     assert model.openai_api_key.get_secret_value() == "lm-studio"
     assert model.temperature == 0.3
     assert model.reasoning_effort is None
+    assert model.stream_usage is True  # token counts for usage analytics
 
 
 def test_reasoning_effort_goes_to_lmstudio_and_openai_when_set():
@@ -44,6 +45,7 @@ def test_anthropic_gets_the_key_and_no_reasoning_effort():
     assert model.max_tokens == 1024
     assert model.temperature == 0.3
     assert "reasoning_effort" not in model.model_kwargs
+    assert build(provider="anthropic", api_key="k", base_url="http://proxy:8080").anthropic_api_url == "http://proxy:8080"
 
 
 def test_gemini_gets_the_key():

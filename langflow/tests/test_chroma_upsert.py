@@ -16,6 +16,7 @@ def test_creates_the_collection_with_the_workspace_hnsw_settings(chroma):
     upsert([Data(data={"text": "one"})])
 
     assert chroma.calls[0] == ("POST", "/collections")
+    assert chroma.bodies[0]["get_or_create"] is True
     assert chroma.collections["ws_ouc"]["configuration"] == {"hnsw": COLLECTION_HNSW}
     assert COLLECTION_HNSW == {"space": "cosine", "ef_construction": 200, "ef_search": 400, "max_neighbors": 32}
 
@@ -36,6 +37,14 @@ def test_writes_ids_text_vectors_and_scalar_metadata(chroma):
                                   "chunk_index": 1}, [0.0, 1.0]),
     }
     assert result == {"collection": "ws_ouc", "document_id": "doc-1", "chunks": 2, "pages": 2}
+
+
+def test_writing_to_an_existing_collection_reuses_it(chroma):
+    chroma.add("ws_ouc", {"doc-2:0": ("other", {"document_id": "doc-2"}, [1.0, 0.0, 0.0])})
+
+    upsert([Data(data={"text": "one"})])
+
+    assert sorted(chroma.rows("ws_ouc")) == ["doc-1:0", "doc-2:0"]
 
 
 def test_reingest_deletes_the_documents_old_vectors_first(chroma):

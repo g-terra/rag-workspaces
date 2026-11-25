@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from fakes import URL, FakeEmbeddings
+from fakes import URL, FakeChroma, FakeEmbeddings, serve
 
 from rag_workspaces import chroma_search
 from rag_workspaces.chroma_search import (
@@ -178,10 +178,12 @@ def test_each_part_of_a_question_gets_its_turn(chroma):
     # The whole question leans to alpha by meaning.
     embedding = FakeEmbeddings({"What is alpha?": alpha, "How does beta work?": beta, query: [1.0, 0.2, 0.0]})
 
-    ids = found(search(search_query=query, embedding=embedding))
+    result = search(search_query=query, embedding=embedding).get_passages().data["passages"]
 
     assert embedding.queries == ["What is alpha?", "How does beta work?", query]
-    assert sorted(ids) == ["a:0", "b:0"]
+    assert sorted(p["id"] for p in result) == ["a:0", "b:0"]
+    # Scores are against the whole question, not a part: b:0 is 0.196 from it, 1.0 from its own part.
+    assert {p["id"]: p["score"] for p in result}["b:0"] == 0.1961
 
 
 def test_the_index_is_cached_and_reads_only_new_vectors_when_the_collection_grows(chroma):
@@ -221,3 +223,44 @@ def test_a_collection_too_big_for_memory_uses_chromas_own_vector_search(chroma, 
     assert found(search(folder="w1", top_k=10)) == [f"doc-a:{i}" for i in range(5)]
     queries = [b for (_, path), b in zip(chroma.calls, chroma.bodies, strict=True) if path.endswith("/query")]
     assert queries[-1]["where"] == {"folder": "w1"}
+
+
+def test_the_index_is_rebuilt_once_it_is_a_few_minutes_old(chroma, monkeypatch):
+    chroma.add("ws_ouc", passages())
+    now = [1000.0]
+    monkeypatch.setattr(chroma_search.time, "monotonic", lambda: now[0])
+
+    def keyword_reads() -> int:
+        return sum(1 for b in chroma.bodies if b.get("include") == ["documents", "metadatas"])
+
+    search().get_passages()
+    search().get_passages()
+    assert keyword_reads() == 1
+
+    now[0] += chroma_search.INDEX_TTL_SECONDS + 1
+    search().get_passages()
+    assert keyword_reads() == 2
+
+
+def test_two_chroma_servers_never_share_an_index(chroma):
+    chroma.add("ws_ouc", passages())
+    other = FakeChroma()
+    # The same collection id and passage count, different passages.
+    other.add("ws_ouc", {f"x:{i}": (f"Other server XJ-9 note {i}.", {"document_id": "x"}, [1.0, 0.0, 0.0])
+                         for i in range(6)})
+
+    assert found(search()) == ["doc-b:0", "doc-a:0"]
+    with serve(other, "http://chroma2.test"):
+        assert found(search(chroma_url="http://chroma2.test")) == ["x:0", "x:1"]
+
+
+def test_a_passage_deleted_after_the_index_was_built_is_left_out(chroma):
+    chroma.add("ws_ouc", passages())
+    assert found(search()) == ["doc-b:0", "doc-a:0"]
+
+    # Same count, so the cached index (which still has doc-b:0) is reused.
+    del chroma.rows("ws_ouc")["doc-b:0"]
+    chroma.rows("ws_ouc")["doc-z:0"] = ("Unrelated.", {"document_id": "doc-z"}, [0.0, 1.0, 0.0])
+
+    result = search().get_passages().data["passages"]
+    assert [(p["rank"], p["id"]) for p in result] == [(1, "doc-a:0")]

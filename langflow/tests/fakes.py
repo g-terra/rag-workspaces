@@ -50,14 +50,17 @@ class FakeChroma:
 
     @staticmethod
     def _matches(meta: dict, where: dict | None) -> bool:
+        assert len(where or {}) <= 1, "real Chroma needs $and for several conditions"
         return all(meta.get(k) == v for k, v in (where or {}).items())
 
     def handle(self, request: httpx.Request) -> httpx.Response:
-        path = request.url.path.removeprefix(httpx.URL(BASE).path)
+        path = request.url.path.removeprefix(httpx.URL(BASE).path)  # the same path on any host
         self.calls.append((request.method, path))
         body = json.loads(request.content) if request.content else {}
         self.bodies.append(body)
         if request.method == "POST" and path == "/collections":
+            if body["name"] in self.collections and not body.get("get_or_create"):
+                return httpx.Response(409, json={"error": "UniqueConstraintError"})
             c = self.collections.setdefault(body["name"], {"id": f"cid-{body['name']}", "rows": {}})
             c.setdefault("configuration", body.get("configuration"))
             return httpx.Response(200, json={"id": c["id"], "name": body["name"]})
@@ -75,6 +78,8 @@ class FakeChroma:
                 rows[pid] = (doc, meta, emb)
             return httpx.Response(200, json={})
         if action == "delete":
+            if not body.get("where"):
+                return httpx.Response(400, json={"error": "fake Chroma: delete needs a where"})
             for pid in [p for p, (_, meta, _) in rows.items() if self._matches(meta, body.get("where"))]:
                 del rows[pid]
             return httpx.Response(200, json={})
@@ -101,7 +106,7 @@ def cosine(a: list[float], b: list[float]) -> float:
     return sum(x * y for x, y in zip(a, b, strict=True)) / norm if norm else 0.0
 
 
-def serve(fake: FakeChroma) -> respx.MockRouter:
+def serve(fake: FakeChroma, url: str = URL) -> respx.MockRouter:
     router = respx.mock(assert_all_called=False)
-    router.route(url__startswith=URL).mock(side_effect=fake.handle)
+    router.route(url__startswith=url).mock(side_effect=fake.handle)
     return router
