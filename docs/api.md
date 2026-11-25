@@ -63,7 +63,8 @@ The answer's `text` cites passages as `[1]`, `[2]`, matching `citations[].rank`,
 document and page. When nothing in the workspace is relevant enough, the answer is `grounded: false` with a
 fixed "not found" text, and no model is called. A reply that cites none of its passages (the model read them and
 found nothing to use) is `grounded: false` too, with the model's own words, and so is a short reply that says the
-material does not cover the question even if it cites passages. Rate an answer with
+material does not cover the question even if it cites passages. A citation number the
+model invents at the end of a statement is removed from `text`; a streamed reply can show it until `done`. Rate an answer with
 `POST …/answers/{id}/feedback { "rating": "up" }`.
 
 **Stream** the answer as it is written by sending `Accept: text/event-stream`. The stream sends `token`

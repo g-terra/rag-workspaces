@@ -14,6 +14,7 @@ import {
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
 import { FLOWS } from '../flows.js';
+import { dropUnknownCitations } from './citations.js';
 import { contextText, searchSources, type SourceHit } from './composite-search.js';
 import { normalise, resolveHits, retrieve, searchTweaks } from './passages.js';
 import { chatEndpoint, ProviderNotConfigured, type ChatEndpoint } from './providers.js';
@@ -237,18 +238,15 @@ export class Generator {
       const cited = composite
         ? hits
         : await resolveHits(db, workspace, normalise(citationsText ? parseJsonMessage(citationsText) : []));
-      const text = messageText(outputs['ChatOutput-answer']);
+      const written = messageText(outputs['ChatOutput-answer']);
+      const ranks = cited.map((p) => p.rank);
+      const text = dropUnknownCitations(written, ranks);
       if (!text.trim()) throw new HttpProblem(502, 'The model returned an empty answer.');
       return {
         status: 'complete',
         text,
         // A refusal that cites its passages anyway still rests on nothing (isRefusal).
-        grounded:
-          !isRefusal(text) &&
-          citesAny(
-            text,
-            cited.map((p) => p.rank),
-          ),
+        grounded: !isRefusal(text) && citesAny(text, ranks),
         citations: cited.map((p) => ({
           rank: p.rank,
           workspace: p.workspace,

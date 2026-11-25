@@ -57,7 +57,18 @@ describe('contextText', () => {
       hit('ouc', 1, 0.5, { page: 3 }),
       hit('personal', 2, 0.5, { startSeconds: 75, documentTitle: 'talk.mp4' }),
     ]);
-    expect(text).toBe('[1] (OUC: ouc.pdf, page 3)\nouc 1\n\n[2] (PERSONAL: talk.mp4, at 1:15)\npersonal 2');
+    expect(text).toBe(
+      'The passages are numbered 1 to 2. Cite only these numbers.\n\n' +
+        '[1] (OUC: ouc.pdf, page 3)\nouc 1\n\n[2] (PERSONAL: talk.mp4, at 1:15)\npersonal 2',
+    );
+  });
+
+  it('writes times in a transcript in round brackets, so they do not look like citations', () => {
+    const text = contextText([
+      hit('ouc', 1, 0.5, { text: '[4:00] One epoch. [1:02:03] See items[3], x[1:10] and [2].' }),
+    ]);
+    expect(text).toContain('\n(4:00) One epoch. (1:02:03) See items[3], x[1:10] and [2].');
+    expect(text).toContain('The passages are numbered 1 to 1. Cite only these numbers.');
   });
 
   it('says so when there is nothing', () => {

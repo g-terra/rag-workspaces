@@ -88,6 +88,9 @@ Same `Embeddings` and `Search` tweaks as `rw-retrieve`, plus:
 | `Prompt` | `template` (uses `{context}` and `{question}`) |
 | `LLM` | `provider` (`lmstudio`, `openai`, `anthropic`, `gemini`), `model_name`, `api_key`, `base_url`, `temperature`, `system_message`, `reasoning_effort` (empty: not sent; LM Studio and OpenAI only) |
 
+`Search` gives the prompt the numbered passages, after a line saying which numbers are valid, with times in transcripts
+as `(m:ss)`: in square brackets models copy them as citations.
+
 Outputs `ChatOutput-answer` (the answer text; tokens stream with `?stream=true`) and
 `ChatOutput-citations` (the passages given to the model, same shape as `rw-retrieve`).
 
@@ -114,7 +117,7 @@ without the `Embeddings`, `Search` and `ChatOutput-citations` nodes; the chat in
 | Node | Tweak fields |
 |---|---|
 | `ChatInput` | `input_value` (top-level): the question or latest message |
-| `Prompt` | `context`: the numbered passages, `[n] (<workspace>: <title>, page p)` then the text. `history`: earlier turns, or `(this is the first message)` |
+| `Prompt` | `context`: a line saying which numbers are valid, then the numbered passages (times as `(m:ss)`), `[n] (<workspace>: <title>, page p)` then the text. `history`: earlier turns, or `(this is the first message)` |
 | `LLM` | as `rw-answer` |
 
 Output `ChatOutput-answer` only: the API already knows the passages it sent, so it stores them as the citations.

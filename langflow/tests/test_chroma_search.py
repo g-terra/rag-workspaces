@@ -164,7 +164,19 @@ def test_context_tags_each_passage_with_where_it_comes_from(chroma):
 
     context = search().get_context().text
 
-    assert context == "[1] (talk.mp4, at 1:15)\nXJ-9 board reference.\n\n[2] (notes.pdf, page 1)\nGeneral notes about models, part 0."
+    assert context == ("The passages are numbered 1 to 2. Cite only these numbers.\n\n"
+                       "[1] (talk.mp4, at 1:15)\nXJ-9 board reference.\n\n[2] (notes.pdf, page 1)\nGeneral notes about models, part 0.")
+
+
+def test_context_writes_transcript_times_in_round_brackets(chroma):
+    chroma.add("ws_ouc", passages(**{"doc-b:0": ("[4:00] XJ-9 board reference, again at [1:02:03] and in xs[1:30].",
+                                                 {"document_id": "doc-b", "filename": "talk.mp4", "start_seconds": 75.0,
+                                                  "chunk_index": 0, "folder": "w2"},
+                                                 [0.0, 0.0, 1.0])}))
+
+    context = search().get_context().text
+
+    assert "(4:00) XJ-9 board reference, again at (1:02:03) and in xs[1:30]." in context
 
 
 def test_each_part_of_a_question_gets_its_turn(chroma):

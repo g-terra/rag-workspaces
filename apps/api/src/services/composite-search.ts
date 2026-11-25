@@ -38,6 +38,9 @@ function clock(seconds: number): string {
   return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
 }
 
+/** A time in a transcript, `[4:00]`. In square brackets it reads like a citation, and models copy it as one. */
+const TIME = /(?<![\w\])])\[(\d{1,3}:\d{2}(?::\d{2})?)\]/g;
+
 /**
  * The passages as the prompt's `{context}`, in the layout of the Search component's context output
  * (`langflow/components/rag_workspaces/chroma_search.py`), with the source workspace's name first and
@@ -45,14 +48,15 @@ function clock(seconds: number): string {
  */
 export function contextText(passages: SourceHit[]): string {
   if (!passages.length) return 'No relevant passages found.';
-  return passages
+  const blocks = passages
     .map((p) => {
       let where = `${p.workspaceName}: ${p.documentTitle}`;
       if (p.page) where += `, page ${p.page}`;
       else if (p.startSeconds !== null) where += `, at ${clock(p.startSeconds)}`;
-      return `[${p.rank}] (${where})\n${p.text}`;
+      return `[${p.rank}] (${where})\n${p.text.replace(TIME, '($1)')}`;
     })
     .join('\n\n');
+  return `The passages are numbered 1 to ${passages.length}. Cite only these numbers.\n\n${blocks}`;
 }
 
 export type CompositeSearchConfig = Pick<

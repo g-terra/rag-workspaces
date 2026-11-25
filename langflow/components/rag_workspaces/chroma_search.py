@@ -38,6 +38,9 @@ from lfx.schema.data import Data
 from lfx.schema.message import Message
 
 
+# A time in a transcript, `[4:00]`. In square brackets it reads like a citation, and models copy it as one.
+TIME = re.compile(r"(?<![\w\])])\[(\d{1,3}:\d{2}(?::\d{2})?)\]", re.ASCII)
+
 # How many candidates each ranking contributes before fusion, and RRF's k (the usual 60).
 CANDIDATES = 200
 RRF_K = 60
@@ -371,8 +374,12 @@ class ChromaWorkspaceSearch(Component):
                 where += f", page {p['page']}"
             elif p.get("start_seconds") is not None:
                 where += f", at {clock(p['start_seconds'])}"
-            blocks.append(f"[{p['rank']}] ({where})\n{p['text']}")
-        return Message(text="\n\n".join(blocks) if blocks else "No relevant passages found.")
+            text = TIME.sub(r"(\1)", p["text"])
+            blocks.append(f"[{p['rank']}] ({where})\n{text}")
+        if not blocks:
+            return Message(text="No relevant passages found.")
+        numbers = f"The passages are numbered 1 to {len(blocks)}. Cite only these numbers."
+        return Message(text="\n\n".join([numbers, *blocks]))
 
 
 def clock(seconds: float) -> str:
