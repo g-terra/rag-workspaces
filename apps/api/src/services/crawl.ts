@@ -3,7 +3,7 @@ import { and, eq, notInArray } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 import { PgBoss } from 'pg-boss';
 import type { Config } from '../config.js';
-import { ChromaService } from './chroma.js';
+import { KnowledgeBaseService } from './knowledge-bases.js';
 import { inScope, looksLikePage, normalizeUrl } from './crawl-scope.js';
 import type { DocumentEvents } from './document-events.js';
 import type { IngestQueue } from './ingest-queue.js';
@@ -14,7 +14,7 @@ export type CrawlDeps = {
   db: Database;
   storage: UploadStorage;
   fetcher: PageFetcher;
-  chroma: ChromaService;
+  kb: KnowledgeBaseService;
   events: DocumentEvents;
   /** Where new and changed pages go to be ingested. */
   ingest: IngestQueue;
@@ -382,9 +382,9 @@ class CrawlRun {
 
   /** Delete a page's vectors, row and file, unless an ingest run may be reading it. */
   private async remove(doc: Document): Promise<void> {
-    const { db, chroma, storage, events } = this.deps;
+    const { db, kb, storage, events } = this.deps;
     if (isBusy(doc)) return;
-    await chroma.deleteDocumentVectors(ChromaService.collectionName(this.slug), doc.id);
+    await kb.deleteDocument(KnowledgeBaseService.nameFor(this.slug), doc.id);
     const [gone] = await db
       .delete(documents)
       .where(and(eq(documents.id, doc.id), notInArray(documents.status, [...BUSY])))

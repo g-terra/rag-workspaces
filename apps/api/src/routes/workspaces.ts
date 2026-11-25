@@ -26,7 +26,7 @@ import { accessTo, requireWorkspace, type Access } from '../auth/access.js';
 import { currentUser, requireAdmin, requireUser } from '../auth/plugin.js';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
-import { ChromaService } from '../services/chroma.js';
+import { KnowledgeBaseService } from '../services/knowledge-bases.js';
 import type { DocumentEvents } from '../services/document-events.js';
 import type { IngestQueue } from '../services/ingest-queue.js';
 import { startReindex } from '../services/reindex.js';
@@ -37,7 +37,7 @@ import { findStyle } from '../services/styles.js';
 
 export type WorkspaceRoutesOptions = {
   db: Database;
-  chroma: ChromaService;
+  kb: KnowledgeBaseService;
   storage: UploadStorage;
   queue: IngestQueue;
   events: DocumentEvents;
@@ -73,7 +73,7 @@ const UNSET: WorkspaceSettings = {
 
 export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = async (
   app,
-  { db, chroma, storage, queue, events, config },
+  { db, kb, storage, queue, events, config },
 ) => {
   const toApi = (w: WorkspaceRow, access: Access, sources: WorkspaceRow[]): Workspace => ({
     id: w.id,
@@ -122,7 +122,7 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
         ...common,
         summary: 'Create a workspace',
         description:
-          'Creates the workspace and its Chroma collection (`ws_<slug>`). The slug never changes. ' +
+          'Creates the workspace and its Langflow collection (`ws_<slug>`). The slug never changes. ' +
           'The embedding provider and model are pinned now, from the request or the defaults in `.env`. ' +
           'With `kind: "composite"` and `sources` (two to ten standard workspaces) it holds no documents and ' +
           'no collection, and answers from its sources instead; embedding, chunking and `minScore` are theirs.',
@@ -149,8 +149,8 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
             embeddingModel: embeddingModel(),
             embeddingPrefixes: embeddingPrefixes(embeddingModel(), config),
           };
-      // Collection first: if Chroma is down nothing is half-created in Postgres. A composite has none.
-      if (!composite) await chroma.ensureCollection(ChromaService.collectionName(slug));
+      // Collection first: if Langflow is down nothing is half-created in Postgres. A composite has none.
+      if (!composite) await kb.ensure(KnowledgeBaseService.nameFor(slug), pinned);
       const created = await db
         .transaction(async (tx) => {
           const [row] = await tx
@@ -240,7 +240,7 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
         ...common,
         summary: 'Ingest every document again, optionally with a new embedding model',
         description:
-          'Empties the Chroma collection and queues every document. The workspace is `reindexing` until the ' +
+          'Empties the Langflow collection and queues every document. The workspace is `reindexing` until the ' +
           'last document is `ready` or `failed`; meanwhile passages, answers and chat messages answer 503 with ' +
           '`Retry-After`. Send `embeddingProvider` and `embeddingModel` to switch the workspace to another ' +
           'model (the only way to change it); an empty body reindexes with the current settings, for example ' +
@@ -254,7 +254,7 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
     async (req, reply) => {
       const { workspace } = await requireWorkspace(db, req.principal, req.params.slug, 'admin');
       requireStandard(workspace);
-      const row = await startReindex({ db, chroma, queue, events, config }, workspace, req.body ?? {});
+      const row = await startReindex({ db, kb, queue, events, config }, workspace, req.body ?? {});
       req.log.info(
         { workspace: workspace.slug, by: req.principal?.id, embeddingModel: row.settings.embeddingModel },
         'workspace reindex started',
@@ -270,7 +270,7 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
         ...common,
         summary: 'Delete a workspace and all its data',
         description:
-          'Removes its documents, files, Chroma collection, members and key bindings. An API key left with no workspace is revoked.',
+          'Removes its documents, files, Langflow collection, members and key bindings. An API key left with no workspace is revoked.',
         params: SlugParams,
         response: { 204: z.null() },
       },
@@ -302,10 +302,10 @@ export const workspaceRoutes: FastifyPluginAsyncZod<WorkspaceRoutesOptions> = as
       });
       if (workspace.kind === 'standard') {
         try {
-          await chroma.deleteCollection(ChromaService.collectionName(workspace.slug));
+          await kb.delete(KnowledgeBaseService.nameFor(workspace.slug));
         } catch (err) {
           // The workspace is gone either way; a leftover collection is harmless and `pnpm doctor` reports it.
-          req.log.warn({ err, workspace: workspace.slug }, 'could not delete the Chroma collection');
+          req.log.warn({ err, workspace: workspace.slug }, 'could not delete the Langflow collection');
         }
         await storage.removeWorkspace(workspace.slug);
       }

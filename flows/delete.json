@@ -14,32 +14,10 @@
         },
         "data": {
           "id": "Delete",
-          "type": "ext:rag_workspaces:ChromaWorkspaceDelete@extra",
+          "type": "ext:rag_workspaces:KnowledgeDocumentDelete@extra",
           "node": {
             "template": {
               "_type": "Component",
-              "chroma_url": {
-                "tool_mode": false,
-                "trace_as_metadata": true,
-                "load_from_db": false,
-                "list": false,
-                "list_add_label": "Add More",
-                "override_skip": false,
-                "required": false,
-                "placeholder": "",
-                "show": true,
-                "name": "chroma_url",
-                "value": "http://chroma:8000",
-                "display_name": "Chroma URL",
-                "advanced": true,
-                "api_editable": false,
-                "dynamic": false,
-                "info": "",
-                "title_case": false,
-                "track_in_telemetry": false,
-                "type": "str",
-                "_input_type": "StrInput"
-              },
               "code": {
                 "type": "code",
                 "required": true,
@@ -47,7 +25,7 @@
                 "list": false,
                 "show": true,
                 "multiline": true,
-                "value": "\"\"\"Delete every vector of one document from a workspace's Chroma collection.\"\"\"\n\nimport httpx\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import Output, StrInput\nfrom lfx.schema.data import Data\n\n\nclass ChromaWorkspaceDelete(Component):\n    display_name = \"Chroma Workspace Delete\"\n    description = \"Delete a document's vectors from a Chroma collection by document id.\"\n    icon = \"trash-2\"\n    name = \"ChromaWorkspaceDelete\"\n\n    inputs = [\n        StrInput(name=\"collection_name\", display_name=\"Collection Name\", value=\"ws_default\", required=True),\n        StrInput(name=\"document_id\", display_name=\"Document ID\", required=True),\n        StrInput(name=\"chroma_url\", display_name=\"Chroma URL\", value=\"http://chroma:8000\", advanced=True),\n        StrInput(name=\"tenant\", display_name=\"Tenant\", value=\"default_tenant\", advanced=True),\n        StrInput(name=\"database\", display_name=\"Database\", value=\"default_database\", advanced=True),\n    ]\n    outputs = [Output(display_name=\"Result\", name=\"result\", method=\"delete\")]\n\n    def delete(self) -> Data:\n        base = f\"{self.chroma_url.rstrip('/')}/api/v2/tenants/{self.tenant}/databases/{self.database}\"\n        where = {\"document_id\": self.document_id}\n        with httpx.Client(timeout=60) as client:\n            r = client.get(f\"{base}/collections/{self.collection_name}\")\n            if r.status_code == 404:\n                return Data(data={\"document_id\": self.document_id, \"deleted\": 0})\n            r.raise_for_status()\n            cid = r.json()[\"id\"]\n            ids = client.post(f\"{base}/collections/{cid}/get\", json={\"where\": where, \"include\": []})\n            ids.raise_for_status()\n            n = len(ids.json()[\"ids\"])\n            client.post(f\"{base}/collections/{cid}/delete\", json={\"where\": where}).raise_for_status()\n        result = {\"collection\": self.collection_name, \"document_id\": self.document_id, \"deleted\": n}\n        self.status = result\n        return Data(data=result)\n",
+                "value": "\"\"\"Delete one document's chunks from a native Langflow knowledge base.\n\nLangflow 1.13.3 has no route or component mode for this (spike finding F4), but every\nknowledge-base backend implements ``delete_by``; ingestion uses it to roll back a failed\njob. This component calls it for the flow owner's knowledge base, matching the\n``document_id`` column that our ingest flow stores as chunk metadata.\n\"\"\"\n\nfrom lfx.custom.custom_component.component import Component\nfrom lfx.io import Output, StrInput\nfrom lfx.schema.data import Data\n\n\nclass KnowledgeDocumentDelete(Component):\n    display_name = \"Knowledge Document Delete\"\n    description = \"Delete a document's chunks from a knowledge base by document id.\"\n    icon = \"trash-2\"\n    name = \"KnowledgeDocumentDelete\"\n\n    inputs = [\n        StrInput(name=\"knowledge_base\", display_name=\"Knowledge\", required=True),\n        StrInput(name=\"document_id\", display_name=\"Document ID\", required=True),\n    ]\n    outputs = [Output(display_name=\"Result\", name=\"result\", method=\"delete\")]\n\n    async def delete(self) -> Data:\n        import uuid\n\n        from langflow.api.utils.kb_helpers import backend_for_name\n\n        # Same ownership rule as the Knowledge component: the KB must belong to the flow's user.\n        owner = self.user_id if isinstance(self.user_id, uuid.UUID) else uuid.UUID(str(self.user_id))\n        backend = await backend_for_name(owner, self.knowledge_base)\n        try:\n            before = await backend.count()\n            await backend.delete_by({\"document_id\": self.document_id})\n            deleted = before - await backend.count()\n        finally:\n            await backend.teardown()\n        result = {\"knowledge_base\": self.knowledge_base, \"document_id\": self.document_id, \"deleted\": deleted}\n        self.status = result\n        return Data(data=result)\n",
                 "fileTypes": [],
                 "file_path": "",
                 "password": false,
@@ -58,50 +36,6 @@
                 "info": "",
                 "load_from_db": false,
                 "title_case": false
-              },
-              "collection_name": {
-                "tool_mode": false,
-                "trace_as_metadata": true,
-                "load_from_db": false,
-                "list": false,
-                "list_add_label": "Add More",
-                "override_skip": false,
-                "required": true,
-                "placeholder": "",
-                "show": true,
-                "name": "collection_name",
-                "value": "ws_default",
-                "display_name": "Collection Name",
-                "advanced": false,
-                "api_editable": false,
-                "dynamic": false,
-                "info": "",
-                "title_case": false,
-                "track_in_telemetry": false,
-                "type": "str",
-                "_input_type": "StrInput"
-              },
-              "database": {
-                "tool_mode": false,
-                "trace_as_metadata": true,
-                "load_from_db": false,
-                "list": false,
-                "list_add_label": "Add More",
-                "override_skip": false,
-                "required": false,
-                "placeholder": "",
-                "show": true,
-                "name": "database",
-                "value": "default_database",
-                "display_name": "Database",
-                "advanced": true,
-                "api_editable": false,
-                "dynamic": false,
-                "info": "",
-                "title_case": false,
-                "track_in_telemetry": false,
-                "type": "str",
-                "_input_type": "StrInput"
               },
               "document_id": {
                 "tool_mode": false,
@@ -125,20 +59,20 @@
                 "type": "str",
                 "_input_type": "StrInput"
               },
-              "tenant": {
+              "knowledge_base": {
                 "tool_mode": false,
                 "trace_as_metadata": true,
                 "load_from_db": false,
                 "list": false,
                 "list_add_label": "Add More",
                 "override_skip": false,
-                "required": false,
+                "required": true,
                 "placeholder": "",
                 "show": true,
-                "name": "tenant",
-                "value": "default_tenant",
-                "display_name": "Tenant",
-                "advanced": true,
+                "name": "knowledge_base",
+                "value": "",
+                "display_name": "Knowledge",
+                "advanced": false,
                 "api_editable": false,
                 "dynamic": false,
                 "info": "",
@@ -148,12 +82,12 @@
                 "_input_type": "StrInput"
               }
             },
-            "description": "Delete a document's vectors from a Chroma collection by document id.",
+            "description": "Delete a document's chunks from a knowledge base by document id.",
             "icon": "trash-2",
             "base_classes": [
               "JSON"
             ],
-            "display_name": "Chroma Workspace Delete",
+            "display_name": "Knowledge Document Delete",
             "documentation": "",
             "minimized": false,
             "custom_fields": {},
@@ -178,28 +112,25 @@
               }
             ],
             "field_order": [
-              "collection_name",
-              "document_id",
-              "chroma_url",
-              "tenant",
-              "database"
+              "knowledge_base",
+              "document_id"
             ],
             "beta": false,
             "legacy": false,
             "edited": false,
             "metadata": {
-              "component_class_name": "ChromaWorkspaceDelete",
-              "module": "_lfx_ext.extra.rag_workspaces.chroma_delete",
-              "code_hash": "8c805d10968b",
+              "component_class_name": "KnowledgeDocumentDelete",
+              "module": "_lfx_ext.extra.rag_workspaces.knowledge_delete",
+              "code_hash": "71a442057292",
               "dependencies": {
                 "total_dependencies": 2,
                 "dependencies": [
                   {
-                    "name": "httpx",
-                    "version": "0.28.1"
+                    "name": "lfx",
+                    "version": "1.13.3"
                   },
                   {
-                    "name": "lfx",
+                    "name": "langflow",
                     "version": "1.13.3"
                   }
                 ]
@@ -209,9 +140,9 @@
             "extension": "rag_workspaces",
             "bundle": "rag_workspaces",
             "extension_version": "0.0.0",
-            "namespaced_id": "ext:rag_workspaces:ChromaWorkspaceDelete@extra",
-            "name": "ChromaWorkspaceDelete",
-            "legacy_module": "chroma_delete"
+            "namespaced_id": "ext:rag_workspaces:KnowledgeDocumentDelete@extra",
+            "name": "KnowledgeDocumentDelete",
+            "legacy_module": "knowledge_delete"
           },
           "showNode": true
         }
@@ -524,14 +455,14 @@
     ],
     "edges": [
       {
-        "id": "reactflow__edge-Delete{œdataTypeœ:œext:rag_workspaces:ChromaWorkspaceDelete@extraœ,œidœ:œDeleteœ,œnameœ:œresultœ,œoutput_typesœ:[œJSONœ]}-ChatOutput-result{œfieldNameœ:œinput_valueœ,œidœ:œChatOutput-resultœ,œinputTypesœ:[œDataœ,œJSONœ,œDataFrameœ,œTableœ,œMessageœ],œtypeœ:œotherœ}",
+        "id": "reactflow__edge-Delete{œdataTypeœ:œext:rag_workspaces:KnowledgeDocumentDelete@extraœ,œidœ:œDeleteœ,œnameœ:œresultœ,œoutput_typesœ:[œJSONœ]}-ChatOutput-result{œfieldNameœ:œinput_valueœ,œidœ:œChatOutput-resultœ,œinputTypesœ:[œDataœ,œJSONœ,œDataFrameœ,œTableœ,œMessageœ],œtypeœ:œotherœ}",
         "source": "Delete",
         "target": "ChatOutput-result",
-        "sourceHandle": "{œdataTypeœ:œext:rag_workspaces:ChromaWorkspaceDelete@extraœ,œidœ:œDeleteœ,œnameœ:œresultœ,œoutput_typesœ:[œJSONœ]}",
+        "sourceHandle": "{œdataTypeœ:œext:rag_workspaces:KnowledgeDocumentDelete@extraœ,œidœ:œDeleteœ,œnameœ:œresultœ,œoutput_typesœ:[œJSONœ]}",
         "targetHandle": "{œfieldNameœ:œinput_valueœ,œidœ:œChatOutput-resultœ,œinputTypesœ:[œDataœ,œJSONœ,œDataFrameœ,œTableœ,œMessageœ],œtypeœ:œotherœ}",
         "data": {
           "sourceHandle": {
-            "dataType": "ext:rag_workspaces:ChromaWorkspaceDelete@extra",
+            "dataType": "ext:rag_workspaces:KnowledgeDocumentDelete@extra",
             "id": "Delete",
             "name": "result",
             "output_types": [
@@ -550,9 +481,7 @@
             ],
             "type": "other"
           }
-        },
-        "animated": false,
-        "className": ""
+        }
       }
     ],
     "viewport": {

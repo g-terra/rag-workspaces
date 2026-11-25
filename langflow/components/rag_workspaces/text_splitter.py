@@ -63,5 +63,7 @@ class WorkspaceTextSplitter(Component):
         if not chunks:
             msg = "No text to split"
             raise ValueError(msg)
+        for i, chunk in enumerate(chunks):
+            chunk.data["chunk_index"] = i
         self.status = f"{len(chunks)} chunk(s)"
         return DataFrame(chunks)

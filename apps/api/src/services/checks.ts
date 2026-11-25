@@ -12,10 +12,6 @@ function httpCheck(name: string, url: string, fetchFn: typeof fetch = fetch): Re
   };
 }
 
-export function chromaCheck(config: Pick<Config, 'CHROMA_URL'>, fetchFn?: typeof fetch): ReadinessCheck {
-  return httpCheck('chroma', `${config.CHROMA_URL.replace(/\/+$/, '')}/api/v2/heartbeat`, fetchFn);
-}
-
 /** Keycloak answers and our realm exists (its discovery document is served). */
 export function keycloakCheck(
   config: Pick<Config, 'KEYCLOAK_INTERNAL_URL' | 'KEYCLOAK_REALM'>,

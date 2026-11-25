@@ -40,5 +40,3 @@ services:
       WHISPER_URL: http://standin:1234
 
   # Published so the checks can count what the ingest flow wrote.
-  chroma:
-    ports: ['127.0.0.1:${CHROMA_PORT:-18000}:8000']

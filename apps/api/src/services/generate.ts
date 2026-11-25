@@ -14,6 +14,7 @@ import {
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
 import { FLOWS } from '../flows.js';
+import { folderDocumentIds } from './folders.js';
 import { contextText, searchSources, type SourceHit } from './composite-search.js';
 import { normalise, resolveHits, retrieve, searchTweaks } from './passages.js';
 import { chatEndpoint, ProviderNotConfigured, type ChatEndpoint } from './providers.js';
@@ -169,7 +170,7 @@ export class Generator {
       // API's config so nothing below can reach a key the workspace has replaced.
       const config = await withWorkspaceKeys(db, this.deps.config, workspace.id);
       chat = chatEndpoint(workspace.settings, config);
-      const opts = { limit: maxPassages, folderId };
+      const opts = { limit: maxPassages, documentIds: await folderDocumentIds(db, folderId) };
       const composite = workspace.kind === 'composite';
       // Resolve before deciding: a hit whose document was deleted or is not ready doesn't count.
       // A composite searches each source with that source's own model and keys (not its own).

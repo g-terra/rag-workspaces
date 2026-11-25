@@ -4,8 +4,8 @@ import { buildApp } from './app.js';
 import { apiKeyAuthenticator } from './auth/api-keys.js';
 import { keycloakAuthenticator, keycloakOptionsFromConfig } from './auth/keycloak.js';
 import { loadConfig } from './config.js';
-import { chromaCheck, keycloakCheck } from './services/checks.js';
-import { ChromaService } from './services/chroma.js';
+import { keycloakCheck } from './services/checks.js';
+import { KnowledgeBaseService } from './services/knowledge-bases.js';
 import { DocumentEvents } from './services/document-events.js';
 import { Crawler, PgBossCrawlQueue } from './services/crawl.js';
 import { IngestProcessor, PgBossIngestQueue } from './services/ingest.js';
@@ -28,7 +28,7 @@ const database = createDb(config.DATABASE_URL);
 
 const langflow = new LangflowService({ config, log: logger.child({ component: 'langflow' }) });
 
-const chroma = new ChromaService(config);
+const kb = new KnowledgeBaseService(langflow.client);
 const storage = new UploadStorage(config.UPLOADS_DIR, config.MAX_UPLOAD_BYTES);
 const events = new DocumentEvents();
 const queue = new PgBossIngestQueue(
@@ -38,7 +38,7 @@ const queue = new PgBossIngestQueue(
     storage,
     ...(config.WHISPER_URL ? { whisper: new WhisperClient(config.WHISPER_URL) } : {}),
     langflow: langflow.client,
-    chroma,
+    kb,
     events,
     config,
     log: logger.child({ component: 'ingest' }),
@@ -53,7 +53,7 @@ const crawls = new PgBossCrawlQueue(
     db: database.db,
     storage,
     fetcher: new LangflowPageFetcher(langflow.client),
-    chroma,
+    kb,
     events,
     ingest: queue,
     config,
@@ -70,7 +70,7 @@ const app = await buildApp({
   loggerInstance: logger,
   db: database.db,
   langflow: langflow.client,
-  chroma,
+  kb,
   storage,
   queue,
   crawls,
@@ -82,7 +82,6 @@ const app = await buildApp({
   langflowKey: () => langflow.keySource,
   checks: [
     { name: 'postgres', check: () => database.ping() },
-    chromaCheck(config),
     keycloakCheck(config),
     langflow.readinessCheck(),
   ],

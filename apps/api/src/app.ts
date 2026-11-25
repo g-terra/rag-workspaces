@@ -9,7 +9,7 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import type { Database } from '@rag/db';
-import type { LangflowClient } from '@rag/langflow-client';
+import { LangflowClient } from '@rag/langflow-client';
 import { auth } from './auth/plugin.js';
 import type { Authenticator } from './auth/principal.js';
 import type { Config } from './config.js';
@@ -32,7 +32,7 @@ import { usageRoutes } from './routes/usage.js';
 import { userRoutes } from './routes/users.js';
 import { workspaceRoutes } from './routes/workspaces.js';
 import { AnswerService } from './services/answers.js';
-import { ChromaService } from './services/chroma.js';
+import { KnowledgeBaseService } from './services/knowledge-bases.js';
 import { ConversationService } from './services/conversations.js';
 import { DocumentEvents } from './services/document-events.js';
 import type { KeySource } from './services/langflow.js';
@@ -50,8 +50,8 @@ export type AppDeps = {
   db?: Database;
   /** Runs the search and answer flows. Routes that need it are only registered when it is given. */
   langflow?: LangflowClient;
-  /** Defaults to a client for CHROMA_URL. */
-  chroma?: ChromaService;
+  /** Defaults to one on `langflow`. */
+  kb?: KnowledgeBaseService;
   /** Defaults to UPLOADS_DIR. */
   storage?: UploadStorage;
   /** Where new uploads are queued for ingestion. */
@@ -85,7 +85,7 @@ export async function buildApp({
   config,
   db,
   langflow,
-  chroma = new ChromaService(config),
+  kb = new KnowledgeBaseService(langflow ?? new LangflowClient({ baseUrl: config.LANGFLOW_URL })),
   storage = new UploadStorage(config.UPLOADS_DIR, config.MAX_UPLOAD_BYTES),
   queue = noopQueue,
   crawls = { enqueue: async () => {} },
@@ -173,16 +173,16 @@ export async function buildApp({
   await app.register(systemRoutes, { checks, models, langflowKey, config });
   await app.register(userRoutes, { directory });
   if (db) {
-    await app.register(workspaceRoutes, { db, chroma, storage, queue, events, config });
-    await app.register(documentRoutes, { db, storage, chroma, queue, events, config });
-    await app.register(folderRoutes, { db, chroma, events });
-    await app.register(siteRoutes, { db, chroma, storage, events, crawls });
+    await app.register(workspaceRoutes, { db, kb, storage, queue, events, config });
+    await app.register(documentRoutes, { db, storage, kb, queue, events, config });
+    await app.register(folderRoutes, { db, events });
+    await app.register(siteRoutes, { db, kb, storage, events, crawls });
     await app.register(apiKeyRoutes, { db });
     await app.register(styleRoutes, { db });
     await app.register(providerRoutes, { db, config, fetchFn: providerFetch });
     await app.register(usageRoutes, { db });
     if (langflow) {
-      await app.register(passageRoutes, { db, chroma, langflow, config });
+      await app.register(passageRoutes, { db, kb, langflow, config });
       await app.register(answerRoutes, { db, answers: new AnswerService({ db, langflow, config }) });
       await app.register(conversationRoutes, {
         db,

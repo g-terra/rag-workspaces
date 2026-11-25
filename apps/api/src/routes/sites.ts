@@ -5,7 +5,7 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
 import { HttpProblem } from '../errors.js';
-import { ChromaService } from '../services/chroma.js';
+import { KnowledgeBaseService } from '../services/knowledge-bases.js';
 import { scopeOf } from '../services/crawl-scope.js';
 import type { CrawlQueue } from '../services/crawl.js';
 import type { DocumentEvents } from '../services/document-events.js';
@@ -15,7 +15,7 @@ import type { UploadStorage } from '../services/storage.js';
 
 export type SiteRoutesOptions = {
   db: Database;
-  chroma: ChromaService;
+  kb: KnowledgeBaseService;
   storage: UploadStorage;
   events: DocumentEvents;
   crawls: CrawlQueue;
@@ -31,7 +31,7 @@ const common = { tags: ['sites'], security: [{ bearerAuth: [] }] };
 const BUSY_DOCS = ['transcribing', 'processing'] as const;
 
 export const siteRoutes: FastifyPluginAsyncZod<SiteRoutesOptions> = async (app, opts) => {
-  const { db, chroma, storage, events, crawls } = opts;
+  const { db, kb, storage, events, crawls } = opts;
 
   const toApi = (s: SiteRow, slug: string, documentCount: number): Site => ({
     id: s.id,
@@ -220,14 +220,12 @@ export const siteRoutes: FastifyPluginAsyncZod<SiteRoutesOptions> = async (app, 
         ? await db.update(sites).set(set).where(eq(sites.id, site.id)).returning()
         : [site];
       if (folderId !== undefined && row!.folderId !== site.folderId) {
-        const collection = ChromaService.collectionName(workspace.slug);
         const pages = await db
           .update(documents)
           .set({ folderId: row!.folderId })
           .where(and(eq(documents.siteId, site.id), notInArray(documents.status, [...BUSY_DOCS])))
           .returning();
         for (const page of pages) {
-          await chroma.setDocumentFolder(collection, page.id, page.folderId);
           events.emit({ workspaceId: workspace.id, document: page });
         }
       }
@@ -254,8 +252,8 @@ export const siteRoutes: FastifyPluginAsyncZod<SiteRoutesOptions> = async (app, 
       const site = await loadSite(workspace.id, req.params.siteId);
       if (site.status === 'crawling')
         throw new HttpProblem(409, 'This site is being crawled. Try again when it finishes.');
-      const collection = ChromaService.collectionName(workspace.slug);
-      // One transaction: rows go only when no page is being ingested, and if Chroma fails nothing is
+      const collection = KnowledgeBaseService.nameFor(workspace.slug);
+      // One transaction: rows go only when no page is being ingested, and if Langflow fails nothing is
       // deleted, so the caller can retry.
       const pages = await db.transaction(async (tx) => {
         const gone = await tx
@@ -277,7 +275,7 @@ export const siteRoutes: FastifyPluginAsyncZod<SiteRoutesOptions> = async (app, 
           .where(and(eq(sites.id, site.id), notInArray(sites.status, ['crawling'])))
           .returning({ id: sites.id });
         if (!removed) throw new HttpProblem(409, 'This site is being crawled. Try again when it finishes.');
-        for (const p of gone) await chroma.deleteDocumentVectors(collection, p.id);
+        for (const p of gone) await kb.deleteDocument(collection, p.id);
         return gone;
       });
       for (const p of pages) {

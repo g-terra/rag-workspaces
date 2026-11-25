@@ -59,10 +59,16 @@ def test_overlap_repeats_the_end_of_one_chunk_at_the_start_of_the_next():
 
 
 def test_a_single_data_row_and_plain_dicts_are_accepted():
-    assert split(Data(data={"text": "One.", "page": 4})) == [{"page": 4, "text": "One."}]
-    assert split([{"text": "Two."}]) == [{"text": "Two."}]
+    assert split(Data(data={"text": "One.", "page": 4})) == [{"page": 4, "text": "One.", "chunk_index": 0}]
+    assert split([{"text": "Two."}]) == [{"text": "Two.", "chunk_index": 0}]
 
 
 def test_no_text_is_an_error():
     with pytest.raises(ValueError, match="No text to split"):
         split([Data(data={"text": "   "}), Data(data={"page": 1})])
+
+
+def test_chunks_are_numbered_across_the_whole_document():
+    rows = [Data(data={"text": "One."}), Data(data={"text": "Two."})]
+
+    assert [c["chunk_index"] for c in split(rows)] == [0, 1]

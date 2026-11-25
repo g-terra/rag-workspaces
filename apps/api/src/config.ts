@@ -110,7 +110,7 @@ const ConfigSchema = z.object({
   CRAWL_FETCH_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
 
   // --- Asking ---
-  /** A passage search (embedding the query plus one Chroma query) gets this long. */
+  /** A passage search (embedding the query plus one Langflow query) gets this long. */
   RETRIEVE_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
   /** A whole answer (search, prompt, generation) gets this long. Local models can be slow. */
   ANSWER_TIMEOUT_MS: z.coerce.number().int().positive().default(180_000),
@@ -130,9 +130,6 @@ const ConfigSchema = z.object({
   LANGFLOW_SUPERUSER_PASSWORD: optionalString,
   /** Fallback when signing in fails: a key made by hand in the Langflow UI. */
   LANGFLOW_API_KEY: optionalString,
-
-  // --- Chroma ---
-  CHROMA_URL: z.url().default('http://chroma:8000'),
 
   // --- Keycloak ---
   /** Where the API reaches Keycloak inside the compose network (keys, health). Not the token issuer. */

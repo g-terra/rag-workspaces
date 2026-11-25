@@ -11,7 +11,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { PgBoss } from 'pg-boss';
 import type { Config } from '../config.js';
 import { FLOWS } from '../flows.js';
-import { ChromaService } from './chroma.js';
+import { KnowledgeBaseService } from './knowledge-bases.js';
 import type { DocumentEvents } from './document-events.js';
 import type { IngestQueue } from './ingest-queue.js';
 import { embeddingEndpoint } from './providers.js';
@@ -39,7 +39,7 @@ export type IngestDeps = {
   /** Set when the video profile is on (`WHISPER_URL`); video and audio fail without it. */
   whisper?: WhisperClient;
   langflow: LangflowClient;
-  chroma: ChromaService;
+  kb: KnowledgeBaseService;
   events: DocumentEvents;
   config: IngestConfig;
   log: FastifyBaseLogger;
@@ -48,7 +48,7 @@ export type IngestDeps = {
 export type IngestOutcome = 'ready' | 'retry' | 'failed' | 'gone';
 
 /** What the rw-ingest flow returns in its `ChatOutput-result` (flows/README.md). */
-type IngestResult = { document_id: string; chunks: number; pages: number | null };
+type IngestResult = { rows: number };
 
 /**
  * Runs the ingest flow for one document and keeps its row honest. Separate from the queue
@@ -84,7 +84,7 @@ export class IngestProcessor {
   }
 
   private async run(documentId: string, seen: { workspaceId?: string }): Promise<IngestOutcome> {
-    const { db, langflow, chroma, config, log } = this.deps;
+    const { db, langflow, kb, config, log } = this.deps;
     const [row] = await db
       .select({ document: documents, workspace: workspaces })
       .from(documents)
@@ -104,7 +104,7 @@ export class IngestProcessor {
     seen.workspaceId = workspace.id;
     const claim = { attempts: attempt, status: 'processing' as const };
 
-    const collection = ChromaService.collectionName(workspace.slug);
+    const collection = KnowledgeBaseService.nameFor(workspace.slug);
     const settings = workspace.settings;
     const timeoutMs =
       config.INGEST_TIMEOUT_MS + Math.ceil(document.sizeBytes / 1_048_576) * config.INGEST_TIMEOUT_MS_PER_MB;
@@ -119,7 +119,7 @@ export class IngestProcessor {
         if (!(await this.update(document.id, { status: 'processing' }, { ...claim, status: 'transcribing' })))
           return 'gone';
       }
-      await chroma.deleteDocumentVectors(collection, document.id);
+      await kb.deleteDocument(collection, document.id);
       const run = await langflow.run(
         FLOWS.ingest,
         {
@@ -129,22 +129,16 @@ export class IngestProcessor {
               file_path: filePath,
               document_id: document.id,
               filename: document.fileName,
-              // Passages carry the folder id, so searches can be limited to one folder.
-              folder: claimed.folderId ?? '',
             },
             Split: {
               chunk_size: settings.chunkSize ?? config.DEFAULT_CHUNK_SIZE,
               chunk_overlap: settings.chunkOverlap ?? config.DEFAULT_CHUNK_OVERLAP,
             },
-            Embeddings: {
-              model: settings.embeddingModel,
-              base_url: embeddings.baseUrl,
+            Knowledge: {
+              knowledge_base: collection,
               api_key: embeddings.apiKey,
-              // Pinned with the model; a workspace from before prefixes keeps embedding without them.
-              document_prefix: settings.embeddingPrefixes?.document ?? '',
-              query_prefix: settings.embeddingPrefixes?.query ?? '',
+              metadata_json: JSON.stringify({ document_id: document.id }),
             },
-            Upsert: { collection_name: collection, document_id: document.id },
           },
         },
         AbortSignal.timeout(timeoutMs),
@@ -153,21 +147,17 @@ export class IngestProcessor {
         messageText(outputsByComponent(run)['ChatOutput-result']),
       );
       if (
-        !(await this.update(
-          document.id,
-          { status: 'ready', passageCount: result.chunks, error: null },
-          claim,
-        ))
+        !(await this.update(document.id, { status: 'ready', passageCount: result.rows, error: null }, claim))
       ) {
-        await chroma.deleteDocumentVectors(collection, document.id);
+        await kb.deleteDocument(collection, document.id);
         return 'gone';
       }
-      log.info({ documentId, chunks: result.chunks, attempt }, 'document ready');
+      log.info({ documentId, chunks: result.rows, attempt }, 'document ready');
       return 'ready';
     } catch (err) {
       const reason = describe(err, timeoutMs);
       const last = attempt >= config.INGEST_MAX_ATTEMPTS;
-      await chroma.deleteDocumentVectors(collection, document.id).catch((cleanupErr: unknown) => {
+      await kb.deleteDocument(collection, document.id).catch((cleanupErr: unknown) => {
         // The next attempt or a reindex starts by deleting them again.
         log.warn({ documentId, err: cleanupErr }, 'could not remove vectors of a failed run');
       });

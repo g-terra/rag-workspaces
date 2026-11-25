@@ -15,18 +15,18 @@ import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
 import { searchSources } from '../services/composite-search.js';
 import { requireStandard, sourcesOf } from '../services/composites.js';
-import { requireFolder } from '../services/folders.js';
+import { folderDocumentIds, requireFolder } from '../services/folders.js';
 import { assertSearchable } from '../services/reindex.js';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
-import { ChromaService, type StoredChunk } from '../services/chroma.js';
+import { KnowledgeBaseService, type StoredChunk } from '../services/knowledge-bases.js';
 import { flowProblem } from '../services/flow-errors.js';
-import { parsePassageId, passageId, resolveHits, retrieve, vectorId } from '../services/passages.js';
+import { parsePassageId, passageId, resolveHits, retrieve } from '../services/passages.js';
 import { withWorkspaceKeys } from '../services/provider-keys.js';
 
 export type PassageRoutesOptions = {
   db: Database;
-  chroma: ChromaService;
+  kb: KnowledgeBaseService;
   langflow: LangflowClient;
   config: Pick<
     Config,
@@ -66,7 +66,7 @@ function fromChunk(
 }
 
 export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async (app, opts) => {
-  const { db, chroma, langflow, config } = opts;
+  const { db, kb, langflow, config } = opts;
 
   async function loadDocument(workspace: Workspace, documentId: string) {
     const [row] = await db
@@ -125,7 +125,7 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
         hits = await retrieve(langflow, workspace, query, await withWorkspaceKeys(db, config, workspace.id), {
           limit,
           minScore,
-          folderId,
+          documentIds: await folderDocumentIds(db, folderId),
         });
       } catch (err) {
         throw flowProblem(err, 'Search');
@@ -160,8 +160,8 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
       assertSearchable(holder);
 
       const i = parsed.chunkIndex;
-      const wanted = [i - 1, i, i + 1].filter((n) => n >= 0).map((n) => vectorId(document.id, n));
-      const chunks = await chroma.getChunks(ChromaService.collectionName(holder.slug), wanted);
+      const wanted = [i - 1, i, i + 1].filter((n) => n >= 0);
+      const chunks = await kb.getChunks(KnowledgeBaseService.nameFor(holder.slug), document.id, wanted);
       const byIndex = new Map(
         chunks.map((c) => fromChunk(c, document, holder.slug)).map((p) => [p.chunkIndex, p] as const),
       );
@@ -196,8 +196,8 @@ export const passageRoutes: FastifyPluginAsyncZod<PassageRoutesOptions> = async 
       const offset = Number(req.query.cursor ?? 0);
       const end = Math.min(offset + req.query.limit, total);
       const ids = [];
-      for (let n = offset; n < end; n++) ids.push(vectorId(document.id, n));
-      const chunks = await chroma.getChunks(ChromaService.collectionName(workspace.slug), ids);
+      for (let n = offset; n < end; n++) ids.push(n);
+      const chunks = await kb.getChunks(KnowledgeBaseService.nameFor(workspace.slug), document.id, ids);
       const data = chunks
         .map((c) => fromChunk(c, document, workspace.slug))
         .sort((a, b) => a.chunkIndex - b.chunkIndex);

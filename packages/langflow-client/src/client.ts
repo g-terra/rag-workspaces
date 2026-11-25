@@ -139,6 +139,15 @@ export class LangflowClient {
     return flows.map(({ id, name, endpoint_name }) => ({ id, name, endpoint_name: endpoint_name ?? null }));
   }
 
+  /** Langflow's knowledge-base routes (undocumented there: re-check them on an upgrade). */
+  async knowledgeBases(method: string, path: string, body?: unknown): Promise<unknown> {
+    const res = await this.request(`${method} knowledge base`, `/api/v1/knowledge_bases${path}`, {
+      method,
+      ...(body ? this.json(body) : {}),
+    });
+    return res.json();
+  }
+
   /** Run a flow by endpoint name and wait for the whole result. */
   async run(flow: string, req: RunRequest, signal?: AbortSignal): Promise<RunResponse> {
     const res = await this.request(`run ${flow}`, `/api/v1/run/${encodeURIComponent(flow)}?stream=false`, {

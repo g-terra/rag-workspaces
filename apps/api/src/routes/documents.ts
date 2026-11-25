@@ -20,7 +20,7 @@ import { standardOnly } from '../services/composites.js';
 import { openEventStream } from '../sse.js';
 import type { Config } from '../config.js';
 import { HttpProblem } from '../errors.js';
-import { ChromaService } from '../services/chroma.js';
+import { KnowledgeBaseService } from '../services/knowledge-bases.js';
 import type { DocumentEvents } from '../services/document-events.js';
 import type { IngestQueue } from '../services/ingest-queue.js';
 import { requireFolder } from '../services/folders.js';
@@ -31,7 +31,7 @@ import { FileTooLarge, detectType, isMedia, type FileType } from '../services/st
 export type DocumentRoutesOptions = {
   db: Database;
   storage: UploadStorage;
-  chroma: ChromaService;
+  kb: KnowledgeBaseService;
   queue: IngestQueue;
   events: DocumentEvents;
   config: Pick<Config, 'MAX_UPLOAD_BYTES' | 'MAX_UPLOAD_FILES' | 'WHISPER_URL'>;
@@ -69,7 +69,7 @@ const MIME: Record<DocumentRow['type'], string> = {
 };
 
 export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = async (app, opts) => {
-  const { db, storage, chroma, queue, events, config } = opts;
+  const { db, storage, kb, queue, events, config } = opts;
   // A composite has no documents: its sources do.
   app.addHook('preHandler', standardOnly(db));
   await app.register(multipart, {
@@ -379,16 +379,6 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
       if (!row) {
         throw new HttpProblem(409, 'This document is being ingested right now. Try again when it finishes.');
       }
-      if (moving) {
-        try {
-          await chroma.setDocumentFolder(ChromaService.collectionName(workspace.slug), doc.id, row.folderId);
-        } catch (err) {
-          // Put the row back, so the record and the passages agree; the caller can retry.
-          await db.update(documents).set({ folderId: doc.folderId }).where(eq(documents.id, doc.id));
-          req.log.error({ err, documentId: doc.id }, 'moving passages to the new folder failed');
-          throw new HttpProblem(503, 'The vector store could not be updated, so the document was not moved.');
-        }
-      }
       events.emit({ workspaceId: workspace.id, document: row });
       return toApi(row, workspace.slug);
     },
@@ -476,8 +466,8 @@ export const documentRoutes: FastifyPluginAsyncZod<DocumentRoutesOptions> = asyn
       if (doc.status === 'processing' || doc.status === 'transcribing') {
         throw new HttpProblem(409, 'This document is being ingested right now. Try again when it finishes.');
       }
-      // Vectors first: if Chroma is down, nothing is deleted and the caller can retry.
-      await chroma.deleteDocumentVectors(ChromaService.collectionName(workspace.slug), doc.id);
+      // Vectors first: if Langflow is down, nothing is deleted and the caller can retry.
+      await kb.deleteDocument(KnowledgeBaseService.nameFor(workspace.slug), doc.id);
       await db.delete(documents).where(eq(documents.id, doc.id));
       await storage.remove(doc.storagePath);
       events.emit({ workspaceId: workspace.id, document: doc, removed: true });

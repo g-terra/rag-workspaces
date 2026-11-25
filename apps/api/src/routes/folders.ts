@@ -6,10 +6,9 @@ import { z } from 'zod';
 import { requireWorkspace } from '../auth/access.js';
 import { standardOnly } from '../services/composites.js';
 import { HttpProblem } from '../errors.js';
-import { ChromaService } from '../services/chroma.js';
 import type { DocumentEvents } from '../services/document-events.js';
 
-export type FolderRoutesOptions = { db: Database; chroma: ChromaService; events: DocumentEvents };
+export type FolderRoutesOptions = { db: Database; events: DocumentEvents };
 
 const SlugParams = z.object({ slug: WorkspaceSlug });
 const FolderParams = SlugParams.extend({ folderId: z.string() });
@@ -19,10 +18,7 @@ const common = { tags: ['documents'], security: [{ bearerAuth: [] }] };
  * Folders group documents inside a workspace (docs/architecture.md, "Workspaces"). Flat, unique
  * names ignoring case. Deleting one moves its documents, and their passages, to the top level.
  */
-export const folderRoutes: FastifyPluginAsyncZod<FolderRoutesOptions> = async (
-  app,
-  { db, chroma, events },
-) => {
+export const folderRoutes: FastifyPluginAsyncZod<FolderRoutesOptions> = async (app, { db, events }) => {
   // A composite has no folders: its sources do.
   app.addHook('preHandler', standardOnly(db));
   const toApi = (f: FolderRow, slug: string, documentCount: number): Folder => ({
@@ -150,14 +146,6 @@ export const folderRoutes: FastifyPluginAsyncZod<FolderRoutesOptions> = async (
           409,
           'A document in this folder is being ingested. Try again when it finishes.',
         );
-      }
-      // Passages first: if Chroma fails part way, the folder is still there and a retry finishes the job.
-      const collection = ChromaService.collectionName(workspace.slug);
-      try {
-        for (const d of inside) await chroma.setDocumentFolder(collection, d.id, null);
-      } catch (err) {
-        req.log.error({ err, folderId: folder.id }, 'moving passages out of a deleted folder failed');
-        throw new HttpProblem(503, 'The vector store could not be updated, so the folder was not deleted.');
       }
       // The foreign key sets folder_id to null on the documents.
       await db.delete(folders).where(eq(folders.id, folder.id));
