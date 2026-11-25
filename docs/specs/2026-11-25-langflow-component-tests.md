@@ -31,11 +31,17 @@ otherwise have to list the components as untested.
 - `langflow/requirements-test.txt`: what the tests need, pinned. `lfx==1.13.3` plus the libraries the
   components import, at the versions in Langflow 1.13.3's `uv.lock` (so the tests see what the container
   runs), and `pytest` and `respx` (mocks `httpx`).
-- `langflow/pytest.ini`: `pythonpath = components`, `testpaths = tests`, so tests import
-  `rag_workspaces.<module>` the way Langflow loads them.
-- `langflow/tests/conftest.py`: a fake embeddings object (fixed vectors per text, records the texts it
-  was given) and a fixture that clears the module-level caches `chroma_search` and `web_page` keep in
-  `sys.modules`, so tests don't leak indexes or robots.txt into each other.
+- `langflow/pytest.ini`: `pythonpath = components tests`, `testpaths = tests`, so tests import
+  `rag_workspaces.<module>` the way Langflow loads them, and the shared fakes as `fakes`. lfx's own
+  pydantic deprecation warnings are filtered.
+- `langflow/tests/fakes.py`: `FakeEmbeddings` (fixed vectors per text, records the documents and queries
+  it was given) and `FakeChroma`, an in-memory stand-in for the Chroma v2 REST routes the components call
+  (collections get/create, `count`, `get` by ids, where or page, `upsert`, `delete`, `query`), served
+  through respx at `http://chroma.test`. It records every call and body, so tests can check order (delete
+  before upsert) and which vectors were read.
+- `langflow/tests/conftest.py`: the `chroma` fixture, and an autouse fixture that clears the module-level
+  caches `chroma_search` and `web_page` keep in `sys.modules`, so tests don't leak indexes or robots.txt
+  into each other.
 - One test file per component. Components are built with their inputs as keyword arguments and their
   output method is called directly. What each covers:
   - `test_document_loader.py`: PDF page numbers (a PDF built in the test with pypdf), DOCX, MD/TXT,
@@ -61,13 +67,18 @@ otherwise have to list the components as untested.
   - `test_web_page.py`: `sitemap_urls`, `read_sitemaps` (indexes, gzip, other origins skipped, missing
     first-level sitemap, file cap), `strip_llms_note`, `page_links`, `main_markdown` drops navigation and
     sidebars, robots.txt blocking, the Markdown twin, non-HTML skipped, an error reported rather than
-    raised. The SSRF guard is replaced by a plain client in these tests (it resolves DNS); its own
-    behaviour is Langflow's.
+    raised. The page tests list their test hosts in `CRAWL_ALLOWED_HOSTS`, the component's own way past
+    the SSRF guard (which resolves DNS); one test checks the guard still refuses a private address and a
+    host in `LANGFLOW_SSRF_ALLOWED_HOSTS`, which need no DNS.
 - `package.json`: `test:langflow` runs `uv run --no-project --python 3.12 --with-requirements
   langflow/requirements-test.txt pytest -c langflow/pytest.ini`. uv builds and caches the environment, so
   there is no virtualenv to manage.
-- `.github/workflows/ci.yml`: a `langflow` job (`astral-sh/setup-uv`, then `pnpm test:langflow`'s
-  command) next to the existing `check` job, on every pull request and push to `main`.
+- `.github/workflows/ci.yml`: a `langflow` job ("Langflow components": `astral-sh/setup-uv` with its
+  cache keyed on `requirements-test.txt`, then the same `uv run ... pytest` as `pnpm test:langflow`,
+  without installing Node) next to the existing `check` job, on every pull request and push to `main`.
+- `langflow/components/rag_workspaces/document_loader.py`: one fix the tests found. A DOCX with no text
+  gave a row with empty text, which passed the loader's "No text could be extracted" check and failed
+  later in the splitter with "No text to split". It now fails in the loader, like an empty PDF.
 - `.gitignore`: `__pycache__/` and `.pytest_cache/`.
 
 ## Decisions and trade-offs
@@ -94,9 +105,14 @@ None. Nothing in the running stack changes. Developers need uv installed to run 
 
 ## Testing
 
-`pnpm test:langflow` runs `langflow/tests/test_*.py`. CI runs the same command in the `Langflow
-components` job. To check that the tests guard behaviour, change a constant such as `RRF_K` or the
-splitter's `SEPARATORS` and watch the matching tests fail.
+`pnpm test:langflow` runs `langflow/tests/test_*.py` (84 tests, about 10 seconds after the first
+environment build). CI runs the same command in the `Langflow components` job.
+
+The tests were checked against deliberate breakage, each caught by at least one test: the splitter cutting
+at spaces only; search without BM25, without `min_score`, without the keyword folder filter, without
+question parts, or re-reading every vector; upsert without the delete; the chat model dropping
+`reasoning_effort`; the web page ignoring robots.txt, following other-origin sitemaps, keeping chrome, or
+skipping the scope's own sitemap.
 
 ## Out of scope and follow-ups
 

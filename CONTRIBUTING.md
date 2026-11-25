@@ -124,11 +124,14 @@ pnpm lint             # ESLint
 pnpm typecheck        # tsc --noEmit
 pnpm test             # Vitest in every package
 pnpm test:scripts     # node:test for scripts/
+pnpm test:langflow    # pytest for the custom Langflow components
 pnpm build
 ```
 
 Database tests in `packages/db` and `apps/api` run only when `TEST_DATABASE_URL` points at a Postgres you
-don't mind being written to; CI starts a throwaway one.
+don't mind being written to; CI starts a throwaway one. `pnpm test:langflow` needs
+[uv](https://docs.astral.sh/uv/); it builds a Python environment with Langflow's component framework (`lfx`) at
+the version the stack runs and mocks every HTTP call, so it needs no Docker or model.
 
 Two slower suites run a whole throwaway stack in Docker, with a small stand-in model instead of a real one:
 

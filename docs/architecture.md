@@ -258,5 +258,5 @@ docker-compose.yml, turbo.json, pnpm-workspace.yaml, .env.example
 | App DB | Postgres + Drizzle ORM |
 | Transcription | faster-whisper ASR service + ffmpeg (optional profile) |
 | Admin UI | Vite + React, React Router, Tailwind CSS, shadcn/ui, TanStack Query, oidc-client-ts, fetch-based SSE |
-| Tests | Vitest, Testcontainers, Playwright, MSW |
+| Tests | Vitest, Testcontainers, Playwright, MSW; pytest and respx for the custom Langflow components |
 | CI | GitHub Actions |
